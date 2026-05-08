@@ -25,6 +25,13 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import QrCodeIcon from '@mui/icons-material/QrCode';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import ChatIcon from '@mui/icons-material/Chat';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,12 +140,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Admin Upgrade Modal
+// Admin Upgrade Modal — redesigned, mobile-first
 // ---------------------------------------------------------------------------
 function AdminUpgradeModal({ onClose }: { onClose: () => void }) {
   const { showToast } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [step, setStep] = useState<'overview' | 'confirm'>('overview');
 
   const handleUpgrade = async () => {
     setLoading(true);
@@ -165,92 +173,214 @@ function AdminUpgradeModal({ onClose }: { onClose: () => void }) {
   };
 
   const PERKS = [
-    'Create & manage matches',
-    'AI predictions engine',
-    'Booking code access',
-    'Affiliate link tools',
-    'Analytics dashboard',
-    'Referral commissions',
+    { icon: <BarChartIcon sx={{ fontSize: 16 }} />,     label: 'Analytics Dashboard',    desc: 'Real-time revenue & user stats'     },
+    { icon: <PsychologyIcon sx={{ fontSize: 16 }} />,   label: 'AI Predictions Engine',  desc: 'Generate & publish match insights'  },
+    { icon: <QrCodeIcon sx={{ fontSize: 16 }} />,       label: 'Booking Code Access',    desc: 'Create & manage booking codes'      },
+    { icon: <GroupAddIcon sx={{ fontSize: 16 }} />,     label: 'Affiliate Tools',        desc: 'Referral links & commission tracking'},
+    { icon: <PaymentsIcon sx={{ fontSize: 16 }} />,     label: 'Withdrawal Management',  desc: 'Approve & reject user withdrawals'  },
+    { icon: <ChatIcon sx={{ fontSize: 16 }} />,         label: 'Upgrade Chat Support',   desc: 'Direct chat with super admins'      },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md px-5 pb-8 pt-5 sm:mx-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative w-full sm:max-w-md sm:mx-4 bg-white dark:bg-slate-900 rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
+
+        {/* Gradient accent bar at top */}
+        <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/70 to-emerald-400 shrink-0" />
+
         {/* Mobile drag handle */}
-        <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-5 sm:hidden" />
+        <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-3 mb-1 sm:hidden shrink-0" />
 
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-bold text-base flex items-center gap-2 text-slate-800 dark:text-slate-100">
-            <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <AdminPanelSettingsIcon className="text-primary" sx={{ fontSize: 18 }} />
-            </span>
-            Upgrade to Admin
-          </h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400"
-          >
-            <CloseIcon fontSize="small" />
-          </button>
-        </div>
-
+        {/* ── SUCCESS STATE ── */}
         {done ? (
-          <div className="text-center py-6">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mx-auto mb-4">
-              <VerifiedUserIcon className="text-emerald-600" fontSize="large" />
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="w-20 h-20 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-5 ring-4 ring-emerald-100 dark:ring-emerald-900/40">
+              <RocketLaunchIcon className="text-emerald-500" sx={{ fontSize: 36 }} />
             </div>
-            <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Request Submitted!</p>
-            <p className="text-sm text-slate-500 mb-6">Our team will review your request shortly.</p>
-            <button onClick={onClose} className="btn-primary w-full py-3 rounded-xl text-sm font-semibold">
-              Done
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">You're on your way!</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed max-w-xs">
+              Your upgrade request has been submitted. Our team will review and activate your admin account shortly.
+            </p>
+            <button
+              onClick={onClose}
+              className="btn-primary w-full py-3.5 rounded-xl text-sm font-bold"
+            >
+              Got it, thanks!
             </button>
           </div>
-        ) : (
+        ) : step === 'overview' ? (
+
+          /* ── OVERVIEW STEP ── */
           <>
-            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl p-4 mb-4 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
-                What you'll get
+            {/* Header */}
+            <div className="flex items-start justify-between px-5 pt-4 pb-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0">
+                  <AdminPanelSettingsIcon className="text-primary" sx={{ fontSize: 20 }} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white leading-tight">
+                    Become an Admin
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Unlock the full platform</p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 shrink-0 mt-0.5"
+              >
+                <CloseIcon fontSize="small" />
+              </button>
+            </div>
+
+            {/* Hero banner */}
+            <div className="mx-5 mb-4 rounded-2xl bg-gradient-to-br from-primary/90 to-primary p-5 text-white relative overflow-hidden shrink-0">
+              {/* Decorative circles */}
+              <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10" />
+              <div className="absolute -bottom-8 -left-4 w-20 h-20 rounded-full bg-white/5" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <AutoAwesomeIcon sx={{ fontSize: 14 }} className="text-yellow-300" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-white/80">Admin Access</span>
+                </div>
+                <p className="text-2xl font-black leading-tight mb-1">Run your own<br />betting platform</p>
+                <p className="text-xs text-white/70 leading-relaxed">
+                  One-time upgrade. Manage matches, users, payouts & more.
+                </p>
+              </div>
+            </div>
+
+            {/* Perks list — scrollable */}
+            <div className="flex-1 overflow-y-auto px-5 pb-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
+                Everything included
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                {PERKS.map(b => (
-                  <div key={b} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                    <CheckCircleIcon
-                      className="text-primary shrink-0 mt-0.5"
-                      sx={{ fontSize: 13 }}
-                    />
-                    {b}
+              <div className="space-y-2">
+                {PERKS.map((perk) => (
+                  <div
+                    key={perk.label}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 text-primary">
+                      {perk.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                        {perk.label}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">{perk.desc}</p>
+                    </div>
+                    <CheckCircleIcon className="text-emerald-500 shrink-0" sx={{ fontSize: 16 }} />
                   </div>
                 ))}
               </div>
             </div>
-            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              A one-time upgrade fee applies. You'll be redirected to Paystack to complete payment
-              securely.
-            </p>
-            <div className="flex gap-3">
+
+            {/* Footer CTA */}
+            <div className="px-5 pt-3 pb-6 shrink-0 border-t border-slate-100 dark:border-slate-800 mt-2">
+              <p className="text-[11px] text-slate-400 text-center mb-3 leading-relaxed">
+                A one-time upgrade fee applies. Payment is processed securely via Paystack.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Maybe Later
+                </button>
+                <button
+                  onClick={() => setStep('confirm')}
+                  className="flex-1 btn-primary py-3.5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold"
+                >
+                  Continue
+                  <KeyboardArrowRightIcon fontSize="small" />
+                </button>
+              </div>
+            </div>
+          </>
+
+        ) : (
+
+          /* ── CONFIRM STEP ── */
+          <>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 pt-4 pb-3 shrink-0">
               <button
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => setStep('overview')}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400"
               >
-                Cancel
+                <KeyboardArrowRightIcon fontSize="small" className="rotate-180" />
               </button>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">Confirm Upgrade</h3>
+                <p className="text-xs text-slate-400">Review before proceeding</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 pb-2 space-y-4">
+              {/* Summary card */}
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+                    <AdminPanelSettingsIcon sx={{ fontSize: 20 }} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-slate-900 dark:text-white">Admin Account Upgrade</p>
+                    <p className="text-xs text-slate-500">One-time payment via Paystack</p>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  {[
+                    'Full admin dashboard access',
+                    'Manage all platform features',
+                    'Affiliate commission earnings',
+                    'Priority support via upgrade chat',
+                  ].map(item => (
+                    <div key={item} className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                      <CheckCircleIcon className="text-primary shrink-0" sx={{ fontSize: 14 }} />
+                      <span className="text-xs">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notice */}
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 p-3.5 flex gap-2.5">
+                <ShieldIcon className="text-amber-500 shrink-0 mt-0.5" sx={{ fontSize: 16 }} />
+                <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                  You'll be redirected to Paystack's secure payment page. After payment, your account will be reviewed and upgraded within 24 hours.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pt-3 pb-6 shrink-0 border-t border-slate-100 dark:border-slate-800 mt-2">
               <button
                 onClick={handleUpgrade}
                 disabled={loading}
-                className="flex-1 btn-primary py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-60"
+                className="btn-primary w-full py-4 rounded-xl flex items-center justify-center gap-2.5 text-sm font-bold disabled:opacity-60 mb-3"
               >
                 {loading ? (
                   <>
                     <CircularProgress fontSize="small" className="animate-spin" />
-                    Processing…
+                    Redirecting to Paystack…
                   </>
                 ) : (
                   <>
-                    <ArrowUpwardIcon fontSize="small" />
-                    Upgrade Now
+                    <RocketLaunchIcon fontSize="small" />
+                    Proceed to Payment
                   </>
                 )}
+              </button>
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="w-full py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </>
@@ -561,7 +691,7 @@ export default function AccountPage() {
             </span>
           </div>
 
-          {/* Tab bar — sticky on scroll */}
+          {/* Tab bar */}
           <div className="flex border-b border-slate-100 dark:border-slate-800">
             {TABS.map(tab => (
               <button
@@ -598,7 +728,6 @@ export default function AccountPage() {
                   <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
                     <AccountBalanceWalletIcon className="text-primary" sx={{ fontSize: 15 }} />
                   </div>
-                  {/* Live indicator */}
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -902,7 +1031,6 @@ export default function AccountPage() {
             <CardHeader icon={<ShieldIcon sx={{ fontSize: 15 }} />} title="Change Password" />
             <div className="px-4 py-4 space-y-4">
 
-              {/* Error alert */}
               {pwError && (
                 <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-sm">
                   <CloseIcon sx={{ fontSize: 16 }} className="shrink-0 mt-0.5" />
@@ -910,7 +1038,6 @@ export default function AccountPage() {
                 </div>
               )}
 
-              {/* Success alert */}
               {pwSuccess && (
                 <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm">
                   <CheckCircleIcon sx={{ fontSize: 16 }} className="shrink-0 mt-0.5" />
@@ -918,35 +1045,10 @@ export default function AccountPage() {
                 </div>
               )}
 
-              <PwField
-                label="Current Password"
-                field="current"
-                form={pwForm}
-                setForm={setPwForm}
-                show={showPw}
-                setShow={setShowPw}
-                disabled={pwLoading}
-              />
-              <PwField
-                label="New Password"
-                field="next"
-                form={pwForm}
-                setForm={setPwForm}
-                show={showPw}
-                setShow={setShowPw}
-                disabled={pwLoading}
-              />
-              <PwField
-                label="Confirm New Password"
-                field="confirm"
-                form={pwForm}
-                setForm={setPwForm}
-                show={showPw}
-                setShow={setShowPw}
-                disabled={pwLoading}
-              />
+              <PwField label="Current Password"     field="current" form={pwForm} setForm={setPwForm} show={showPw} setShow={setShowPw} disabled={pwLoading} />
+              <PwField label="New Password"         field="next"    form={pwForm} setForm={setPwForm} show={showPw} setShow={setShowPw} disabled={pwLoading} />
+              <PwField label="Confirm New Password" field="confirm" form={pwForm} setForm={setPwForm} show={showPw} setShow={setShowPw} disabled={pwLoading} />
 
-              {/* Strength hint */}
               {pwForm.next.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex gap-1">
@@ -999,25 +1101,19 @@ export default function AccountPage() {
         {/* ─── PREFERENCES TAB ─── */}
         {activeTab === 'preferences' && (
           <>
-            {/* Notifications */}
             <Card>
-              <CardHeader
-                icon={<NotificationsIcon sx={{ fontSize: 15 }} />}
-                title="Notifications"
-              />
+              <CardHeader icon={<NotificationsIcon sx={{ fontSize: 15 }} />} title="Notifications" />
               <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
                 {(
                   [
-                    { key: 'push',  label: 'Push Notifications', sub: 'In-app alerts & updates' },
-                    { key: 'sms',   label: 'SMS Alerts',         sub: 'Text messages to your phone' },
-                    { key: 'email', label: 'Email Notifications', sub: 'Updates sent to your inbox' },
+                    { key: 'push',  label: 'Push Notifications',  sub: 'In-app alerts & updates'       },
+                    { key: 'sms',   label: 'SMS Alerts',          sub: 'Text messages to your phone'   },
+                    { key: 'email', label: 'Email Notifications', sub: 'Updates sent to your inbox'    },
                   ] as const
                 ).map(({ key, label, sub }) => (
                   <div key={key} className="flex items-center justify-between px-4 py-3.5 gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                        {label}
-                      </p>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
                     </div>
                     <Toggle
@@ -1029,12 +1125,8 @@ export default function AccountPage() {
               </div>
             </Card>
 
-            {/* Responsible gambling */}
             <Card>
-              <CardHeader
-                icon={<VerifiedUserIcon sx={{ fontSize: 15 }} />}
-                title="Responsible Gambling"
-              />
+              <CardHeader icon={<VerifiedUserIcon sx={{ fontSize: 15 }} />} title="Responsible Gambling" />
               <div className="px-4 py-4 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
@@ -1073,7 +1165,6 @@ export default function AccountPage() {
               </div>
             </Card>
 
-            {/* Sign out */}
             <button
               onClick={handleLogout}
               className="w-full py-3.5 text-sm font-bold text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 border border-rose-100 dark:border-rose-900/40 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-900/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm"
