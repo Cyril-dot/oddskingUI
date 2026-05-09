@@ -23,16 +23,28 @@ interface EnrichedMatch extends Match {
 }
 
 // ---------------------------------------------------------------------------
-// Live status set — mirrors reference page exactly
+// Live status set
+//
+// NOTE: The backend's LiveScorePoller normalises ALL provider status strings
+// (1H, 2H, HT, ET, PEN, SHOOTOUT, BREAK, SUSPENDED, INTERRUPTED, etc.)
+// into exactly "LIVE" before persisting.  So the primary value we ever
+// receive from the API is "LIVE".
+//
+// The extended set below acts as a safety net for any edge-case pass-through
+// values from the /live endpoint or raw LiveScoreApiClient responses,
+// keeping parity with the backend's IN_PLAY_STATUSES set.
 // ---------------------------------------------------------------------------
 const LIVE_STATUSES = new Set([
-  'LIVE', 'live', 'IN_PLAY', 'in_play', 'inplay',
+  // Backend normalised value (primary — only this matters in practice)
+  'LIVE',
+  // Safety net — raw provider values if ever passed through
+  'live', 'IN_PLAY', 'in_play', 'inplay',
   'FIRST_HALF', 'first_half', '1H', '1h',
   'SECOND_HALF', 'second_half', '2H', '2h',
   'HALFTIME', 'halftime', 'HALF_TIME', 'half_time', 'HT', 'ht',
-  'EXTRA_TIME', 'extra_time', 'ET', 'et',
-  'PENALTIES', 'penalties', 'PEN', 'pen', 'P',
-  'BREAK', 'break', 'INTERRUPTED', 'interrupted', 'SUSPENDED', 'suspended',
+  'EXTRA_TIME', 'extra_time', 'ET', 'et', 'ET1', 'et1', 'ET2', 'et2',
+  'PENALTIES', 'penalties', 'PEN', 'pen', 'P', 'SHOOTOUT', 'shootout',
+  'BREAK', 'break', 'SUSPENDED', 'suspended', 'INTERRUPTED', 'interrupted',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -54,7 +66,12 @@ function groupByLeague(matches: EnrichedMatch[]): Map<string, EnrichedMatch[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Odds extraction — same robust logic as reference page
+// Odds extraction
+//
+// The backend's MatchService.getMatchOdds() returns an array of odds objects.
+// Each entry may have: selection ("1", "X", "2" or team name), odd (decimal
+// value), market ("1X2"), etc.  The extractor handles the backend's format
+// as well as common fallback shapes.
 // ---------------------------------------------------------------------------
 function extractOddsMap(
   oddsArray: unknown[],
@@ -63,11 +80,12 @@ function extractOddsMap(
 ): OddsMap | undefined {
   if (!Array.isArray(oddsArray) || oddsArray.length === 0) return undefined;
 
+  // Filter to 1X2 / match-result market if market field is present
   const entries = (oddsArray as Array<Record<string, unknown>>).filter((o) => {
     const market = String(o.market ?? o.market_name ?? o.marketName ?? o.type ?? '')
       .toLowerCase()
       .replace(/[\s_-]/g, '');
-    return market === '1x2' || market === 'matchresult' || market === 'matchodds';
+    return !market || market === '1x2' || market === 'matchresult' || market === 'matchodds';
   });
 
   const pool = entries.length > 0 ? entries : (oddsArray as Array<Record<string, unknown>>);
@@ -99,6 +117,57 @@ function extractOddsMap(
     return undefined;
   }
   return { home, draw, away };
+}
+
+// ---------------------------------------------------------------------------
+// Unwrap /live or /with-all-odds response
+//
+// The backend's /live endpoint returns: { success, data: Match[] }
+// The backend's /with-all-odds endpoint returns:
+//   { success, data: { live: [{match, match_result, asian_handicap}], ... } }
+//
+// This helper handles both shapes so LiveMatchesPage works regardless of
+// which endpoint was used.
+// ---------------------------------------------------------------------------
+function unwrapLiveResponse(raw: unknown): Array<{ match: Match; odds: unknown[] }> {
+  if (!raw) return [];
+  const obj = raw as Record<string, unknown>;
+
+  // Shape 1: { success, data: Match[] } — direct array from /live endpoint
+  if (obj.success && Array.isArray(obj.data)) {
+    return (obj.data as Match[])
+      .filter((m) => m && m.id)
+      .map((m) => ({ match: m, odds: [] }));
+  }
+
+  // Shape 2: { success, data: { live: [{match, match_result, ...}] } }
+  if (obj.success && obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+    const data = obj.data as Record<string, unknown>;
+    const liveArr = data['live'];
+    if (Array.isArray(liveArr)) {
+      return liveArr
+        .map((item) => {
+          const i = item as Record<string, unknown>;
+          const match = i.match as Match;
+          if (!match || !match.id) return null;
+          const odds: unknown[] =
+            Array.isArray(i.match_result) ? (i.match_result as unknown[]) :
+            Array.isArray(i.odds)         ? (i.odds as unknown[]) :
+            [];
+          return { match, odds };
+        })
+        .filter(Boolean) as Array<{ match: Match; odds: unknown[] }>;
+    }
+  }
+
+  // Shape 3: raw Match[] (no wrapper)
+  if (Array.isArray(raw)) {
+    return (raw as Match[])
+      .filter((m) => m && m.id)
+      .map((m) => ({ match: m, odds: [] }));
+  }
+
+  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -272,12 +341,12 @@ function MatchCard({ match }: { match: EnrichedMatch }) {
 // Main Page
 // ---------------------------------------------------------------------------
 export default function LiveMatchesPage() {
-  const [allMatches, setAllMatches]     = useState<EnrichedMatch[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState<string | null>(null);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [lastUpdated, setLastUpdated]   = useState<Date | null>(null);
-  const [teamFilter, setTeamFilter]     = useState('');
+  const [allMatches, setAllMatches]   = useState<EnrichedMatch[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [teamFilter, setTeamFilter]   = useState('');
   const genRef = useRef(0);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -290,25 +359,37 @@ export default function LiveMatchesPage() {
     setError(null);
 
     try {
-      // Try authenticated endpoint first, fall back to public
-      let raw: Match[] = [];
+      // ── Step 1: fetch raw live matches ──────────────────────────────────
+      // Try authenticated endpoint first, fall back to public.
+      // Backend MatchService.getLiveMatches() queries DB for status="LIVE"
+      // only — so this list is already filtered to genuinely live matches.
+      let rawItems: Array<{ match: Match; odds: unknown[] }> = [];
+
       try {
         const res = await matchesApi.live();
-        raw = Array.isArray(res.data) ? res.data : [];
+        rawItems = unwrapLiveResponse(res);
       } catch {
-        const res = await publicMatches.live() as unknown as { data?: Match[] } | Match[];
-        raw = Array.isArray(res)
-          ? (res as Match[])
-          : Array.isArray((res as { data?: Match[] }).data)
-            ? (res as { data: Match[] }).data
-            : [];
+        const res = await publicMatches.live();
+        rawItems = unwrapLiveResponse(res);
       }
 
       if (!alive()) return;
 
-      // Fetch odds per match in parallel (best-effort)
+      // ── Step 2: fetch odds for each match in parallel (best-effort) ─────
+      // Backend MatchService.getMatchOdds() generates live odds on demand
+      // (or returns cached live odds if available).  N+1 is acceptable here
+      // because the /live list is typically small (< 20 matches).
+      // If the response already contains odds (withAllOdds shape), we skip
+      // the per-match call.
       const enriched: EnrichedMatch[] = await Promise.all(
-        raw.map(async (m) => {
+        rawItems.map(async ({ match: m, odds: existingOdds }) => {
+          // If odds came bundled with the response, use them directly
+          if (existingOdds.length > 0) {
+            const oddsMap = extractOddsMap(existingOdds, m.homeTeam ?? '', m.awayTeam ?? '');
+            return { ...m, oddsMap };
+          }
+
+          // Otherwise fetch odds separately
           try {
             let oddsRaw: unknown[] = [];
             try {
@@ -330,7 +411,9 @@ export default function LiveMatchesPage() {
         }),
       );
 
-      // Deduplicate by id
+      if (!alive()) return;
+
+      // ── Step 3: deduplicate by id ───────────────────────────────────────
       const seen = new Set<string>();
       const deduped = enriched.filter((m) => {
         if (seen.has(m.id)) return false;
@@ -338,7 +421,9 @@ export default function LiveMatchesPage() {
         return true;
       });
 
-      // Only keep genuinely live matches
+      // ── Step 4: keep only genuinely live matches ────────────────────────
+      // Backend already filters to status="LIVE" in getLiveMatches(), but
+      // the extended LIVE_STATUSES set handles any edge-case pass-throughs.
       const live = deduped.filter((m) => LIVE_STATUSES.has(m.status ?? ''));
 
       if (alive()) {
@@ -356,15 +441,30 @@ export default function LiveMatchesPage() {
     }
   }, []);
 
-  // Initial load
-  useEffect(() => { fetchLive(); }, [fetchLive]);
-
-  // Auto-refresh every 60 s (only when tab is visible)
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  // FIX: Both effects use the same genRef so unmounting the component
+  // correctly cancels both the initial load and subsequent interval fetches.
   useEffect(() => {
+    fetchLive();
+    // Cancel initial load on unmount
+    return () => { genRef.current++; };
+  }, [fetchLive]);
+
+  useEffect(() => {
+    // Auto-refresh every 60s — only when tab is visible
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchLive(true);
     }, 60_000);
-    return () => { genRef.current++; clearInterval(interval); };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchLive(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchLive]);
 
   // ── Filter + group ────────────────────────────────────────────────────────
@@ -378,7 +478,7 @@ export default function LiveMatchesPage() {
     );
   }, [allMatches, teamFilter]);
 
-  const grouped   = useMemo(() => groupByLeague(filtered), [filtered]);
+  const grouped    = useMemo(() => groupByLeague(filtered), [filtered]);
   const leagueKeys = useMemo(() => [...grouped.keys()].sort(), [grouped]);
 
   // ── Render ────────────────────────────────────────────────────────────────

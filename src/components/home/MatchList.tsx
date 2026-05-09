@@ -28,20 +28,30 @@ interface EnrichedMatch extends Match { oddsMap?: OddsMap; }
 // ---------------------------------------------------------------------------
 // Status sets
 // ---------------------------------------------------------------------------
+// NOTE: The backend's LiveScorePoller normalises ALL provider status strings
+// (1H, 2H, HT, ET, PEN, etc.) into exactly "LIVE", "FINISHED", or "UPCOMING"
+// before persisting to the DB. So the frontend only ever sees those three
+// values from the /with-all-odds API. The extended sets below are kept as a
+// safety net for any edge-case pass-through values from the API.
+// ---------------------------------------------------------------------------
 const LIVE_STATUSES = new Set([
-  'LIVE', 'live', 'IN_PLAY', 'in_play', 'inplay',
+  // Backend normalised value (primary)
+  'LIVE',
+  // Safety net — raw provider values if ever passed through
+  'live', 'IN_PLAY', 'in_play', 'inplay',
   'FIRST_HALF', 'first_half', '1H', '1h',
   'SECOND_HALF', 'second_half', '2H', '2h',
   'HALFTIME', 'halftime', 'HALF_TIME', 'half_time', 'HT', 'ht',
-  'EXTRA_TIME', 'extra_time', 'ET', 'et',
-  'PENALTIES', 'penalties', 'PEN', 'pen', 'P',
-  'BREAK', 'break', 'SUSPENDED', 'suspended',
+  'EXTRA_TIME', 'extra_time', 'ET', 'et', 'ET1', 'et1', 'ET2', 'et2',
+  'PENALTIES', 'penalties', 'PEN', 'pen', 'P', 'SHOOTOUT', 'shootout',
+  'BREAK', 'break', 'SUSPENDED', 'suspended', 'INTERRUPTED', 'interrupted',
 ]);
 
 const FINISHED_STATUSES = new Set([
-  'FINISHED', 'finished',
-  'FULL_TIME', 'full_time',
-  'FT', 'ft',
+  // Backend normalised value (primary)
+  'FINISHED',
+  // Safety net — raw provider values if ever passed through
+  'finished', 'FULL_TIME', 'full_time', 'FT', 'ft',
   'AWARDED', 'awarded',
   'CANCELLED', 'cancelled', 'CANCELED', 'canceled',
   'POSTPONED', 'postponed',
@@ -50,8 +60,7 @@ const FINISHED_STATUSES = new Set([
   'AFTER_EXTRA_TIME', 'after_extra_time', 'AET', 'aet',
   'AFTER_PENALTIES', 'after_penalties', 'AP', 'ap',
   'ENDED', 'ended',
-  'COMPLETED', 'completed',
-  'COMPLETE', 'complete',
+  'COMPLETED', 'completed', 'COMPLETE', 'complete',
   'WALKOVER', 'walkover',
   'RETIRED', 'retired',
   'INTERRUPTED', 'interrupted',
@@ -61,8 +70,9 @@ const FINISHED_STATUSES = new Set([
 
 function finishedLabel(status?: string): string {
   const s = status ?? '';
-  if (['FINISHED', 'finished', 'FULL_TIME', 'full_time', 'FT', 'ft', 'AWARDED', 'awarded',
-       'ENDED', 'ended', 'COMPLETED', 'completed', 'COMPLETE', 'complete'].includes(s)) return 'FT';
+  if (['FINISHED', 'finished', 'FULL_TIME', 'full_time', 'FT', 'ft',
+       'AWARDED', 'awarded', 'ENDED', 'ended',
+       'COMPLETED', 'completed', 'COMPLETE', 'complete'].includes(s)) return 'FT';
   if (['AFTER_EXTRA_TIME', 'after_extra_time', 'AET', 'aet'].includes(s)) return 'AET';
   if (['AFTER_PENALTIES', 'after_penalties', 'AP', 'ap'].includes(s)) return 'PEN';
   if (['POSTPONED', 'postponed'].includes(s)) return 'PPD';
@@ -92,199 +102,79 @@ const TOP_6_LABELS = new Set<string>(TOP_6_LEAGUES.map((l) => l.label));
 // Cup competitions — displayed as "Other Cups"
 // ---------------------------------------------------------------------------
 const CUPS_LABELS = new Set<string>([
-  // UEFA
-  'Europa League',
-  'UEFA Europa League',
-  'Conference League',
-  'UEFA Conference League',
+  'Europa League', 'UEFA Europa League',
+  'Conference League', 'UEFA Conference League',
   'UEFA Super Cup',
-  // English
-  'FA Cup',
-  'Carabao Cup',
-  'EFL Cup',
-  'Community Shield',
-  'FA Trophy',
-  // Spanish
-  'Copa del Rey',
-  'Supercopa de España',
-  // German
-  'DFB Pokal',
-  'DFB-Pokal',
-  // Italian
-  'Coppa Italia',
-  'Supercoppa Italiana',
-  // French
-  'Coupe de France',
-  'Trophée des Champions',
-  // South American
-  'Copa Libertadores',
-  'CONMEBOL Libertadores',
-  'Copa Sudamericana',
-  'CONMEBOL Sudamericana',
+  'FA Cup', 'Carabao Cup', 'EFL Cup', 'Community Shield', 'FA Trophy',
+  'Copa del Rey', 'Supercopa de España',
+  'DFB Pokal', 'DFB-Pokal',
+  'Coppa Italia', 'Supercoppa Italiana',
+  'Coupe de France', 'Trophée des Champions',
+  'Copa Libertadores', 'CONMEBOL Libertadores',
+  'Copa Sudamericana', 'CONMEBOL Sudamericana',
   'Recopa Sudamericana',
-  // African
-  'CAF Champions League',
-  'CAF Confederation Cup',
-  'CAF Super Cup',
-  'AFCON',
-  'Africa Cup of Nations',
-  'CHAN',
-  'WAFU Cup',
-  // Asian
-  'AFC Champions League',
-  'AFC Cup',
-  // North/Central American
-  'CONCACAF Champions League',
-  'CONCACAF League',
-  'Gold Cup',
-  // Scottish
-  'Scottish Cup',
-  'Scottish League Cup',
-  // Portuguese
-  'Taça de Portugal',
-  // Dutch
-  'KNVB Cup',
-  // Turkish
-  'Turkish Cup',
-  // Belgian
-  'Belgian Cup',
-  // Global
-  'FIFA Club World Cup',
-  'FIFA World Cup',
-  'UEFA Nations League',
-  'CONMEBOL–UEFA Cup of Champions',
+  'CAF Champions League', 'CAF Confederation Cup', 'CAF Super Cup',
+  'AFCON', 'Africa Cup of Nations', 'CHAN', 'WAFU Cup',
+  'AFC Champions League', 'AFC Cup',
+  'CONCACAF Champions League', 'CONCACAF League', 'Gold Cup',
+  'Scottish Cup', 'Scottish League Cup',
+  'Taça de Portugal', 'KNVB Cup', 'Turkish Cup', 'Belgian Cup',
+  'FIFA Club World Cup', 'FIFA World Cup',
+  'UEFA Nations League', 'CONMEBOL–UEFA Cup of Champions',
 ]);
 
 // ---------------------------------------------------------------------------
-// Other recognised leagues — displayed as "Other Leagues"
+// Other recognised leagues
 // ---------------------------------------------------------------------------
 const OTHER_LEAGUE_LABELS = new Set<string>([
-  // Europe — second tier English
-  'Championship',
-  'EFL Championship',
-  'League One',
-  'League Two',
-  // Netherlands
-  'Eredivisie',
-  'Eerste Divisie',
-  // Portugal
-  'Primeira Liga',
-  'Liga Portugal',
-  'Liga NOS',
-  // Scotland
-  'Scottish Premiership',
-  'Scottish Premier League',
-  // Turkey
-  'Süper Lig',
-  'Super Lig',
-  'Turkish Super Lig',
-  // Belgium
-  'Belgian Pro League',
-  'First Division A',
-  'Jupiler Pro League',
-  // Greece
-  'Super League Greece',
-  'Greek Super League',
-  // Russia
-  'Russian Premier League',
-  'RPL',
-  // Ukraine
-  'Ukrainian Premier League',
-  'UPL',
-  // Denmark
-  'Danish Superliga',
-  'Superliga',
-  // Norway
-  'Eliteserien',
-  'Norwegian Eliteserien',
-  // Sweden
-  'Allsvenskan',
-  'Swedish Allsvenskan',
-  // Switzerland
-  'Swiss Super League',
-  'Super League Switzerland',
-  // Austria
-  'Austrian Bundesliga',
-  'Austrian Football Bundesliga',
-  // Czech Republic
-  'Czech First League',
-  'Czech Liga',
-  // Romania
-  'Romanian Liga 1',
-  'Liga 1 Romania',
-  // Poland
-  'Ekstraklasa',
-  'Polish Ekstraklasa',
-  // Hungary
-  'OTP Bank Liga',
-  'Hungarian Liga',
-  // Serbia
-  'Serbian SuperLiga',
-  // Croatia
-  'Croatian SuperSport HNL',
-  // Israel
+  'Championship', 'EFL Championship', 'League One', 'League Two',
+  'Eredivisie', 'Eerste Divisie',
+  'Primeira Liga', 'Liga Portugal', 'Liga NOS',
+  'Scottish Premiership', 'Scottish Premier League',
+  'Süper Lig', 'Super Lig', 'Turkish Super Lig',
+  'Belgian Pro League', 'First Division A', 'Jupiler Pro League',
+  'Super League Greece', 'Greek Super League',
+  'Russian Premier League', 'RPL',
+  'Ukrainian Premier League', 'UPL',
+  'Danish Superliga', 'Superliga',
+  'Eliteserien', 'Norwegian Eliteserien',
+  'Allsvenskan', 'Swedish Allsvenskan',
+  'Swiss Super League', 'Super League Switzerland',
+  'Austrian Bundesliga', 'Austrian Football Bundesliga',
+  'Czech First League', 'Czech Liga',
+  'Romanian Liga 1', 'Liga 1 Romania',
+  'Ekstraklasa', 'Polish Ekstraklasa',
+  'OTP Bank Liga', 'Hungarian Liga',
+  'Serbian SuperLiga', 'Croatian SuperSport HNL',
   'Israeli Premier League',
-  // Americas
-  'MLS',
-  'Major League Soccer',
-  'Liga MX',
-  'Mexican Liga MX',
-  'Argentine Liga Profesional',
-  'Primera División Argentina',
-  'Argentine Primera División',
-  'Brazilian Série A',
-  'Brasileirão',
-  'Série A Brazil',
-  'Brazilian Série B',
-  'Chilean Primera División',
-  'Colombian Primera A',
-  'Uruguayan Primera División',
-  'Ecuadorian Serie A',
-  'Peruvian Primera División',
-  // Middle East
-  'Saudi Pro League',
-  'Saudi Professional League',
-  'Saudi Arabia Pro League',
-  'UAE Pro League',
-  'Qatar Stars League',
-  // Asia
-  'J1 League',
-  'J-League',
-  'Japanese J1 League',
-  'K League 1',
-  'Korean K League 1',
-  'Chinese Super League',
-  'CSL',
-  'Indian Super League',
-  'ISL',
-  'A-League',
-  'Australian A-League',
-  // Africa
-  'Ghana Premier League',
-  'GPL',
-  'Nigeria Professional Football League',
-  'NPFL',
-  'Egyptian Premier League',
-  'CAF',
-  'South African PSL',
-  'Premier Soccer League',
-  'Kenyan Premier League',
-  'Botswana Premier League',
-  'Zambia Super League',
-  'Tanzanian Premier League',
-  'Ugandan Premier League',
-  'Rwandan Premier League',
+  'MLS', 'Major League Soccer',
+  'Liga MX', 'Mexican Liga MX',
+  'Argentine Liga Profesional', 'Primera División Argentina', 'Argentine Primera División',
+  'Brazilian Série A', 'Brasileirão', 'Série A Brazil', 'Brazilian Série B',
+  'Chilean Primera División', 'Colombian Primera A',
+  'Uruguayan Primera División', 'Ecuadorian Serie A', 'Peruvian Primera División',
+  'Saudi Pro League', 'Saudi Professional League', 'Saudi Arabia Pro League',
+  'UAE Pro League', 'Qatar Stars League',
+  'J1 League', 'J-League', 'Japanese J1 League',
+  'K League 1', 'Korean K League 1',
+  'Chinese Super League', 'CSL',
+  'Indian Super League', 'ISL',
+  'A-League', 'Australian A-League',
+  'Ghana Premier League', 'GPL',
+  'Nigeria Professional Football League', 'NPFL',
+  'Egyptian Premier League', 'CAF',
+  'South African PSL', 'Premier Soccer League',
+  'Kenyan Premier League', 'Botswana Premier League',
+  'Zambia Super League', 'Tanzanian Premier League',
+  'Ugandan Premier League', 'Rwandan Premier League',
   'Ethiopian Premier League',
-  'Algerian Ligue Professionnelle 1',
-  'Moroccan Botola Pro',
-  'Tunisian Ligue Professionnelle 1',
-  'Senegalese Ligue 1',
-  'Ivorian Ligue 1',
-  'Cameroonian MTN Elite One',
+  'Algerian Ligue Professionnelle 1', 'Moroccan Botola Pro',
+  'Tunisian Ligue Professionnelle 1', 'Senegalese Ligue 1',
+  'Ivorian Ligue 1', 'Cameroonian MTN Elite One',
 ]);
 
 // ---------------------------------------------------------------------------
-// Top-6 team sets
+// Top-6 team sets (for verification)
 // ---------------------------------------------------------------------------
 const PREMIER_LEAGUE_TEAMS = new Set([
   'Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton',
@@ -339,195 +229,13 @@ const CHAMPIONS_LEAGUE_TEAMS = new Set([
   ...LIGUE_1_TEAMS,
 ]);
 
-// ---------------------------------------------------------------------------
-// Other league team sets (used for verification)
-// ---------------------------------------------------------------------------
-const EREDIVISIE_TEAMS = new Set([
-  'Ajax', 'PSV', 'PSV Eindhoven', 'Feyenoord', 'AZ', 'AZ Alkmaar',
-  'Utrecht', 'FC Utrecht', 'Twente', 'FC Twente', 'Heerenveen',
-  'SC Heerenveen', 'Sparta Rotterdam', 'NEC Nijmegen', 'RKC Waalwijk',
-  'Fortuna Sittard', 'Almere City', 'Go Ahead Eagles', 'Heracles',
-  'Willem II', 'NAC Breda', 'PEC Zwolle',
-]);
-
-const PRIMEIRA_LIGA_TEAMS = new Set([
-  'Benfica', 'Porto', 'FC Porto', 'Sporting CP', 'Sporting',
-  'Braga', 'SC Braga', 'Vitoria Guimaraes', 'Guimaraes',
-  'Rio Ave', 'Boavista', 'Famalicao', 'Moreirense', 'Arouca',
-  'Casa Pia', 'Chaves', 'Estrela Amadora', 'Farense', 'Gil Vicente',
-  'Vizela', 'AVS', 'Nacional',
-]);
-
-const CHAMPIONSHIP_TEAMS = new Set([
-  'Leeds United', 'Sheffield United', 'Burnley', 'Middlesbrough',
-  'Sunderland', 'West Bromwich Albion', 'WBA', 'Coventry City',
-  'Watford', 'Norwich City', 'Stoke City', 'Hull City',
-  'Millwall', 'Preston North End', 'Swansea City', 'Bristol City',
-  'Cardiff City', 'Luton Town', 'QPR', 'Queens Park Rangers',
-  'Plymouth Argyle', 'Oxford United', 'Derby County', 'Portsmouth',
-]);
-
-const SCOTTISH_PREM_TEAMS = new Set([
-  'Celtic', 'Rangers', 'Hearts', 'Hibernian', 'Aberdeen',
-  'Dundee United', 'Dundee', 'Kilmarnock', 'Motherwell', 'St Mirren',
-  'St Johnstone', 'Ross County', 'Livingston', 'Hamilton',
-]);
-
-const SUPER_LIG_TEAMS = new Set([
-  'Galatasaray', 'Fenerbahce', 'Besiktas', 'Trabzonspor',
-  'Basaksehir', 'Istanbul Basaksehir', 'Sivasspor', 'Konyaspor',
-  'Alanyaspor', 'Kasimpasa', 'Rizespor', 'Kayserispor',
-  'Antalyaspor', 'Gaziantep FK', 'Hatayspor', 'Samsunspor',
-  'Adana Demirspor', 'Ankaragücü',
-]);
-
-const BELGIAN_PRO_TEAMS = new Set([
-  'Club Brugge', 'Anderlecht', 'RSC Anderlecht', 'Gent', 'KAA Gent',
-  'Standard Liège', 'Standard', 'Antwerp', 'Royal Antwerp',
-  'Genk', 'Racing Genk', 'Union Saint-Gilloise', 'Cercle Brugge',
-  'Mechelen', 'KV Mechelen', 'Westerlo', 'Kortrijk', 'Sint-Truiden',
-  'Charleroi', 'Sporting Charleroi',
-]);
-
-const MLS_TEAMS = new Set([
-  'LA Galaxy', 'LAFC', 'Los Angeles FC', 'Inter Miami', 'Inter Miami CF',
-  'Seattle Sounders', 'Portland Timbers', 'Atlanta United',
-  'New York City FC', 'NYCFC', 'New York Red Bulls', 'Red Bulls',
-  'Toronto FC', 'CF Montréal', 'Columbus Crew', 'Chicago Fire',
-  'FC Dallas', 'Sporting Kansas City', 'Real Salt Lake',
-  'Colorado Rapids', 'San Jose Earthquakes', 'Minnesota United',
-  'Orlando City', 'DC United', 'Philadelphia Union',
-  'New England Revolution', 'Nashville SC', 'Charlotte FC',
-  'Austin FC', 'St. Louis City SC', 'St Louis City',
-]);
-
-const SAUDI_PRO_TEAMS = new Set([
-  'Al-Hilal', 'Al Hilal', 'Al-Nassr', 'Al Nassr', 'Al-Ittihad', 'Al Ittihad',
-  'Al-Ahli', 'Al Ahli', 'Al-Shabab', 'Al Shabab', 'Al-Qadsiah',
-  'Al-Fayha', 'Al-Fateh', 'Al-Khaleej', 'Al-Riyadh', 'Al-Ettifaq',
-  'Al-Okhdood', 'Al-Taawoun', 'Al-Wehda', 'Damac FC',
-]);
-
-const LIGA_MX_TEAMS = new Set([
-  'Club América', 'America', 'Chivas', 'Guadalajara', 'Cruz Azul',
-  'Tigres UANL', 'Tigres', 'Monterrey', 'CF Monterrey',
-  'Pumas UNAM', 'Pumas', 'León', 'Atlas', 'Toluca',
-  'Santos Laguna', 'Pachuca', 'Necaxa', 'Querétaro', 'Mazatlán',
-  'San Luis', 'Atlético San Luis', 'Juárez', 'FC Juárez',
-  'Tijuana', 'Club Tijuana', 'Puebla', 'Xolos',
-]);
-
-const BRASILEIRAO_TEAMS = new Set([
-  'Flamengo', 'CR Flamengo', 'Palmeiras', 'SE Palmeiras',
-  'Atletico Mineiro', 'Atlético-MG', 'Fluminense', 'Botafogo',
-  'Internacional', 'Grêmio', 'São Paulo', 'Santos',
-  'Vasco da Gama', 'Vasco', 'Corinthians', 'Cruzeiro',
-  'Bahia', 'Fortaleza', 'RB Bragantino', 'Athletico Paranaense',
-  'Athletico-PR', 'Cuiabá', 'Goiás', 'Coritiba', 'América-MG',
-]);
-
-const ARGENTINA_TEAMS = new Set([
-  'River Plate', 'Boca Juniors', 'Racing Club', 'Independiente',
-  'San Lorenzo', 'Estudiantes', 'Vélez Sársfield', 'Talleres',
-  'Atletico Tucumán', 'Newell\'s Old Boys', 'Rosario Central',
-  'Lanús', 'Defensa y Justicia', 'Huracán', 'Argentinos Juniors',
-  'Banfield', 'Godoy Cruz', 'Tigre', 'Platense', 'Instituto',
-]);
-
-const J1_LEAGUE_TEAMS = new Set([
-  'Vissel Kobe', 'Gamba Osaka', 'Cerezo Osaka', 'Kashima Antlers',
-  'Kashiwa Reysol', 'Urawa Red Diamonds', 'Urawa Reds',
-  'FC Tokyo', 'Yokohama F. Marinos', 'Yokohama Marinos',
-  'Nagoya Grampus', 'Sanfrecce Hiroshima', 'Sagan Tosu',
-  'Avispa Fukuoka', 'Shonan Bellmare', 'Albirex Niigata',
-  'Kyoto Sanga', 'Consadole Sapporo',
-]);
-
-const GHANA_PREMIER_TEAMS = new Set([
-  'Accra Hearts of Oak', 'Hearts of Oak', 'Asante Kotoko', 'Kotoko',
-  'Medeama SC', 'Medeama', 'Dreams FC', 'Bechem United',
-  'Aduana Stars', 'Aduana FC', 'Ashantigold SC', 'Ashantigold',
-  'King Faisal', 'Real Tamale United', 'RTU', 'Bibiani Gold Stars',
-  'Berekum Chelsea', 'Nations FC', 'Nsoatreman FC',
-  'Legon Cities', 'Karela United', 'FC Samartex', 'Samartex',
-  'Bofoakwa Tano', 'Heart of Lions',
-]);
-
-const EGYPT_PREMIER_TEAMS = new Set([
-  'Al Ahly', 'Zamalek', 'Pyramids FC', 'Pyramids',
-  'El Gouna FC', 'Misr Lel Maqasa', 'ENPPI', 'Smouha',
-  'Future FC', 'Al Masry', 'Ceramica Cleopatra', 'ZED FC',
-]);
-
-const NIGERIA_NPFL_TEAMS = new Set([
-  'Enyimba', 'Enyimba FC', 'Rivers United', 'Shooting Stars',
-  'Kano Pillars', 'Heartland FC', 'Sunshine Stars', 'Rangers International',
-  'Lobi Stars', 'Kwara United', 'Nasarawa United', 'Dakkada FC',
-  'Plateau United', 'Wikki Tourists',
-]);
-
-const K_LEAGUE_TEAMS = new Set([
-  'Jeonbuk Hyundai Motors', 'Jeonbuk', 'Ulsan Hyundai', 'Ulsan',
-  'FC Seoul', 'Suwon Samsung Bluewings', 'Suwon Bluewings',
-  'Pohang Steelers', 'Pohang', 'Incheon United',
-  'Seongnam FC', 'Jeju United', 'Daegu FC', 'Gangwon FC',
-  'Gimcheon Sangmu', 'Suwon FC',
-]);
-
-const CSL_TEAMS = new Set([
-  'Shanghai Port', 'Shanghai SIPG', 'Shandong Taishan', 'Shandong',
-  'Guangzhou FC', 'Guangzhou Evergrande', 'Beijing Guoan',
-  'Wuhan Three Towns', 'Zhejiang FC', 'Chengdu Rongcheng',
-  'Tianjin Jinmen Tiger', 'Cangzhou Mighty Lions',
-]);
-
 const LEAGUE_TEAM_MAP: Record<string, Set<string>> = {
-  'Premier League':            PREMIER_LEAGUE_TEAMS,
-  'La Liga':                   LA_LIGA_TEAMS,
-  'Bundesliga':                BUNDESLIGA_TEAMS,
-  'Serie A':                   SERIE_A_TEAMS,
-  'Ligue 1':                   LIGUE_1_TEAMS,
-  'Champions League':          CHAMPIONS_LEAGUE_TEAMS,
-  // Other leagues
-  'Eredivisie':                EREDIVISIE_TEAMS,
-  'Eerste Divisie':            EREDIVISIE_TEAMS,
-  'Primeira Liga':             PRIMEIRA_LIGA_TEAMS,
-  'Liga Portugal':             PRIMEIRA_LIGA_TEAMS,
-  'Liga NOS':                  PRIMEIRA_LIGA_TEAMS,
-  'Championship':              CHAMPIONSHIP_TEAMS,
-  'EFL Championship':          CHAMPIONSHIP_TEAMS,
-  'Scottish Premiership':      SCOTTISH_PREM_TEAMS,
-  'Scottish Premier League':   SCOTTISH_PREM_TEAMS,
-  'Süper Lig':                 SUPER_LIG_TEAMS,
-  'Super Lig':                 SUPER_LIG_TEAMS,
-  'Turkish Super Lig':         SUPER_LIG_TEAMS,
-  'Belgian Pro League':        BELGIAN_PRO_TEAMS,
-  'Jupiler Pro League':        BELGIAN_PRO_TEAMS,
-  'First Division A':          BELGIAN_PRO_TEAMS,
-  'MLS':                       MLS_TEAMS,
-  'Major League Soccer':       MLS_TEAMS,
-  'Saudi Pro League':          SAUDI_PRO_TEAMS,
-  'Saudi Professional League': SAUDI_PRO_TEAMS,
-  'Liga MX':                   LIGA_MX_TEAMS,
-  'Mexican Liga MX':           LIGA_MX_TEAMS,
-  'Brazilian Série A':         BRASILEIRAO_TEAMS,
-  'Brasileirão':               BRASILEIRAO_TEAMS,
-  'Série A Brazil':            BRASILEIRAO_TEAMS,
-  'Argentine Liga Profesional':       ARGENTINA_TEAMS,
-  'Primera División Argentina':       ARGENTINA_TEAMS,
-  'Argentine Primera División':       ARGENTINA_TEAMS,
-  'J1 League':                 J1_LEAGUE_TEAMS,
-  'J-League':                  J1_LEAGUE_TEAMS,
-  'Japanese J1 League':        J1_LEAGUE_TEAMS,
-  'K League 1':                K_LEAGUE_TEAMS,
-  'Korean K League 1':         K_LEAGUE_TEAMS,
-  'Chinese Super League':      CSL_TEAMS,
-  'CSL':                       CSL_TEAMS,
-  'Ghana Premier League':      GHANA_PREMIER_TEAMS,
-  'GPL':                       GHANA_PREMIER_TEAMS,
-  'Egyptian Premier League':   EGYPT_PREMIER_TEAMS,
-  'Nigeria Professional Football League': NIGERIA_NPFL_TEAMS,
-  'NPFL':                      NIGERIA_NPFL_TEAMS,
+  'Premier League':   PREMIER_LEAGUE_TEAMS,
+  'La Liga':          LA_LIGA_TEAMS,
+  'Bundesliga':       BUNDESLIGA_TEAMS,
+  'Serie A':          SERIE_A_TEAMS,
+  'Ligue 1':          LIGUE_1_TEAMS,
+  'Champions League': CHAMPIONS_LEAGUE_TEAMS,
 };
 
 // ---------------------------------------------------------------------------
@@ -554,37 +262,159 @@ function isTop6Match(m: EnrichedMatch): boolean {
 
 function getDisplayLeagueName(m: EnrichedMatch): string {
   const league = m.league ?? 'Other';
-
-  // Top-6 check
   if (TOP_6_LABELS.has(league)) {
     if (league === 'Champions League') return league;
     if (hasVerifiedTeam(m, league)) return league;
-    // Team not verified for this top-6 league — fall through to others
   }
-
-  // Cup competitions
   if (CUPS_LABELS.has(league)) return league;
-
-  // Other recognised leagues
   if (OTHER_LEAGUE_LABELS.has(league)) return league;
-
-  // Anything else
   return 'Other';
 }
 
 function leagueSortKey(leagueName: string): string {
-  // Top-6 first
   const top6Idx = TOP_6_LEAGUES.findIndex((l) => l.label === leagueName);
   if (top6Idx !== -1) return `00_${String(top6Idx).padStart(2, '0')}_${leagueName}`;
-
-  // Cups next
   if (CUPS_LABELS.has(leagueName)) return `01_${leagueName.toLowerCase()}`;
-
-  // Other recognised leagues
   if (OTHER_LEAGUE_LABELS.has(leagueName)) return `02_${leagueName.toLowerCase()}`;
-
-  // Catch-all
   return `99_${leagueName.toLowerCase()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Odds extraction
+// ---------------------------------------------------------------------------
+function extractOddsMap(oddsArray: unknown[], homeTeam: string, awayTeam: string): OddsMap | undefined {
+  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return undefined;
+
+  // Backend puts 1X2 odds under "match_result" key, which arrives here as the array directly.
+  // Filter to only 1X2/match-result market entries if a market field exists.
+  const entries = (oddsArray as Array<Record<string, unknown>>).filter((o) => {
+    const market = String(o.market ?? o.market_name ?? o.marketName ?? o.type ?? '')
+      .toLowerCase().replace(/[\s_-]/g, '');
+    return !market || market === '1x2' || market === 'matchresult' || market === 'matchodds';
+  });
+
+  const pool = entries.length > 0 ? entries : (oddsArray as Array<Record<string, unknown>>);
+  const parseOdd = (o: Record<string, unknown>): number =>
+    parseFloat(String(o.odd ?? o.value ?? o.odds ?? o.price ?? o.decimal ?? '0'));
+
+  const norm = (s: string) => s.toLowerCase().trim();
+  const normHome = norm(homeTeam);
+  const normAway = norm(awayTeam);
+  const matchesTeam = (selection: string, teamNorm: string) => {
+    const sel = norm(selection);
+    return sel === teamNorm || sel.includes(teamNorm) || teamNorm.includes(sel);
+  };
+
+  let home = 0, draw = 0, away = 0;
+  for (const o of pool) {
+    const sel = norm(String(o.selection ?? o.outcome ?? o.name ?? o.label ?? ''));
+    const val = parseOdd(o);
+    if (val <= 0) continue;
+    if (sel === 'draw' || sel === 'x') { if (draw === 0) draw = val; }
+    else if (matchesTeam(sel, normHome)) { if (home === 0) home = val; }
+    else if (matchesTeam(sel, normAway)) { if (away === 0) away = val; }
+  }
+
+  if (home === 0 && draw === 0 && away === 0) {
+    const numericVals = pool.map(parseOdd).filter((v) => v > 1 && v < 50);
+    if (numericVals.length >= 3) return { home: numericVals[0], draw: numericVals[1], away: numericVals[2] };
+    return undefined;
+  }
+  return { home, draw, away };
+}
+
+// ---------------------------------------------------------------------------
+// Unwrap /with-all-odds response
+//
+// Backend MatchService.withAllOdds() bundles matches inside category arrays.
+// The outer controller wraps this as:
+//   { success: true, data: { live: [...], today: [...], upcoming: [...],
+//                            results: [...], future: [...] } }
+// Each item in the array is:
+//   { match: Match, match_result: [...odds], asian_handicap: [...odds] }
+//
+// NOTE: The backend also supports a flat array shape from some endpoints.
+// The unwrapper handles both gracefully.
+// ---------------------------------------------------------------------------
+function unwrapResponse(raw: unknown): Array<{ match: Match; odds: unknown[] }> {
+  if (!raw) return [];
+  const obj = raw as Record<string, unknown>;
+  if (!obj.success || !obj.data) return [];
+  const data = obj.data as Record<string, unknown>;
+  const allItems: Array<{ match: Match; odds: unknown[] }> = [];
+
+  // Known category keys that the backend uses (order determines display priority)
+  const categories = ['live', 'today', 'upcoming', 'future', 'results'] as const;
+  const consumed = new Set<string>();
+
+  for (const cat of categories) {
+    const arr = data[cat];
+    if (Array.isArray(arr)) {
+      consumed.add(cat);
+      for (const item of arr) {
+        const i = item as Record<string, unknown>;
+        const match = i.match as Match;
+        if (!match || !match.id) continue;
+
+        // Backend uses "match_result" key for 1X2 odds (from withAllOdds)
+        // and "odds" as a fallback for older endpoints.
+        const oddsArray: unknown[] =
+          Array.isArray(i.match_result) ? (i.match_result as unknown[]) :
+          Array.isArray(i.odds)         ? (i.odds as unknown[]) :
+          [];
+
+        allItems.push({ match, odds: oddsArray });
+      }
+    }
+  }
+
+  // Catch any additional top-level keys not in the known list
+  for (const [key, val] of Object.entries(data)) {
+    if (consumed.has(key) || !Array.isArray(val)) continue;
+    for (const item of val as unknown[]) {
+      const i = item as Record<string, unknown>;
+      const match = (i.match ?? i) as Match;
+      if (!match || !match.id) continue;
+      const oddsArray: unknown[] =
+        Array.isArray(i.match_result) ? (i.match_result as unknown[]) :
+        Array.isArray(i.odds)         ? (i.odds as unknown[]) :
+        [];
+      allItems.push({ match, odds: oddsArray });
+    }
+  }
+
+  return allItems;
+}
+
+// ---------------------------------------------------------------------------
+// Categorise
+//
+// Backend always persists status as "LIVE", "FINISHED", or "UPCOMING".
+// The extended LIVE_STATUSES / FINISHED_STATUSES sets handle any edge-case
+// pass-through values.
+// ---------------------------------------------------------------------------
+type MatchCategory = 'live' | 'today' | 'upcoming' | 'finished';
+
+function categorise(match: Match): MatchCategory {
+  const status = match.status ?? '';
+
+  // Check finished first — finished always wins (mirrors backend priority)
+  if (FINISHED_STATUSES.has(status)) return 'finished';
+
+  // Then live
+  if (LIVE_STATUSES.has(status)) return 'live';
+
+  // Otherwise use kickoff time for today / upcoming split
+  if (match.kickoffAt) {
+    const kickoff = new Date(match.kickoffAt);
+    const now = new Date();
+    if (kickoff.toDateString() === now.toDateString()) return 'today';
+    if (kickoff > now) return 'upcoming';
+    // Kickoff in the past but status unknown → treat as finished
+    return 'finished';
+  }
+
+  return 'finished';
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +438,8 @@ function FinishedMatchRow({ match }: { match: EnrichedMatch }) {
           {match.homeTeam}
         </span>
         {match.homeLogo && (
-          <img src={match.homeLogo} alt={match.homeTeam} className="w-5 h-5 object-contain shrink-0" />
+          <img src={match.homeLogo} alt={match.homeTeam} className="w-5 h-5 object-contain shrink-0"
+               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         )}
       </div>
 
@@ -629,7 +460,8 @@ function FinishedMatchRow({ match }: { match: EnrichedMatch }) {
 
       <div className="flex flex-1 items-center gap-1.5 min-w-0">
         {match.awayLogo && (
-          <img src={match.awayLogo} alt={match.awayTeam} className="w-5 h-5 object-contain shrink-0" />
+          <img src={match.awayLogo} alt={match.awayTeam} className="w-5 h-5 object-contain shrink-0"
+               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         )}
         <span className={`text-sm truncate ${awayWon ? 'font-bold text-slate-900 dark:text-slate-100' : 'font-medium text-slate-500 dark:text-slate-400'}`}>
           {match.awayTeam}
@@ -645,7 +477,9 @@ function FinishedMatchRow({ match }: { match: EnrichedMatch }) {
 function MatchRow({ match, isUpcomingLayout = false }: { match: EnrichedMatch; isUpcomingLayout?: boolean }) {
   const navigate = useNavigate();
   const { betSlip, addToBetSlip, showToast } = useAppStore();
-  const isLive = LIVE_STATUSES.has(match.status ?? '');
+
+  // Backend normalises to "LIVE" — extended set is the safety net
+  const isLive     = LIVE_STATUSES.has(match.status ?? '');
   const isFinished = FINISHED_STATUSES.has(match.status ?? '');
 
   const isSelected = (market: string, selection: string) =>
@@ -679,13 +513,19 @@ function MatchRow({ match, isUpcomingLayout = false }: { match: EnrichedMatch; i
 
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex flex-1 items-center gap-1.5 min-w-0">
-            {match.homeLogo && <img src={match.homeLogo} alt={match.homeTeam} className="w-5 h-5 object-contain shrink-0" />}
+            {match.homeLogo && (
+              <img src={match.homeLogo} alt={match.homeTeam} className="w-5 h-5 object-contain shrink-0"
+                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            )}
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{match.homeTeam}</span>
           </div>
           <span className="text-xs font-bold text-slate-400 shrink-0 px-1">vs</span>
           <div className="flex flex-1 items-center gap-1.5 justify-end min-w-0">
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate text-right">{match.awayTeam}</span>
-            {match.awayLogo && <img src={match.awayLogo} alt={match.awayTeam} className="w-5 h-5 object-contain shrink-0" />}
+            {match.awayLogo && (
+              <img src={match.awayLogo} alt={match.awayTeam} className="w-5 h-5 object-contain shrink-0"
+                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            )}
           </div>
         </div>
 
@@ -747,7 +587,10 @@ function MatchRow({ match, isUpcomingLayout = false }: { match: EnrichedMatch; i
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
-              {match.homeLogo && <img src={match.homeLogo} alt={match.homeTeam} className="w-4 h-4 object-contain shrink-0" />}
+              {match.homeLogo && (
+                <img src={match.homeLogo} alt={match.homeTeam} className="w-4 h-4 object-contain shrink-0"
+                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              )}
               <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{match.homeTeam}</span>
             </div>
             {(isLive || isFinished) && (
@@ -756,7 +599,10 @@ function MatchRow({ match, isUpcomingLayout = false }: { match: EnrichedMatch; i
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
-              {match.awayLogo && <img src={match.awayLogo} alt={match.awayTeam} className="w-4 h-4 object-contain shrink-0" />}
+              {match.awayLogo && (
+                <img src={match.awayLogo} alt={match.awayTeam} className="w-4 h-4 object-contain shrink-0"
+                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              )}
               <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{match.awayTeam}</span>
             </div>
             {(isLive || isFinished) && (
@@ -818,116 +664,6 @@ function SkeletonRow() {
 }
 
 // ---------------------------------------------------------------------------
-// Odds extraction
-// ---------------------------------------------------------------------------
-function extractOddsMap(oddsArray: unknown[], homeTeam: string, awayTeam: string): OddsMap | undefined {
-  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return undefined;
-
-  const entries = (oddsArray as Array<Record<string, unknown>>).filter((o) => {
-    const market = String(o.market ?? o.market_name ?? o.marketName ?? o.type ?? '')
-      .toLowerCase().replace(/[\s_-]/g, '');
-    return market === '1x2' || market === 'matchresult' || market === 'matchodds';
-  });
-
-  const pool = entries.length > 0 ? entries : (oddsArray as Array<Record<string, unknown>>);
-  const parseOdd = (o: Record<string, unknown>): number =>
-    parseFloat(String(o.odd ?? o.value ?? o.odds ?? o.price ?? o.decimal ?? '0'));
-
-  const norm = (s: string) => s.toLowerCase().trim();
-  const normHome = norm(homeTeam);
-  const normAway = norm(awayTeam);
-  const matchesTeam = (selection: string, teamNorm: string) => {
-    const sel = norm(selection);
-    return sel === teamNorm || sel.includes(teamNorm) || teamNorm.includes(sel);
-  };
-
-  let home = 0, draw = 0, away = 0;
-  for (const o of pool) {
-    const sel = norm(String(o.selection ?? o.outcome ?? o.name ?? o.label ?? ''));
-    const val = parseOdd(o);
-    if (val <= 0) continue;
-    if (sel === 'draw' || sel === 'x') { if (draw === 0) draw = val; }
-    else if (matchesTeam(sel, normHome)) { if (home === 0) home = val; }
-    else if (matchesTeam(sel, normAway)) { if (away === 0) away = val; }
-  }
-
-  if (home === 0 && draw === 0 && away === 0) {
-    const numericVals = pool.map(parseOdd).filter((v) => v > 1 && v < 50);
-    if (numericVals.length >= 3) return { home: numericVals[0], draw: numericVals[1], away: numericVals[2] };
-    return undefined;
-  }
-  return { home, draw, away };
-}
-
-// ---------------------------------------------------------------------------
-// Unwrap /with-all-odds response
-// ---------------------------------------------------------------------------
-function unwrapResponse(raw: unknown): Array<{ match: Match; odds: unknown[] }> {
-  if (!raw) return [];
-  const obj = raw as Record<string, unknown>;
-  if (!obj.success || !obj.data) return [];
-  const data = obj.data as Record<string, unknown>;
-  const allItems: Array<{ match: Match; odds: unknown[] }> = [];
-
-  const categories = ['future', 'live', 'results', 'today', 'upcoming'] as const;
-  const consumed = new Set<string>();
-
-  for (const cat of categories) {
-    const arr = data[cat];
-    if (Array.isArray(arr)) {
-      consumed.add(cat);
-      for (const item of arr) {
-        const i = item as Record<string, unknown>;
-        const match = i.match as Match;
-        if (!match || !match.id) continue;
-        const oddsArray: unknown[] = Array.isArray(i.match_result)
-          ? (i.match_result as unknown[])
-          : Array.isArray(i.odds)
-          ? (i.odds as unknown[])
-          : [];
-        allItems.push({ match, odds: oddsArray });
-      }
-    }
-  }
-
-  for (const [key, val] of Object.entries(data)) {
-    if (consumed.has(key) || !Array.isArray(val)) continue;
-    for (const item of val as unknown[]) {
-      const i = item as Record<string, unknown>;
-      const match = (i.match ?? i) as Match;
-      if (!match || !match.id) continue;
-      const oddsArray: unknown[] = Array.isArray(i.match_result)
-        ? (i.match_result as unknown[])
-        : Array.isArray(i.odds)
-        ? (i.odds as unknown[])
-        : [];
-      allItems.push({ match, odds: oddsArray });
-    }
-  }
-
-  return allItems;
-}
-
-// ---------------------------------------------------------------------------
-// Categorise
-// ---------------------------------------------------------------------------
-type MatchCategory = 'live' | 'today' | 'upcoming' | 'finished';
-
-function categorise(match: Match): MatchCategory {
-  const status = match.status ?? '';
-  if (FINISHED_STATUSES.has(status)) return 'finished';
-  if (LIVE_STATUSES.has(status)) return 'live';
-  if (match.kickoffAt) {
-    const kickoff = new Date(match.kickoffAt);
-    const now = new Date();
-    if (kickoff.toDateString() === now.toDateString()) return 'today';
-    if (kickoff > now) return 'upcoming';
-    return 'finished';
-  }
-  return 'finished';
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 export default function MatchList() {
@@ -944,7 +680,6 @@ export default function MatchList() {
     const alive = () => myGen === genRef.current;
 
     async function load(isBackground = false) {
-      // Only show skeletons on the very first load
       if (!isBackground && !initialLoadDone.current) {
         setLoading(true);
       }
@@ -952,27 +687,28 @@ export default function MatchList() {
       try {
         const response = await publicMatches.withAllOdds();
         if (!alive()) return;
-        const items = unwrapResponse(response);
-        const enriched: EnrichedMatch[] = [];
 
+        const items = unwrapResponse(response);
+
+        const enriched: EnrichedMatch[] = [];
         for (const item of items) {
           const oddsMap = extractOddsMap(item.odds, item.match.homeTeam ?? '', item.match.awayTeam ?? '');
           enriched.push({ ...item.match, oddsMap });
         }
 
+        // Deduplicate by id (can appear across multiple category arrays)
         const seen = new Set<string>();
         const deduped = enriched.filter((m) => {
           if (seen.has(m.id)) return false;
           seen.add(m.id);
           return true;
         });
+
         if (alive()) {
           setAllMatches(deduped);
           initialLoadDone.current = true;
         }
       } catch (err) {
-        // On background refresh, swallow the error silently so the
-        // existing data stays visible and the user isn't disturbed
         if (alive() && !isBackground) {
           setError((err as Error).message ?? 'Failed to load matches');
         }
@@ -981,10 +717,9 @@ export default function MatchList() {
       }
     }
 
-    // First load — show skeletons
     load(false);
 
-    // Subsequent refreshes — fully silent
+    // Background refresh every 30s (only when tab visible)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') load(true);
     }, 30_000);
@@ -1001,22 +736,19 @@ export default function MatchList() {
     };
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Derived data
+  // ---------------------------------------------------------------------------
   const { leagueMatches, otherMatches } = useMemo(() => {
     if (!activeLeague) {
       return { leagueMatches: allMatches, otherMatches: [] as EnrichedMatch[] };
     }
-
     const inLeague: EnrichedMatch[] = [];
     const outside: EnrichedMatch[] = [];
-
     for (const m of allMatches) {
-      if (matchBelongsToLeague(m, activeLeague)) {
-        inLeague.push(m);
-      } else {
-        outside.push(m);
-      }
+      if (matchBelongsToLeague(m, activeLeague)) inLeague.push(m);
+      else outside.push(m);
     }
-
     return { leagueMatches: inLeague, otherMatches: outside };
   }, [allMatches, activeLeague]);
 
@@ -1025,6 +757,7 @@ export default function MatchList() {
       live: [], today: [], upcoming: [], finished: [],
     };
     for (const m of leagueMatches) cats[categorise(m)].push(m);
+    // Most recent finished first
     cats.finished.sort((a, b) => {
       const ta = a.kickoffAt ? new Date(a.kickoffAt).getTime() : 0;
       const tb = b.kickoffAt ? new Date(b.kickoffAt).getTime() : 0;
@@ -1049,7 +782,6 @@ export default function MatchList() {
   // ---------------------------------------------------------------------------
   // Rendering helpers
   // ---------------------------------------------------------------------------
-
   function groupByLeague(matches: EnrichedMatch[]): Map<string, EnrichedMatch[]> {
     const map = new Map<string, EnrichedMatch[]>();
     for (const m of matches) {
@@ -1058,22 +790,26 @@ export default function MatchList() {
       map.get(key)!.push(m);
     }
     return new Map(
-      [...map.entries()].sort(([a], [b]) =>
-        leagueSortKey(a).localeCompare(leagueSortKey(b))
-      ),
+      [...map.entries()].sort(([a], [b]) => leagueSortKey(a).localeCompare(leagueSortKey(b))),
     );
   }
 
-  function renderLeagueCard(league: string, lm: EnrichedMatch[], isUpcoming: boolean, isFinishedSection = false) {
+  function renderLeagueCard(
+    league: string,
+    lm: EnrichedMatch[],
+    isUpcoming: boolean,
+    isFinishedSection = false,
+  ) {
     const isTop6 = TOP_6_LABELS.has(league);
     const isCup  = CUPS_LABELS.has(league);
-    const showLogo = (isTop6 || isCup) && league !== 'Other' && league !== 'Other Leagues' && league !== 'Other Cups';
+    const showLogo = (isTop6 || isCup) && league !== 'Other';
 
     return (
       <div key={league} className="card mb-2 overflow-hidden">
         <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
           {showLogo && lm[0]?.leagueLogo && (
-            <img src={lm[0].leagueLogo} alt={league} className="w-4 h-4 object-contain" />
+            <img src={lm[0].leagueLogo} alt={league} className="w-4 h-4 object-contain"
+                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           )}
           <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
             {league}
@@ -1098,10 +834,9 @@ export default function MatchList() {
   ) {
     if (matches.length === 0) return null;
 
-    // Split into top-6, cups, other leagues, and unknown
-    const top6    = matches.filter(isTop6Match);
-    const cups    = matches.filter((m) => !isTop6Match(m) && CUPS_LABELS.has(m.league ?? ''));
-    const others  = matches.filter((m) => !isTop6Match(m) && !CUPS_LABELS.has(m.league ?? ''));
+    const top6   = matches.filter(isTop6Match);
+    const cups   = matches.filter((m) => !isTop6Match(m) && CUPS_LABELS.has(m.league ?? ''));
+    const others = matches.filter((m) => !isTop6Match(m) && !CUPS_LABELS.has(m.league ?? ''));
 
     return (
       <section className="mb-6">
@@ -1109,7 +844,8 @@ export default function MatchList() {
           <h2 className="font-heading text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             {isLiveSection && <FiberManualRecordIcon sx={{ fontSize: 10 }} className="text-green-500 animate-pulse" />}
             {isFinishedSection && (
-              <svg className="text-slate-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg className="text-slate-400" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="9 12 11 14 15 10" />
               </svg>
@@ -1129,20 +865,16 @@ export default function MatchList() {
 
         {isFinishedSection && !showFinished ? null : (
           <>
-            {/* Top-6 leagues */}
             {[...groupByLeague(top6).entries()].map(([league, lm]) =>
               renderLeagueCard(league, lm, isUpcoming, isFinishedSection)
             )}
 
-            {/* Divider → Other Cups */}
             {cups.length > 0 && (
               <>
                 {top6.length > 0 && (
                   <div className="flex items-center gap-2 my-3">
                     <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Other Cups
-                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Other Cups</span>
                     <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                   </div>
                 )}
@@ -1152,15 +884,12 @@ export default function MatchList() {
               </>
             )}
 
-            {/* Divider → Other Leagues */}
             {others.length > 0 && (
               <>
                 {(top6.length > 0 || cups.length > 0) && (
                   <div className="flex items-center gap-2 my-3">
                     <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Other Leagues
-                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Other Leagues</span>
                     <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                   </div>
                 )}
@@ -1188,10 +917,8 @@ export default function MatchList() {
 
   const hasOtherContent =
     otherMatches.length > 0 &&
-    (otherGrouped.live.length > 0 ||
-      otherGrouped.today.length > 0 ||
-      otherGrouped.upcoming.length > 0 ||
-      otherGrouped.finished.length > 0);
+    (otherGrouped.live.length > 0 || otherGrouped.today.length > 0 ||
+     otherGrouped.upcoming.length > 0 || otherGrouped.finished.length > 0);
 
   return (
     <div className="px-4 mt-4">
