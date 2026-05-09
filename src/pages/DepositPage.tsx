@@ -108,32 +108,71 @@ export default function DepositPage() {
   const amountValid  = !isNaN(parsedAmount) && parsedAmount >= MIN_AMOUNT;
 
   // ── Paystack submit ───────────────────────────────────────────────────────
-  // FIX: Open the popup SYNCHRONOUSLY inside the click handler (before any await)
-  // so browsers don't treat it as a pop-up blocker violation. Then redirect the
-  // already-open window once the API returns the auth URL.
+  // FIX 1: Open the popup SYNCHRONOUSLY inside the click handler BEFORE any
+  //         async work so browsers treat it as a direct user-gesture response.
+  // FIX 2: Guard immediately if the popup was blocked — show an error instead
+  //         of silently hanging.
+  // FIX 3: Unwrap Paystack's nested response shape:
+  //         { status, data: { authorization_url, reference } }
   const handlePaystackDeposit = async () => {
     if (!amountValid) return;
+
+    // ✅ FIX 1 & 2 — Open popup synchronously, guard if blocked
+    const popup = window.open('', 'paystack', 'width=600,height=700,scrollbars=yes');
+
+    if (!popup || popup.closed) {
+      setErrorMsg(
+        'Your browser blocked the payment popup. Please allow popups for this site in your browser settings and try again.'
+      );
+      setStep('error');
+      return;
+    }
+
+    // Show a friendly loading page in the popup while we fetch the URL
+    popup.document.write(`
+      <html><head><title>Redirecting to Paystack…</title>
+      <style>
+        body { margin:0; display:flex; align-items:center; justify-content:center;
+               min-height:100vh; font-family:sans-serif; background:#0f172a; color:#94a3b8; }
+        .spinner { width:40px; height:40px; border:3px solid #334155;
+                   border-top-color:#3b82f6; border-radius:50%;
+                   animation:spin 0.8s linear infinite; margin-bottom:16px; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .wrap { text-align:center; }
+      </style></head>
+      <body><div class="wrap">
+        <div class="spinner"></div>
+        <p>Connecting to Paystack…</p>
+      </div></body></html>
+    `);
+
     setLoading(true);
     setErrorMsg('');
     setStep('processing');
 
-    // ✅ Open blank popup immediately — still inside the synchronous click context
-    const popup = window.open('', 'paystack', 'width=600,height=700,scrollbars=yes');
-
     try {
       const res  = await deposits.paystackInit({ amount: parsedAmount, currency: 'GHS', channel: 'mobile_money' });
-      const data = res.data as { authorizationUrl?: string; authorization_url?: string; reference?: string };
-      const authUrl = data.authorizationUrl ?? data.authorization_url;
-      const ref     = data.reference ?? '';
+
+      // ✅ FIX 3 — Paystack wraps its payload: { status, data: { authorization_url, reference } }
+      // Your backend forwards this shape, so unwrap it safely.
+      const raw      = res.data as Record<string, unknown>;
+      const inner    = (raw?.data ?? raw) as Record<string, unknown>;
+      const authUrl  = (inner?.authorization_url ?? inner?.authorizationUrl ?? '') as string;
+      const ref      = (inner?.reference ?? raw?.reference ?? '') as string;
+
+      console.log('[Paystack] init response:', res.data); // DEBUG — remove after confirming
 
       if (!authUrl) {
-        popup?.close();
-        throw new Error('No authorization URL returned from Paystack.');
+        popup.close();
+        throw new Error(
+          'Paystack did not return a payment URL. ' +
+          'The backend may have received an error from Paystack — check server logs.'
+        );
       }
 
-      setPaystackRef(ref);
+      setPaystackRef(ref as string);
 
-      if (popup && !popup.closed) {
+      if (!popup.closed) {
         // ✅ Redirect the already-open popup to the real Paystack URL
         popup.location.href = authUrl;
 
@@ -144,14 +183,20 @@ export default function DepositPage() {
           }, 500);
         });
       } else {
-        // Popup was blocked anyway — fall back to same-tab redirect
+        // Popup was closed before we could redirect — fall back to same-tab
         window.location.href = authUrl;
       }
 
       setStep('success');
     } catch (e: unknown) {
       popup?.close();
-      setErrorMsg(e instanceof Error ? e.message : 'Deposit failed. Please try again.');
+      // ✅ FIX 4 — Always log so you get visibility even without backend logs
+      console.error('[Paystack] deposit error:', e);
+      setErrorMsg(
+        e instanceof Error
+          ? e.message
+          : 'Deposit failed. Please check your connection and try again.'
+      );
       setStep('error');
     } finally {
       setLoading(false);
@@ -186,12 +231,12 @@ export default function DepositPage() {
         expectedGhsAmount: parseFloat(expectedGhs),
         senderAddress:     senderAddress.trim() || undefined,
         userNote:          userNote.trim() || undefined,
-        // screenshotUrl:  upload separately and pass URL here
       });
       const ref = (res.data as { id?: string }).id ?? '';
       setBinanceRef(ref);
       setStep('binance-success');
     } catch (e: unknown) {
+      console.error('[Binance] deposit submission error:', e);
       setErrorMsg(e instanceof Error ? e.message : 'Submission failed. Please try again.');
       setStep('error');
     } finally {
@@ -229,7 +274,8 @@ export default function DepositPage() {
           <AddCardIcon className="text-primary" sx={{ fontSize: 32 }} />
         </div>
         <h2 className="font-heading text-xl font-bold mb-2">Processing…</h2>
-        <p className="text-sm text-slate-500">Please wait. Do not close this page.</p>
+        <p className="text-sm text-slate-500">Please complete the payment in the popup window.</p>
+        <p className="text-xs text-slate-600 mt-2">Do not close this page.</p>
       </div>
     );
   }
