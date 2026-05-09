@@ -108,16 +108,9 @@ export default function DepositPage() {
   const amountValid  = !isNaN(parsedAmount) && parsedAmount >= MIN_AMOUNT;
 
   // ── Paystack submit ───────────────────────────────────────────────────────
-  // FIX 1: Open the popup SYNCHRONOUSLY inside the click handler BEFORE any
-  //         async work so browsers treat it as a direct user-gesture response.
-  // FIX 2: Guard immediately if the popup was blocked — show an error instead
-  //         of silently hanging.
-  // FIX 3: Unwrap Paystack's nested response shape:
-  //         { status, data: { authorization_url, reference } }
   const handlePaystackDeposit = async () => {
     if (!amountValid) return;
 
-    // ✅ FIX 1 & 2 — Open popup synchronously, guard if blocked
     const popup = window.open('', 'paystack', 'width=600,height=700,scrollbars=yes');
 
     if (!popup || popup.closed) {
@@ -128,7 +121,6 @@ export default function DepositPage() {
       return;
     }
 
-    // Show a friendly loading page in the popup while we fetch the URL
     popup.document.write(`
       <html><head><title>Redirecting to Paystack…</title>
       <style>
@@ -151,16 +143,12 @@ export default function DepositPage() {
     setStep('processing');
 
     try {
-      const res  = await deposits.paystackInit({ amount: parsedAmount, currency: 'GHS', channel: 'mobile_money' });
+      const res = await deposits.paystackInit({ amount: parsedAmount, currency: 'GHS', channel: 'mobile_money' });
 
-      // ✅ FIX 3 — Paystack wraps its payload: { status, data: { authorization_url, reference } }
-      // Your backend forwards this shape, so unwrap it safely.
-      const raw      = res.data as Record<string, unknown>;
-      const inner    = (raw?.data ?? raw) as Record<string, unknown>;
-      const authUrl  = (inner?.authorization_url ?? inner?.authorizationUrl ?? '') as string;
-      const ref      = (inner?.reference ?? raw?.reference ?? '') as string;
-
-      console.log('[Paystack] init response:', res.data); // DEBUG — remove after confirming
+      const raw     = res.data as Record<string, unknown>;
+      const inner   = (raw?.data ?? raw) as Record<string, unknown>;
+      const authUrl = (inner?.authorization_url ?? inner?.authorizationUrl ?? '') as string;
+      const ref     = (inner?.reference ?? raw?.reference ?? '') as string;
 
       if (!authUrl) {
         popup.close();
@@ -170,28 +158,23 @@ export default function DepositPage() {
         );
       }
 
-      setPaystackRef(ref as string);
+      setPaystackRef(ref);
 
       if (!popup.closed) {
-        // ✅ Redirect the already-open popup to the real Paystack URL
         popup.location.href = authUrl;
 
-        // Wait for the user to close the popup
         await new Promise<void>((resolve) => {
           const timer = setInterval(() => {
             if (popup.closed) { clearInterval(timer); resolve(); }
           }, 500);
         });
       } else {
-        // Popup was closed before we could redirect — fall back to same-tab
         window.location.href = authUrl;
       }
 
       setStep('success');
     } catch (e: unknown) {
       popup?.close();
-      // ✅ FIX 4 — Always log so you get visibility even without backend logs
-      console.error('[Paystack] deposit error:', e);
       setErrorMsg(
         e instanceof Error
           ? e.message
@@ -236,7 +219,6 @@ export default function DepositPage() {
       setBinanceRef(ref);
       setStep('binance-success');
     } catch (e: unknown) {
-      console.error('[Binance] deposit submission error:', e);
       setErrorMsg(e instanceof Error ? e.message : 'Submission failed. Please try again.');
       setStep('error');
     } finally {
