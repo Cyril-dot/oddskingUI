@@ -1153,10 +1153,15 @@ function SpecialGamesSection() {
 
     async function load() {
       try {
-       const raw = await fetch(
-  'https://poikiloblastic-leeanne-gazeless.ngrok-free.dev/api/public/admin-matches'
+     const raw = await fetch(
+  'https://poikiloblastic-leeanne-gazeless.ngrok-free.app/api/public/admin-matches',
+  {
+    headers: {
+      'ngrok-skip-browser-warning': 'true'
+    }
+  }
 ).then((r) => r.json());
-        if (!alive()) return;
+if (!alive()) return;
 
         const matches = unwrapAdminMatches(raw);
         if (matches.length === 0) { setAdminMatches([]); return; }

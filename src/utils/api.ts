@@ -650,6 +650,7 @@ async function request<T>(
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
     ...getAuthHeader(),
     ...extraHeaders,
   };
