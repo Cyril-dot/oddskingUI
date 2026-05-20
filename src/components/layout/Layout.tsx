@@ -3,13 +3,14 @@ import { useAppStore } from '../../store';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
+import Footer from './Footer';
 import Toast from '../common/Toast';
 
 export default function Layout() {
   const theme = useAppStore((s) => s.theme);
 
   return (
-    <div className={theme === 'dark' ? 'dark' : ''}>
+    <div className={theme === 'super-bet-dark' ? 'dark' : ''}>
       <div className="min-h-screen bg-surface-light dark:bg-surface-dark transition-colors">
         <Header />
         <div className="flex max-w-[1440px] mx-auto w-full">
@@ -19,6 +20,7 @@ export default function Layout() {
             <Outlet />
           </main>
         </div>
+        <Footer />
         <BottomNav />
         <Toast />
       </div>

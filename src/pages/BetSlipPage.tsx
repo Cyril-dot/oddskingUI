@@ -690,7 +690,7 @@ function BetDetailSheet({ bet, onClose }: { bet: Bet; onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Booking code panel
+// Booking code panel — redesigned, works for guests too
 // ---------------------------------------------------------------------------
 function BookingCodePanel() {
   const { clearBetSlip, addToBetSlip, showToast, user } = useAppStore();
@@ -699,36 +699,7 @@ function BookingCodePanel() {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const [error, setError]     = useState<string | null>(null);
-
-  // ── If the user is not logged in, show a prompt to log in instead ─────────
-  if (!user) {
-    return (
-      <div className="mt-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-          <QrCodeIcon sx={{ fontSize: 14 }} /> Booking Code
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="e.g. ABC12345"
-            disabled
-            className="input-field flex-1 font-mono tracking-widest uppercase opacity-50 cursor-not-allowed"
-          />
-          <button
-            disabled
-            className="px-4 py-2.5 bg-primary/40 text-white rounded-xl text-sm font-bold opacity-50 cursor-not-allowed shrink-0"
-          >
-            Load
-          </button>
-        </div>
-        <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
-          <InfoOutlinedIcon sx={{ fontSize: 14 }} />
-          <Link to="/login" className="text-primary font-semibold hover:underline">Log in</Link>
-          {' '}to load a booking code
-        </p>
-      </div>
-    );
-  }
+  const [expanded, setExpanded] = useState(false);
 
   const handleLoad = async () => {
     if (!code.trim()) return;
@@ -744,7 +715,6 @@ function BookingCodePanel() {
       log('BookingCode', '📦 Raw API response:', res);
 
       if (res.success && res.data) {
-        // ── Log the full enriched selections so we can see every field name ──
         const selections = res.data.enrichedSelections ?? [];
         console.group(`%c[Futball:BookingCode] ✅ Loaded ${selections.length} selection(s)`, 'color:#22c55e;font-weight:bold');
         selections.forEach((sel: Record<string, unknown>, i: number) => {
@@ -774,6 +744,14 @@ function BookingCodePanel() {
 
   const handleAddToSlip = () => {
     if (!preview) return;
+
+    // If user is not logged in, redirect to login with a toast
+    if (!user) {
+      showToast('Log in to place this bet', 'info');
+      navigate('/login');
+      return;
+    }
+
     const enriched: Record<string, unknown>[] = preview.enrichedSelections ?? [];
 
     log('BookingCode', 'Adding to slip. Raw enriched selections:', enriched);
@@ -810,84 +788,191 @@ function BookingCodePanel() {
     setCode('');
   };
 
-  return (
-    <div className="mt-3">
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-        <QrCodeIcon sx={{ fontSize: 14 }} /> Booking Code
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={code}
-          onChange={e => { setCode(e.target.value.toUpperCase()); setError(null); setPreview(null); }}
-          placeholder="e.g. ABC12345"
-          className="input-field flex-1 font-mono tracking-widest uppercase"
-          disabled={loading}
-          onKeyDown={e => e.key === 'Enter' && handleLoad()}
-        />
-        <button
-          onClick={handleLoad}
-          disabled={loading || !code.trim()}
-          className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-bold disabled:opacity-50 transition-colors hover:bg-primary/90 shrink-0"
-        >
-          {loading ? <CircularProgress fontSize="small" className="animate-spin" /> : 'Load'}
-        </button>
-      </div>
+  const selectionCount = (preview?.enrichedSelections ?? []).length;
+  const totalOdds      = preview?.currentTotalOdds ?? preview?.booking?.totalOdds ?? 0;
 
-      {error && (
-        <p className="text-xs text-rose-500 mt-2 flex items-center gap-1">
-          <InfoOutlinedIcon sx={{ fontSize: 14 }} /> {error}
-        </p>
+  return (
+    <div className="mt-2">
+      {/* ── Collapsed trigger ── */}
+      {!expanded && !preview && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="w-full group flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 hover:border-primary/40 dark:hover:border-primary/40 hover:bg-primary/[0.03] transition-all"
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-primary/10 flex items-center justify-center transition-colors shrink-0">
+            <QrCodeIcon sx={{ fontSize: 16 }} className="text-slate-400 group-hover:text-primary transition-colors" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-sm font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white transition-colors">
+              Have a booking code?
+            </p>
+            <p className="text-xs text-slate-400">Tap to load selections instantly</p>
+          </div>
+          <svg className="ml-auto shrink-0 text-slate-300 group-hover:text-primary transition-colors" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       )}
 
-      {preview && (
-        <div className="mt-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-emerald-50/50 dark:bg-emerald-900/10">
-            <div>
-              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 font-mono tracking-wider">
-                {preview.booking?.code ?? code}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {(preview.enrichedSelections ?? []).length} selections ·{' '}
-                Odds: {(preview.currentTotalOdds ?? preview.booking?.totalOdds ?? 0).toFixed(2)}x
-              </p>
+      {/* ── Expanded input panel ── */}
+      {(expanded || preview) && (
+        <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm">
+
+          {/* Header bar */}
+          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700/60">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                <QrCodeIcon sx={{ fontSize: 13 }} className="text-primary" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Booking Code
+              </span>
             </div>
-            <button
-              onClick={() => { setPreview(null); setCode(''); }}
-              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
-            >
-              <CloseIcon sx={{ fontSize: 16 }} />
-            </button>
+            {!preview && (
+              <button
+                onClick={() => { setExpanded(false); setError(null); setCode(''); }}
+                className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 transition-colors"
+              >
+                <CloseIcon sx={{ fontSize: 15 }} />
+              </button>
+            )}
           </div>
 
-          <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-            {(preview.enrichedSelections ?? []).map((sel: Record<string, unknown>, i: number) => {
-              const odds = extractOdds(sel);
-              return (
-                <div key={i} className="px-4 py-2.5 flex justify-between items-center">
-                  <div className="min-w-0 flex-1 mr-3">
-                    <p className="text-xs text-slate-400 truncate">{buildMatchLabel(sel)}</p>
-                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                      {String(sel.market ?? '')}: {String(sel.selection ?? '')}
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold text-primary shrink-0">
-                    {odds > 1 ? odds.toFixed(2) : '—'}
-                  </span>
+          {/* Input row */}
+          {!preview && (
+            <div className="p-4">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={e => { setCode(e.target.value.toUpperCase()); setError(null); }}
+                    placeholder="e.g. ABC12345"
+                    className={`w-full px-4 py-3 rounded-xl border text-sm font-mono tracking-widest uppercase bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 outline-none transition-all focus:ring-2 ${
+                      error
+                        ? 'border-rose-300 dark:border-rose-700 focus:ring-rose-200 dark:focus:ring-rose-900/50'
+                        : 'border-slate-200 dark:border-slate-700 focus:ring-primary/20 focus:border-primary/50'
+                    }`}
+                    disabled={loading}
+                    onKeyDown={e => e.key === 'Enter' && handleLoad()}
+                    autoFocus
+                  />
                 </div>
-              );
-            })}
-          </div>
+                <button
+                  onClick={handleLoad}
+                  disabled={loading || !code.trim()}
+                  className="px-5 py-3 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition-all active:scale-95 shrink-0 flex items-center gap-2"
+                >
+                  {loading
+                    ? <CircularProgress sx={{ fontSize: 16 }} className="animate-spin" />
+                    : 'Load'
+                  }
+                </button>
+              </div>
 
-          <div className="px-4 pb-4 pt-3">
-            <button
-              onClick={handleAddToSlip}
-              className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-            >
-              <CheckCircleIcon fontSize="small" />
-              Add {(preview.enrichedSelections ?? []).length} Selection{(preview.enrichedSelections ?? []).length !== 1 ? 's' : ''} to Slip
-            </button>
-          </div>
+              {/* Error */}
+              {error && (
+                <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-500">
+                  <InfoOutlinedIcon sx={{ fontSize: 13 }} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Guest notice — subtle, non-blocking */}
+              {!user && (
+                <p className="mt-2.5 text-xs text-slate-400 flex items-center gap-1.5">
+                  <InfoOutlinedIcon sx={{ fontSize: 13 }} />
+                  You can preview selections without logging in.{' '}
+                  <Link to="/login" className="text-primary font-semibold hover:underline">Log in</Link>
+                  {' '}to place the bet.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Preview card */}
+          {preview && (
+            <>
+              {/* Code + meta */}
+              <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-base font-black tracking-widest text-slate-800 dark:text-white">
+                      {preview.booking?.code ?? code}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                      Valid
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {selectionCount} selection{selectionCount !== 1 ? 's' : ''} · Odds:{' '}
+                    <span className="font-bold text-primary">{totalOdds.toFixed(2)}x</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setPreview(null); setCode(''); setExpanded(true); }}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors shrink-0"
+                >
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </button>
+              </div>
+
+              {/* Perforated divider */}
+              <div className="relative mx-4 my-1">
+                <div className="border-t border-dashed border-slate-200 dark:border-slate-700" />
+                <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700" />
+                <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700" />
+              </div>
+
+              {/* Selections list */}
+              <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 px-1">
+                {(preview.enrichedSelections ?? []).map((sel: Record<string, unknown>, i: number) => {
+                  const odds = extractOdds(sel);
+                  return (
+                    <div key={i} className="px-3 py-2.5 flex justify-between items-center">
+                      <div className="min-w-0 flex-1 mr-3">
+                        <p className="text-[11px] text-slate-400 truncate mb-0.5">{buildMatchLabel(sel)}</p>
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
+                          {String(sel.market ?? '')}
+                          <span className="text-slate-400 font-normal mx-1">·</span>
+                          {String(sel.selection ?? '')}
+                        </p>
+                      </div>
+                      <span className="text-xs font-black text-primary shrink-0 bg-primary/8 dark:bg-primary/15 px-2 py-1 rounded-lg">
+                        {odds > 1 ? odds.toFixed(2) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Perforated divider */}
+              <div className="relative mx-4 my-1">
+                <div className="border-t border-dashed border-slate-200 dark:border-slate-700" />
+                <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700" />
+                <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700" />
+              </div>
+
+              {/* CTA */}
+              <div className="px-4 pb-4 pt-3">
+                <button
+                  onClick={handleAddToSlip}
+                  className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 active:scale-[0.98] text-white text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-primary/20"
+                >
+                  <CheckCircleIcon sx={{ fontSize: 17 }} />
+                  {user
+                    ? `Add ${selectionCount} Selection${selectionCount !== 1 ? 's' : ''} to Slip`
+                    : `Log in & Add ${selectionCount} Selection${selectionCount !== 1 ? 's' : ''}`
+                  }
+                </button>
+                {!user && (
+                  <p className="text-center text-xs text-slate-400 mt-2">
+                    You'll be taken to the login page
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -1065,7 +1150,7 @@ function SlipTab() {
           <SportsSoccerIcon fontSize="small" /> Browse Matches
         </Link>
 
-        {/* ── Booking code always visible, regardless of login state ── */}
+        {/* Booking code — always visible */}
         <div className="w-full mt-6">
           <BookingCodePanel />
         </div>
