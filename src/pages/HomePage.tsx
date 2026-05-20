@@ -7,7 +7,6 @@ import RightSidebar from '../components/home/RightSidebar';
 export default function HomePage() {
   return (
     <>
-      <SportsCategoryBar />
       <div className="flex">
         <div className="flex-1 min-w-0">
           <HeroCarousel />
