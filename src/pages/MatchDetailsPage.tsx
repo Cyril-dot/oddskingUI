@@ -414,8 +414,8 @@ const ADMIN_ODDS_BASE = 'https://futballbackend-production-c821.up.railway.app';
 async function fetchAdminOddsRaw(id: string): Promise<unknown[]> {
   try {
     const raw = await fetch(
-      `${ADMIN_ODDS_BASE}/api/public/admin-matches/${id}/odds?ngrok-skip-browser-warning=true`
-    ).then((r) => r.json());
+  `${ADMIN_ODDS_BASE}/api/public/admin-matches/${id}/odds`
+).then((r) => r.json());
     // Unwrap { success, data: [...] }
     if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).data)) {
       return (raw as Record<string, unknown>).data as unknown[];
