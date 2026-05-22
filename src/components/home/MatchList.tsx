@@ -1,16 +1,10 @@
 // ---------------------------------------------------------------------------
 // updated match list — old logic + new UI from v2
-// ADDITIONS:
-//   • RecentWinnersBar — scrolling ticker with 30 hardcoded winners (GHS/NGN/USD)
-//     placed ABOVE the sport-tab row on mobile.
-//   • FloatingBetSlipButton — fixed bottom-right icon that navigates to /betslip.
-// FIX 1: blob: URLs for admin team logos are session-scoped and non-transferable.
-//         We detect them early and treat them as missing → pool logo or initials fallback.
-// FIX 2: All console.log / console.warn / console.error removed.
-// FIX 3: Games without odds are filtered out and never shown on site.
-// FIX 4: Admin games now cycle through hardcoded logo pools (5 home + 5 away).
-//         Each admin match gets a unique pair so no two games share the same logos.
-//         Admin can also set logos via the hardcodedHomeLogo / hardcodedAwayLogo fields.
+// CHANGES IN THIS VERSION:
+//   • Top-6 league tab: BOTH home and away team must belong to the league
+//   • Countdown timer: smaller, muted, subtle (not bold/visible)
+//   • RecentWinnersBar: no avatar icon, shows masked phone number + amount won
+//   • Carousel speed slowed from 55s → 90s
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -51,10 +45,10 @@ const AWAY_LOGO_POOL: string[] = [
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  RECENT WINNERS — 30 hardcoded entries                                  ║
-// ║  10 × GHS (20k–100k), 10 × NGN (100k–50m), 10 × USD (2k–50k)          ║
+// ║  Each entry has a masked phone number instead of a name                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 interface Winner {
-  name: string;
+  phone: string;       // e.g. "0244****89"
   amount: string;
   currency: 'GHS' | 'NGN' | 'USD';
   timeAgo: string;
@@ -62,38 +56,38 @@ interface Winner {
 
 const RECENT_WINNERS: Winner[] = [
   // ── GHS ──
-  { name: 'Kwame O.',   amount: '23,500',    currency: 'GHS', timeAgo: '2m'  },
-  { name: 'Abena M.',   amount: '47,200',    currency: 'GHS', timeAgo: '5m'  },
-  { name: 'Kofi A.',    amount: '88,000',    currency: 'GHS', timeAgo: '9m'  },
-  { name: 'Ama S.',     amount: '31,750',    currency: 'GHS', timeAgo: '14m' },
-  { name: 'Yaw B.',     amount: '65,400',    currency: 'GHS', timeAgo: '18m' },
-  { name: 'Akosua P.',  amount: '99,000',    currency: 'GHS', timeAgo: '22m' },
-  { name: 'Kojo D.',    amount: '54,800',    currency: 'GHS', timeAgo: '27m' },
-  { name: 'Efua T.',    amount: '20,500',    currency: 'GHS', timeAgo: '31m' },
-  { name: 'Nana F.',    amount: '76,300',    currency: 'GHS', timeAgo: '35m' },
-  { name: 'Kweku R.',   amount: '43,100',    currency: 'GHS', timeAgo: '40m' },
+  { phone: '0244****12', amount: '23,500',    currency: 'GHS', timeAgo: '2m'  },
+  { phone: '0557****78', amount: '47,200',    currency: 'GHS', timeAgo: '5m'  },
+  { phone: '0201****34', amount: '88,000',    currency: 'GHS', timeAgo: '9m'  },
+  { phone: '0302****56', amount: '31,750',    currency: 'GHS', timeAgo: '14m' },
+  { phone: '0249****90', amount: '65,400',    currency: 'GHS', timeAgo: '18m' },
+  { phone: '0540****23', amount: '99,000',    currency: 'GHS', timeAgo: '22m' },
+  { phone: '0268****67', amount: '54,800',    currency: 'GHS', timeAgo: '27m' },
+  { phone: '0598****11', amount: '20,500',    currency: 'GHS', timeAgo: '31m' },
+  { phone: '0241****45', amount: '76,300',    currency: 'GHS', timeAgo: '35m' },
+  { phone: '0277****88', amount: '43,100',    currency: 'GHS', timeAgo: '40m' },
   // ── NGN ──
-  { name: 'Chidi E.',   amount: '4,200,000',  currency: 'NGN', timeAgo: '3m'  },
-  { name: 'Amaka I.',   amount: '850,000',    currency: 'NGN', timeAgo: '7m'  },
-  { name: 'Tunde A.',   amount: '22,500,000', currency: 'NGN', timeAgo: '11m' },
-  { name: 'Ngozi O.',   amount: '1,700,000',  currency: 'NGN', timeAgo: '16m' },
-  { name: 'Emeka N.',   amount: '49,800,000', currency: 'NGN', timeAgo: '20m' },
-  { name: 'Chioma U.',  amount: '380,000',    currency: 'NGN', timeAgo: '24m' },
-  { name: 'Olu B.',     amount: '7,600,000',  currency: 'NGN', timeAgo: '29m' },
-  { name: 'Kemi F.',    amount: '14,300,000', currency: 'NGN', timeAgo: '33m' },
-  { name: 'Seun W.',    amount: '600,000',    currency: 'NGN', timeAgo: '37m' },
-  { name: 'Bayo L.',    amount: '33,000,000', currency: 'NGN', timeAgo: '42m' },
+  { phone: '0803****21', amount: '4,200,000',  currency: 'NGN', timeAgo: '3m'  },
+  { phone: '0816****54', amount: '850,000',    currency: 'NGN', timeAgo: '7m'  },
+  { phone: '0705****77', amount: '22,500,000', currency: 'NGN', timeAgo: '11m' },
+  { phone: '0901****32', amount: '1,700,000',  currency: 'NGN', timeAgo: '16m' },
+  { phone: '0808****65', amount: '49,800,000', currency: 'NGN', timeAgo: '20m' },
+  { phone: '0703****98', amount: '380,000',    currency: 'NGN', timeAgo: '24m' },
+  { phone: '0812****43', amount: '7,600,000',  currency: 'NGN', timeAgo: '29m' },
+  { phone: '0907****76', amount: '14,300,000', currency: 'NGN', timeAgo: '33m' },
+  { phone: '0802****19', amount: '600,000',    currency: 'NGN', timeAgo: '37m' },
+  { phone: '0818****52', amount: '33,000,000', currency: 'NGN', timeAgo: '42m' },
   // ── USD ──
-  { name: 'James K.',   amount: '3,800',  currency: 'USD', timeAgo: '1m'  },
-  { name: 'Sarah M.',   amount: '47,500', currency: 'USD', timeAgo: '6m'  },
-  { name: 'David C.',   amount: '12,200', currency: 'USD', timeAgo: '10m' },
-  { name: 'Fatima A.',  amount: '28,750', currency: 'USD', timeAgo: '15m' },
-  { name: 'Carlos R.',  amount: '5,400',  currency: 'USD', timeAgo: '19m' },
-  { name: 'Lena V.',    amount: '49,000', currency: 'USD', timeAgo: '23m' },
-  { name: 'Omar H.',    amount: '8,600',  currency: 'USD', timeAgo: '28m' },
-  { name: 'Priya S.',   amount: '2,300',  currency: 'USD', timeAgo: '32m' },
-  { name: 'Mike T.',    amount: '19,900', currency: 'USD', timeAgo: '36m' },
-  { name: 'Yuki N.',    amount: '36,500', currency: 'USD', timeAgo: '41m' },
+  { phone: '+1 (***) ***-3812', amount: '3,800',  currency: 'USD', timeAgo: '1m'  },
+  { phone: '+1 (***) ***-7491', amount: '47,500', currency: 'USD', timeAgo: '6m'  },
+  { phone: '+44 ****-***-220',  amount: '12,200', currency: 'USD', timeAgo: '10m' },
+  { phone: '+1 (***) ***-6603', amount: '28,750', currency: 'USD', timeAgo: '15m' },
+  { phone: '+1 (***) ***-5514', amount: '5,400',  currency: 'USD', timeAgo: '19m' },
+  { phone: '+49 ****-***-881',  amount: '49,000', currency: 'USD', timeAgo: '23m' },
+  { phone: '+1 (***) ***-9927', amount: '8,600',  currency: 'USD', timeAgo: '28m' },
+  { phone: '+91 ****-***-334',  amount: '2,300',  currency: 'USD', timeAgo: '32m' },
+  { phone: '+1 (***) ***-1158', amount: '19,900', currency: 'USD', timeAgo: '36m' },
+  { phone: '+81 ****-***-762',  amount: '36,500', currency: 'USD', timeAgo: '41m' },
 ];
 
 // Currency display config — grey + blue palette only
@@ -103,15 +97,8 @@ const CURRENCY_CONFIG: Record<Winner['currency'], { symbol: string; accent: stri
   USD: { symbol: '$',   accent: '#3b82f6', bg: 'rgba(59,130,246,0.09)',  badge: 'rgba(59,130,246,0.16)'  },
 };
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(' ');
-  return parts.length >= 2
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
-}
-
 // ---------------------------------------------------------------------------
-// RecentWinnersBar — redesigned horizontal auto-scrolling ticker
+// RecentWinnersBar — horizontal auto-scrolling ticker (no avatar, phone + amount)
 // ---------------------------------------------------------------------------
 function RecentWinnersBar() {
   const doubled = useMemo(() => [...RECENT_WINNERS, ...RECENT_WINNERS], []);
@@ -167,18 +154,17 @@ function RecentWinnersBar() {
         </span>
       </div>
 
-      {/* Scrolling track */}
+      {/* Scrolling track — slowed to 90s */}
       <div style={{ overflow: 'hidden', paddingBottom: 11, paddingTop: 2 }}>
         <div style={{
           display: 'flex',
           gap: 7,
           paddingLeft: 14,
-          animation: 'winnersScroll 55s linear infinite',
+          animation: 'winnersScroll 90s linear infinite',
           width: 'max-content',
         }}>
           {doubled.map((w, i) => {
             const cfg = CURRENCY_CONFIG[w.currency];
-            const initials = getInitials(w.name);
             return (
               <div
                 key={i}
@@ -186,10 +172,10 @@ function RecentWinnersBar() {
                   flexShrink: 0,
                   background: cfg.bg,
                   borderRadius: 10,
-                  padding: '7px 11px 7px 8px',
+                  padding: '7px 11px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 9,
+                  gap: 10,
                   border: `1px solid ${cfg.accent}28`,
                   minWidth: 0,
                   position: 'relative',
@@ -202,27 +188,7 @@ function RecentWinnersBar() {
                   background: `linear-gradient(90deg, transparent 0%, ${cfg.accent}50 50%, transparent 100%)`,
                 }} />
 
-                {/* Avatar */}
-                <div style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: '50%',
-                  background: `linear-gradient(135deg, ${cfg.accent}30, ${cfg.accent}15)`,
-                  border: `1.5px solid ${cfg.accent}55`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: cfg.accent,
-                  letterSpacing: '0.02em',
-                  flexShrink: 0,
-                  fontFamily: 'system-ui, sans-serif',
-                }}>
-                  {initials}
-                </div>
-
-                {/* Name + amount */}
+                {/* Phone number + amount — no avatar */}
                 <div style={{ lineHeight: 1 }}>
                   <div style={{
                     fontSize: 11,
@@ -231,8 +197,9 @@ function RecentWinnersBar() {
                     whiteSpace: 'nowrap',
                     marginBottom: 4,
                     fontFamily: 'system-ui, sans-serif',
+                    letterSpacing: '0.03em',
                   }}>
-                    {w.name}
+                    {w.phone}
                   </div>
                   <div style={{
                     display: 'flex',
@@ -267,7 +234,7 @@ function RecentWinnersBar() {
                 {/* Time ago pill */}
                 <div style={{
                   fontSize: 9,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   color: '#334155',
                   whiteSpace: 'nowrap',
                   alignSelf: 'flex-start',
@@ -440,7 +407,7 @@ function addHiddenAdminId(id: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Hardcoded league → teams mappings (unchanged from original)
+// Hardcoded league → teams mappings
 // ---------------------------------------------------------------------------
 const LEAGUE_TEAMS: Record<Exclude<FootballLeagueTab, 'all' | 'other'>, { leagueNames: string[]; teams: string[] }> = {
   premier_league: {
@@ -514,11 +481,19 @@ for (const [tab, { leagueNames, teams }] of Object.entries(LEAGUE_TEAMS) as [Exc
   for (const team of teams) TEAM_TO_LEAGUE_TAB.set(team.toLowerCase(), tab);
 }
 
+// ---------------------------------------------------------------------------
+// FIX: matchBelongsToLeagueTab now requires BOTH teams to be in the league
+// (or the league name itself to match). League-name match alone is still
+// sufficient so that API-sourced games with correct league metadata are kept.
+// ---------------------------------------------------------------------------
 function matchBelongsToLeagueTab(match: Match, tab: Exclude<FootballLeagueTab, 'all' | 'other'>): boolean {
+  // If the league name matches, trust it — API data with correct metadata
   if (LEAGUE_NAME_TO_TAB.get((match.league ?? '').toLowerCase()) === tab) return true;
-  if (TEAM_TO_LEAGUE_TAB.get((match.homeTeam ?? '').toLowerCase()) === tab) return true;
-  if (TEAM_TO_LEAGUE_TAB.get((match.awayTeam ?? '').toLowerCase()) === tab) return true;
-  return false;
+
+  // For team-based matching: BOTH home and away must belong to this league tab
+  const homeTab = TEAM_TO_LEAGUE_TAB.get((match.homeTeam ?? '').toLowerCase());
+  const awayTab = TEAM_TO_LEAGUE_TAB.get((match.awayTeam ?? '').toLowerCase());
+  return homeTab === tab && awayTab === tab;
 }
 
 function inferLeagueFromTeams(homeTeam: string, awayTeam: string): string {
@@ -526,7 +501,8 @@ function inferLeagueFromTeams(homeTeam: string, awayTeam: string): string {
   const a = awayTeam.toLowerCase();
   for (const [, { leagueNames, teams }] of Object.entries(LEAGUE_TEAMS) as [Exclude<FootballLeagueTab, 'all' | 'other'>, typeof LEAGUE_TEAMS[keyof typeof LEAGUE_TEAMS]][]) {
     const teamSet = new Set(teams.map((t) => t.toLowerCase()));
-    if (teamSet.has(h) || teamSet.has(a)) return leagueNames[0];
+    // Only infer league if BOTH teams are in the same league
+    if (teamSet.has(h) && teamSet.has(a)) return leagueNames[0];
   }
   return '';
 }
@@ -648,9 +624,9 @@ function formatCountdown(kickoffAt?: string): string {
   const days  = Math.floor(diff / 86_400_000);
   const hours = Math.floor((diff % 86_400_000) / 3_600_000);
   const mins  = Math.floor((diff % 3_600_000) / 60_000);
-  if (days > 0) return `in ${days}d ${hours}h`;
-  if (hours > 0) return `in ${hours}h ${mins}m`;
-  return `in ${mins}m`;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 function getTeamInitials(name: string): string {
@@ -1389,9 +1365,19 @@ function MatchCard({
           <span className="match-status-badge finished">{finishedLabel(status)}</span>
         )}
         {isUpcoming && match.kickoffAt && (
-          <span className="match-status-badge upcoming">
-            <ScheduleIcon sx={{ fontSize: 11 }} />
+          // ── SUBTLE countdown: small, muted, not bold ──
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            fontSize: 10,
+            fontWeight: 400,
+            color: 'var(--text-faint, #475569)',
+            letterSpacing: '0.02em',
+          }}>
+            <ScheduleIcon sx={{ fontSize: 10, opacity: 0.5 }} />
             {`${formatDate(match.kickoffAt)} · ${formatKickoff(match.kickoffAt)}`}
+            <span style={{ opacity: 0.55, marginLeft: 2 }}>({formatCountdown(match.kickoffAt)})</span>
           </span>
         )}
       </div>
@@ -1402,7 +1388,19 @@ function MatchCard({
           {(isLive || isFinished) && (
             <span className={`match-score${isFinished ? (homeWon ? ' winner' : ' loser') : ''}`}>{homeScore}</span>
           )}
-          {isUpcoming && <span className="match-countdown">{formatCountdown(match.kickoffAt)}</span>}
+          {isUpcoming && match.kickoffAt && (
+            // ── Subtle inline countdown on the right of team name ──
+            <span style={{
+              marginLeft: 'auto',
+              fontSize: 9,
+              fontWeight: 400,
+              color: 'var(--text-faint, #475569)',
+              opacity: 0.7,
+              whiteSpace: 'nowrap',
+            }}>
+              {formatCountdown(match.kickoffAt)}
+            </span>
+          )}
         </div>
         <div className="match-vs-separator" />
         <div className="match-team-row">
