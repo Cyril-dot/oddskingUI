@@ -7,6 +7,8 @@
 //   • Carousel speed slowed from 55s → 90s
 //   • League tab fallback: if a specific league tab has no matches, falls back
 //     to showing all available matches (with a subtle notice)
+//   • RecentWinnersBar: now uses same CSS variables as match cards for
+//     full light/dark mode parity — no more hardcoded palette
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -92,15 +94,19 @@ const RECENT_WINNERS: Winner[] = [
   { phone: '+81 ****-***-762',  amount: '36,500', currency: 'USD', timeAgo: '41m' },
 ];
 
-// Currency display config — grey + blue palette only
-const CURRENCY_CONFIG: Record<Winner['currency'], { symbol: string; accent: string; bg: string; badge: string }> = {
-  GHS: { symbol: 'GHS', accent: '#60a5fa', bg: 'rgba(96,165,250,0.08)',  badge: 'rgba(96,165,250,0.15)'  },
-  NGN: { symbol: '₦',   accent: '#93c5fd', bg: 'rgba(147,197,253,0.07)', badge: 'rgba(147,197,253,0.13)' },
-  USD: { symbol: '$',   accent: '#3b82f6', bg: 'rgba(59,130,246,0.09)',  badge: 'rgba(59,130,246,0.16)'  },
+// Currency symbol lookup — presentation only, colours come from CSS vars
+const CURRENCY_SYMBOL: Record<Winner['currency'], string> = {
+  GHS: 'GHS',
+  NGN: '₦',
+  USD: '$',
 };
 
 // ---------------------------------------------------------------------------
-// RecentWinnersBar — bare scrolling cards, gray in light mode, green in dark
+// RecentWinnersBar
+// Uses the same CSS variables as match cards:
+//   --bg-card, --border-card, --text-main, --text-muted, --text-faint,
+//   --primary, --live-green, --bg-page
+// so it automatically adapts to whatever light/dark theme the host sets.
 // ---------------------------------------------------------------------------
 function RecentWinnersBar() {
   const doubled = useMemo(() => [...RECENT_WINNERS, ...RECENT_WINNERS], []);
@@ -118,72 +124,123 @@ function RecentWinnersBar() {
         }}>
           {doubled.map((w, i) => (
             <div key={i} className="wc-card">
+              {/* top shimmer line — uses --primary at low opacity */}
               <div className="wc-shimmer" />
+              {/* live pulse dot — uses --live-green */}
               <span className="wc-dot" />
               <div style={{ lineHeight: 1 }}>
+                {/* phone — uses --text-muted */}
                 <div className="wc-phone">{w.phone}</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
-                  <span className="wc-symbol">{CURRENCY_CONFIG[w.currency].symbol}</span>
+                  {/* currency badge — uses --primary bg tint */}
+                  <span className="wc-symbol">{CURRENCY_SYMBOL[w.currency]}</span>
+                  {/* amount — uses --text-main */}
                   <span className="wc-amount">{w.amount}</span>
                 </div>
               </div>
+              {/* time ago — uses --text-faint */}
               <div className="wc-time">{w.timeAgo}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Fade edge masks */}
+      {/* Fade edge masks — blend into --bg-page */}
       <div className="wc-fade-left" />
       <div className="wc-fade-right" />
 
       <style>{`
-        /* ── light mode (default) — gray palette ── */
+        /* ─────────────────────────────────────────────────────────────────────
+           All colours use the same CSS variables as the match / game cards.
+           The host stylesheet (light or dark) sets these vars — we just consume
+           them here, so RecentWinnersBar automatically matches the card theme.
+           ───────────────────────────────────────────────────────────────────── */
+
         .wc-card {
           flex-shrink: 0;
-          background: rgba(107,114,128,0.08);
+          /* same surface as match cards */
+          background: var(--bg-card, rgba(255,255,255,0.6));
           border-radius: 12px;
           padding: 11px 16px;
           display: flex;
           align-items: center;
           gap: 14px;
-          border: 1px solid rgba(107,114,128,0.18);
+          /* same border as match cards */
+          border: 1px solid var(--border-card, rgba(0,0,0,0.08));
           min-width: 0;
           position: relative;
           overflow: hidden;
+          /* same subtle shadow as match cards */
+          box-shadow: 0 1px 4px rgba(0,0,0,0.06);
         }
+
+        /* top shimmer line — accent colour at low opacity */
         .wc-shimmer {
           position: absolute; top: 0; left: 0; right: 0; height: 1px;
-          background: linear-gradient(90deg, transparent 0%, rgba(156,163,175,0.4) 50%, transparent 100%);
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            var(--primary, #f5a623) 50%,
+            transparent 100%
+          );
+          opacity: 0.25;
         }
+
+        /* live pulse dot — matches the live green used in match cards */
         .wc-dot {
           width: 7px; height: 7px; border-radius: 50%;
-          background: #9ca3af;
-          box-shadow: 0 0 5px rgba(156,163,175,0.5);
+          background: var(--live-green, #22c55e);
+          box-shadow: 0 0 5px var(--live-green, #22c55e);
           display: inline-block;
           flex-shrink: 0;
           animation: winnerPulse 1.6s ease-in-out infinite;
         }
+
+        /* phone number — secondary label, same as league name text */
         .wc-phone {
-          font-size: 12px; font-weight: 600; color: #6b7280;
-          white-space: nowrap; margin-bottom: 6px;
-          font-family: system-ui, sans-serif; letter-spacing: 0.03em;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-muted, #64748b);
+          white-space: nowrap;
+          margin-bottom: 6px;
+          font-family: system-ui, sans-serif;
+          letter-spacing: 0.03em;
         }
+
+        /* currency badge — uses primary tint, same as odds-btn accent */
         .wc-symbol {
-          font-size: 10px; font-weight: 700; color: #6b7280;
-          background: rgba(107,114,128,0.12);
-          border-radius: 4px; padding: 2px 6px;
-          letter-spacing: 0.06em; font-family: system-ui, sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          color: var(--primary, #f5a623);
+          background: color-mix(in srgb, var(--primary, #f5a623) 12%, transparent);
+          border-radius: 4px;
+          padding: 2px 6px;
+          letter-spacing: 0.06em;
+          font-family: system-ui, sans-serif;
         }
+
+        /* win amount — main text, same as team name weight */
         .wc-amount {
-          font-size: 15px; font-weight: 800; color: #374151;
-          letter-spacing: -0.01em; font-family: system-ui, sans-serif;
+          font-size: 15px;
+          font-weight: 800;
+          color: var(--text-main, #0f172a);
+          letter-spacing: -0.01em;
+          font-family: system-ui, sans-serif;
         }
+
+        /* time ago — faintest text, same as "more markets" label */
         .wc-time {
-          font-size: 10px; font-weight: 600; color: #9ca3af;
-          white-space: nowrap; align-self: flex-start; margin-top: 1px;
-          font-family: system-ui, sans-serif; letter-spacing: 0.04em;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--text-faint, #94a3b8);
+          white-space: nowrap;
+          align-self: flex-start;
+          margin-top: 1px;
+          font-family: system-ui, sans-serif;
+          letter-spacing: 0.04em;
         }
+
+        /* fade masks — blend into the page background */
         .wc-fade-left {
           position: absolute; top: 0; left: 0; bottom: 0; width: 28px;
           background: linear-gradient(90deg, var(--bg-page, #ffffff) 0%, transparent 100%);
@@ -195,50 +252,13 @@ function RecentWinnersBar() {
           pointer-events: none; z-index: 2;
         }
 
-        /* ── dark mode — green palette ── */
-        @media (prefers-color-scheme: dark) {
-          .wc-card {
-            background: rgba(16,185,129,0.08);
-            border-color: rgba(16,185,129,0.2);
-          }
-          .wc-shimmer {
-            background: linear-gradient(90deg, transparent 0%, rgba(52,211,153,0.4) 50%, transparent 100%);
-          }
-          .wc-dot {
-            background: #34d399;
-            box-shadow: 0 0 6px rgba(52,211,153,0.7);
-          }
-          .wc-phone  { color: #6ee7b7; }
-          .wc-symbol { color: #34d399; background: rgba(16,185,129,0.15); }
-          .wc-amount { color: #ecfdf5; }
-          .wc-time   { color: #34d399; }
-          .wc-fade-left  { background: linear-gradient(90deg,  var(--bg-page, #0d1117) 0%, transparent 100%); }
-          .wc-fade-right { background: linear-gradient(270deg, var(--bg-page, #0d1117) 0%, transparent 100%); }
-        }
-
-        /* ── dark mode via .dark class (Tailwind / manual toggle) ── */
-        .dark .wc-card {
-          background: rgba(16,185,129,0.08);
-          border-color: rgba(16,185,129,0.2);
-        }
-        .dark .wc-shimmer {
-          background: linear-gradient(90deg, transparent 0%, rgba(52,211,153,0.4) 50%, transparent 100%);
-        }
-        .dark .wc-dot {
-          background: #34d399;
-          box-shadow: 0 0 6px rgba(52,211,153,0.7);
-        }
-        .dark .wc-phone  { color: #6ee7b7; }
-        .dark .wc-symbol { color: #34d399; background: rgba(16,185,129,0.15); }
-        .dark .wc-amount { color: #ecfdf5; }
-        .dark .wc-time   { color: #34d399; }
-        .dark .wc-fade-left  { background: linear-gradient(90deg,  var(--bg-page, #0d1117) 0%, transparent 100%); }
-        .dark .wc-fade-right { background: linear-gradient(270deg, var(--bg-page, #0d1117) 0%, transparent 100%); }
-
+        /* scroll animation */
         @keyframes winnersScroll {
           0%   { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
+
+        /* pulse dot animation */
         @keyframes winnerPulse {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.35; }
@@ -451,16 +471,8 @@ for (const [tab, { leagueNames, teams }] of Object.entries(LEAGUE_TEAMS) as [Exc
   for (const team of teams) TEAM_TO_LEAGUE_TAB.set(team.toLowerCase(), tab);
 }
 
-// ---------------------------------------------------------------------------
-// FIX: matchBelongsToLeagueTab now requires BOTH teams to be in the league
-// (or the league name itself to match). League-name match alone is still
-// sufficient so that API-sourced games with correct league metadata are kept.
-// ---------------------------------------------------------------------------
 function matchBelongsToLeagueTab(match: Match, tab: Exclude<FootballLeagueTab, 'all' | 'other'>): boolean {
-  // If the league name matches, trust it — API data with correct metadata
   if (LEAGUE_NAME_TO_TAB.get((match.league ?? '').toLowerCase()) === tab) return true;
-
-  // For team-based matching: BOTH home and away must belong to this league tab
   const homeTab = TEAM_TO_LEAGUE_TAB.get((match.homeTeam ?? '').toLowerCase());
   const awayTab = TEAM_TO_LEAGUE_TAB.get((match.awayTeam ?? '').toLowerCase());
   return homeTab === tab && awayTab === tab;
@@ -471,7 +483,6 @@ function inferLeagueFromTeams(homeTeam: string, awayTeam: string): string {
   const a = awayTeam.toLowerCase();
   for (const [, { leagueNames, teams }] of Object.entries(LEAGUE_TEAMS) as [Exclude<FootballLeagueTab, 'all' | 'other'>, typeof LEAGUE_TEAMS[keyof typeof LEAGUE_TEAMS]][]) {
     const teamSet = new Set(teams.map((t) => t.toLowerCase()));
-    // Only infer league if BOTH teams are in the same league
     if (teamSet.has(h) && teamSet.has(a)) return leagueNames[0];
   }
   return '';
@@ -727,7 +738,6 @@ function extractAdminOdds(raw: Record<string, unknown>, homeTeam: string, awayTe
   return undefined;
 }
 
-// keep extractAdminOdds importable even if unused in this file
 void extractAdminOdds;
 
 function unwrapWithAllOdds(raw: unknown): Array<{ match: Match; odds: unknown[] }> {
@@ -1014,7 +1024,7 @@ function unwrapAdminMatches(raw: unknown): Match[] {
 async function fetchAdminMatchOdds(matchId: string): Promise<unknown[]> {
   try {
     const raw = await fetch(
-      `https://futballbackend-production.up.railway.app/api/public/admin-matches/${matchId}/odds`
+      `https://futballbackend-production-7d3b.up.railway.app/api/public/admin-matches/${matchId}/odds`
     ).then((r) => r.json());
     return safeUnwrapOddsArray(raw);
   } catch { return []; }
@@ -1139,10 +1149,6 @@ async function fetchAllFootballMatches(): Promise<EnrichedMatch[]> {
   return enriched.filter(hasValidOdds);
 }
 
-// ---------------------------------------------------------------------------
-// filterByLeagueTab — with fallback to all matches when a specific tab is empty
-// Returns { matches, isFallback } so the UI can show a notice
-// ---------------------------------------------------------------------------
 function filterByLeagueTab(
   matches: EnrichedMatch[],
   tab: FootballLeagueTab,
@@ -1156,15 +1162,12 @@ function filterByLeagueTab(
       }
       return true;
     });
-    // "Other" fallback: if nothing found, show all
     if (filtered.length === 0) return { matches, isFallback: true };
     return { matches: filtered, isFallback: false };
   }
 
-  // Specific league tab (premier_league, la_liga, etc.)
   const filtered = matches.filter((m) => matchBelongsToLeagueTab(m, tab));
   if (filtered.length === 0) {
-    // Fallback: return all matches
     return { matches, isFallback: true };
   }
   return { matches: filtered, isFallback: false };
@@ -1356,7 +1359,6 @@ function MatchCard({
           <span className="match-status-badge finished">{finishedLabel(status)}</span>
         )}
         {isUpcoming && match.kickoffAt && (
-          // ── SUBTLE countdown: small, muted, not bold ──
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -1380,7 +1382,6 @@ function MatchCard({
             <span className={`match-score${isFinished ? (homeWon ? ' winner' : ' loser') : ''}`}>{homeScore}</span>
           )}
           {isUpcoming && match.kickoffAt && (
-            // ── Subtle inline countdown on the right of team name ──
             <span style={{
               marginLeft: 'auto',
               fontSize: 9,
@@ -1476,7 +1477,7 @@ function SpecialGamesSection() {
     async function load() {
       try {
         const raw = await fetch(
-          'https://futballbackend-production.up.railway.app/api/public/admin-matches?ngrok-skip-browser-warning=true',
+          'https://futballbackend-production-7d3b.up.railway.app/api/public/admin-matches?ngrok-skip-browser-warning=true',
         ).then((r) => r.json());
         if (!alive()) return;
         const matches = unwrapAdminMatches(raw);
@@ -1632,10 +1633,6 @@ function SectionDivider({ label }: { label: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// FallbackNotice — subtle banner shown when a league tab has no matches
-// and we're showing all games instead
-// ---------------------------------------------------------------------------
 function FallbackNotice({ tabLabel }: { tabLabel: string }) {
   return (
     <div style={{
@@ -1763,9 +1760,6 @@ export default function MatchList() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, [activeSport, fetchFootball, fetchSport]);
 
-  // ---------------------------------------------------------------------------
-  // allMatches + isFallback — computed with fallback logic
-  // ---------------------------------------------------------------------------
   const { allMatches, isFallback } = useMemo((): { allMatches: EnrichedMatch[]; isFallback: boolean } => {
     if (activeSport === 'football') {
       const result = filterByLeagueTab(allFootballMatches, activeLeagueTab);
@@ -1790,15 +1784,13 @@ export default function MatchList() {
     return sportLoading[activeSport];
   }, [activeSport, footballLoading, sportLoading]);
 
-  // When fallback is active we treat it as "all" for rendering purposes
   const isSpecificLeagueTab = activeSport === 'football'
     && activeLeagueTab !== 'all'
     && activeLeagueTab !== 'other'
-    && !isFallback;  // ← key: if fallback, render like "all"
+    && !isFallback;
 
   const navigate = useNavigate();
 
-  // The human-readable label for the active league tab (used in FallbackNotice)
   const activeLeagueTabLabel = useMemo(
     () => FOOTBALL_LEAGUE_TABS.find((t) => t.key === activeLeagueTab)?.label ?? activeLeagueTab,
     [activeLeagueTab],
@@ -1895,7 +1887,7 @@ export default function MatchList() {
       {/* ── Special Games ── */}
       {activeSport === 'football' && <SpecialGamesSection />}
 
-      {/* ── Fallback notice — shown when a specific league tab had no matches ── */}
+      {/* ── Fallback notice ── */}
       {isFallback && !isLoading && (
         <FallbackNotice tabLabel={activeLeagueTabLabel} />
       )}
