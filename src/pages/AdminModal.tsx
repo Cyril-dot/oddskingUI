@@ -1158,7 +1158,6 @@ function BcSelectionRow({ sel, onRemove }: { sel: any; onRemove: () => void }) {
     </div>
   );
 }
-
 function BcSelectionPicker({ bookingType, onPick, onClose }: { bookingType: BookingTypeId; onPick: (sel: any) => void; onClose: () => void }) {
   const [allMatches, setAllMatches] = useState<any[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
@@ -1227,30 +1226,150 @@ function BcSelectionPicker({ bookingType, onPick, onClose }: { bookingType: Book
   return (
     <BcModalShell title="Add Selection" onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* Type badge */}
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: typeCfg.accent, textTransform: 'uppercase', padding: '6px 10px', borderRadius: 7, background: typeCfg.accentBg, display: 'inline-flex', alignSelf: 'flex-start' }}>
           {bookingType === 'ADMIN_ONLY' ? '⭐ Your admin matches only' : bookingType === 'MIXED' ? '🔀 Admin + external matches' : '🎟️ All available matches'}
         </div>
+
+        {/* ── Match selector ── */}
         <BcField label="Match">
           {loadingMatches ? (
-            <div style={{ ...bcInputStyle, color: 'rgba(255,255,255,0.3)' }}>Loading matches…</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 8, border: '1.5px solid rgba(255,255,255,0.08)', background: '#12121e' }}>
+              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${typeCfg.accent}`, borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>Loading matches…</span>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
           ) : playable.length === 0 ? (
-            <div style={{ ...bcInputStyle, color: 'rgba(255,255,255,0.3)' }}>
-              {bookingType === 'ADMIN_ONLY' ? 'No admin-created matches found. Create matches first.' : 'No matches available.'}
+            <div style={{ padding: '14px', borderRadius: 8, border: '1.5px dashed rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.02)', textAlign: 'center' }}>
+              <div style={{ fontSize: 20, marginBottom: 6 }}>🏟️</div>
+              <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>
+                {bookingType === 'ADMIN_ONLY' ? 'No admin-created matches found. Create matches first.' : 'No matches available.'}
+              </p>
             </div>
           ) : (
-            <select value={match?.id || ''} onChange={(e) => { setMatch(playable.find((m) => m.id === e.target.value) || null); setPick(''); setTeam(''); }} style={{ ...bcInputStyle, cursor: 'pointer', background: 'rgba(255,255,255,0.04)' }}>
-              <option value="">— Choose a match —</option>
-              {bookingType === 'MIXED' ? (
-                <>
-                  <optgroup label="── Your Admin Matches ──">{playable.filter((m) => m._source === 'ADMIN').map((m: any) => <option key={m.id} value={m.id}>{m.homeTeam} vs {m.awayTeam} · {m.league}</option>)}</optgroup>
-                  <optgroup label="── External Feed ──">{playable.filter((m) => m._source === 'EXTERNAL').map((m: any) => <option key={m.id} value={m.id}>{m.homeTeam} vs {m.awayTeam} · {m.league}</option>)}</optgroup>
-                </>
-              ) : (
-                playable.map((m: any) => <option key={m.id} value={m.id}>{m.homeTeam} vs {m.awayTeam} · {m.league}{m._source === 'ADMIN' ? ' ★' : ''}</option>)
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* The <select> itself — solid bg so options are always readable */}
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={match?.id || ''}
+                  onChange={(e) => {
+                    setMatch(playable.find((m) => m.id === e.target.value) || null);
+                    setPick('');
+                    setTeam('');
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '10px 36px 10px 14px',
+                    borderRadius: 8,
+                    border: '1.5px solid rgba(255,255,255,0.12)',
+                    background: '#12121e',        // solid dark — transparent breaks option readability on all platforms
+                    color: match ? '#fff' : 'rgba(255,255,255,0.4)',
+                    fontSize: 13,
+                    fontWeight: match ? 600 : 400,
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    cursor: 'pointer',
+                    lineHeight: '1.5',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = typeCfg.accent)}
+                  onBlur={(e)  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                >
+                  <option value="" style={{ background: '#12121e', color: 'rgba(255,255,255,0.4)' }}>
+                    — Choose a match —
+                  </option>
+
+                  {bookingType === 'MIXED' ? (
+                    <>
+                      <optgroup label="── Your Admin Matches ──" style={{ background: '#12121e', color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>
+                        {playable.filter((m) => m._source === 'ADMIN').map((m: any) => (
+                          <option key={m.id} value={m.id} style={{ background: '#12121e', color: '#fff' }}>
+                            {m.homeTeam} vs {m.awayTeam}{m.league ? ` · ${m.league}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="── External Feed ──" style={{ background: '#12121e', color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>
+                        {playable.filter((m) => m._source === 'EXTERNAL').map((m: any) => (
+                          <option key={m.id} value={m.id} style={{ background: '#12121e', color: '#fff' }}>
+                            {m.homeTeam} vs {m.awayTeam}{m.league ? ` · ${m.league}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    playable.map((m: any) => (
+                      <option key={m.id} value={m.id} style={{ background: '#12121e', color: '#fff' }}>
+                        {m.homeTeam} vs {m.awayTeam}{m.league ? ` · ${m.league}` : ''}{m._source === 'ADMIN' ? ' ★' : ''}
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                {/* Custom chevron arrow (replaces the native one stripped by appearance:none) */}
+                <span style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  pointerEvents: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 9, lineHeight: 1,
+                }}>▼</span>
+              </div>
+
+              {/* Selected match preview card */}
+              {match && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '11px 14px', borderRadius: 10,
+                  background: `${typeCfg.accent}0f`,
+                  border: `1.5px solid ${typeCfg.accent}35`,
+                }}>
+                  {/* Home */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                      {match.homeLogo
+                        ? <img src={match.homeLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        : <span style={{ fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.4)' }}>{(match.homeTeam ?? '?').slice(0, 3).toUpperCase()}</span>
+                      }
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam}</span>
+                  </div>
+
+                  {/* VS */}
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', letterSpacing: '0.1em' }}>VS</span>
+                    {match.league && (
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{match.league}</span>
+                    )}
+                  </div>
+
+                  {/* Away */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam}</span>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                      {match.awayLogo
+                        ? <img src={match.awayLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        : <span style={{ fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.4)' }}>{(match.awayTeam ?? '?').slice(0, 3).toUpperCase()}</span>
+                      }
+                    </div>
+                  </div>
+
+                  {/* Admin badge */}
+                  {match._source === 'ADMIN' && (
+                    <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 7px', borderRadius: 5, background: `${typeCfg.accent}22`, color: typeCfg.accent, border: `1px solid ${typeCfg.accent}40` }}>
+                      Admin
+                    </span>
+                  )}
+                </div>
               )}
-            </select>
+
+            </div>
           )}
         </BcField>
+
+        {/* ── Market ── */}
         <BcField label="Market">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {MARKETS.map((m) => (
@@ -1261,48 +1380,102 @@ function BcSelectionPicker({ bookingType, onPick, onClose }: { bookingType: Book
             ))}
           </div>
         </BcField>
+
+        {/* ── Pick (for simple markets) ── */}
         {'picks' in market && market.picks.length > 0 && (
           <BcField label="Pick">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {market.picks.map((p) => (
-                <button key={p} onClick={() => setPick(p)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: pick === p ? typeCfg.accent : 'rgba(255,255,255,0.06)', color: pick === p ? '#fff' : 'rgba(255,255,255,0.6)', transition: 'background .12s' }}>{p}</button>
+                <button key={p} onClick={() => setPick(p)}
+                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: pick === p ? typeCfg.accent : 'rgba(255,255,255,0.06)', color: pick === p ? '#fff' : 'rgba(255,255,255,0.6)', transition: 'background .12s' }}>
+                  {p}
+                </button>
               ))}
             </div>
           </BcField>
         )}
-        {'hasLine' in market && market.hasLine && <BcField label="Line"><input type="number" step="0.5" value={line} onChange={(e) => setLine(+e.target.value)} style={bcInputStyle} /></BcField>}
+
+        {/* ── Over/Under line ── */}
+        {'hasLine' in market && market.hasLine && (
+          <BcField label="Line">
+            <input type="number" step="0.5" value={line} onChange={(e) => setLine(+e.target.value)} style={bcInputStyle} />
+          </BcField>
+        )}
+
+        {/* ── Handicap ── */}
         {'hasHandicap' in market && market.hasHandicap && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <BcField label="Team">
-              <select value={team} onChange={(e) => setTeam(e.target.value)} style={{ ...bcInputStyle, cursor: 'pointer' }}>
-                <option value="">Choose…</option>
-                {match && <option value={match.homeTeam}>{match.homeTeam}</option>}
-                {match && <option value={match.awayTeam}>{match.awayTeam}</option>}
-              </select>
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={team}
+                  onChange={(e) => setTeam(e.target.value)}
+                  style={{ ...bcInputStyle, cursor: 'pointer', background: '#12121e', color: team ? '#fff' : 'rgba(255,255,255,0.4)', appearance: 'none', WebkitAppearance: 'none', paddingRight: 30 }}
+                >
+                  <option value="" style={{ background: '#12121e' }}>Choose…</option>
+                  {match && <option value={match.homeTeam} style={{ background: '#12121e', color: '#fff' }}>{match.homeTeam}</option>}
+                  {match && <option value={match.awayTeam} style={{ background: '#12121e', color: '#fff' }}>{match.awayTeam}</option>}
+                </select>
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>▼</span>
+              </div>
             </BcField>
-            <BcField label="Handicap"><input type="number" step="0.5" value={handicap} onChange={(e) => setHandicap(+e.target.value)} style={bcInputStyle} /></BcField>
+            <BcField label="Handicap">
+              <input type="number" step="0.5" value={handicap} onChange={(e) => setHandicap(+e.target.value)} style={bcInputStyle} />
+            </BcField>
           </div>
         )}
+
+        {/* ── Correct Score ── */}
         {'hasScore' in market && market.hasScore && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <BcField label="Home Goals"><input type="number" min={0} max={10} value={home} onChange={(e) => setHome(+e.target.value)} style={bcInputStyle} /></BcField>
-            <BcField label="Away Goals"><input type="number" min={0} max={10} value={away} onChange={(e) => setAway(+e.target.value)} style={bcInputStyle} /></BcField>
+            <BcField label="Home Goals">
+              <input type="number" min={0} max={10} value={home} onChange={(e) => setHome(+e.target.value)} style={bcInputStyle} />
+            </BcField>
+            <BcField label="Away Goals">
+              <input type="number" min={0} max={10} value={away} onChange={(e) => setAway(+e.target.value)} style={bcInputStyle} />
+            </BcField>
           </div>
         )}
+
+        {/* ── HT/FT ── */}
         {'hasHtFt' in market && market.hasHtFt && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <BcField label="Half-Time"><select value={ht} onChange={(e) => setHt(e.target.value)} style={{ ...bcInputStyle, cursor: 'pointer' }}>{['Home Win', 'Draw', 'Away Win'].map((v) => <option key={v}>{v}</option>)}</select></BcField>
-            <BcField label="Full-Time"><select value={ft} onChange={(e) => setFt(e.target.value)} style={{ ...bcInputStyle, cursor: 'pointer' }}>{['Home Win', 'Draw', 'Away Win'].map((v) => <option key={v}>{v}</option>)}</select></BcField>
+            <BcField label="Half-Time">
+              <div style={{ position: 'relative' }}>
+                <select value={ht} onChange={(e) => setHt(e.target.value)} style={{ ...bcInputStyle, cursor: 'pointer', background: '#12121e', color: '#fff', appearance: 'none', WebkitAppearance: 'none', paddingRight: 30 }}>
+                  {['Home Win', 'Draw', 'Away Win'].map((v) => <option key={v} style={{ background: '#12121e', color: '#fff' }}>{v}</option>)}
+                </select>
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>▼</span>
+              </div>
+            </BcField>
+            <BcField label="Full-Time">
+              <div style={{ position: 'relative' }}>
+                <select value={ft} onChange={(e) => setFt(e.target.value)} style={{ ...bcInputStyle, cursor: 'pointer', background: '#12121e', color: '#fff', appearance: 'none', WebkitAppearance: 'none', paddingRight: 30 }}>
+                  {['Home Win', 'Draw', 'Away Win'].map((v) => <option key={v} style={{ background: '#12121e', color: '#fff' }}>{v}</option>)}
+                </select>
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 9 }}>▼</span>
+              </div>
+            </BcField>
           </div>
         )}
-        <BcField label="Odds"><input type="number" step="0.01" min="1.10" value={odds} onChange={(e) => setOdds(+e.target.value)} style={bcInputStyle} /></BcField>
+
+        {/* ── Odds ── */}
+        <BcField label="Odds">
+          <input type="number" step="0.01" min="1.10" value={odds} onChange={(e) => setOdds(+e.target.value)} style={bcInputStyle} />
+        </BcField>
+
+        {/* ── Actions ── */}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '11px 0', borderRadius: 9, background: 'rgba(255,255,255,0.06)', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onClose}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 9, background: 'rgba(255,255,255,0.06)', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            Cancel
+          </button>
           <button onClick={() => onPick(buildSelection())} disabled={!canSubmit()}
             style={{ flex: 1, padding: '11px 0', borderRadius: 9, border: 'none', background: canSubmit() ? typeCfg.accent : 'rgba(255,255,255,0.1)', color: canSubmit() ? '#fff' : 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: 800, cursor: canSubmit() ? 'pointer' : 'not-allowed', transition: 'background .15s' }}>
             Add Selection
           </button>
         </div>
+
       </div>
     </BcModalShell>
   );
