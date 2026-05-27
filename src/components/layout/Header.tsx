@@ -150,7 +150,6 @@ const navLinks = [
     label: 'Live',
     icon: <FiberManualRecordIcon className="text-green-500 animate-pulse-green" sx={{ fontSize: 16 }} />,
   },
-
 ];
 
 // ---------------------------------------------------------------------------
@@ -164,12 +163,12 @@ function getUserInitials(fullName: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// OddsKingLogo
+// ZynoBetLogo
 // ---------------------------------------------------------------------------
-function OddsKingLogo() {
+function ZynoBetLogo() {
   return (
-    <div className="flex items-center gap-0 select-none" aria-label="OddsKing">
-      {/* Crown icon */}
+    <div className="flex items-center gap-0 select-none" aria-label="ZynoBet">
+      {/* Lightning bolt icon */}
       <svg
         width="28"
         height="28"
@@ -180,23 +179,16 @@ function OddsKingLogo() {
         style={{ marginRight: 6, flexShrink: 0 }}
       >
         <defs>
-          <linearGradient id="ok-crown-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#FFD740" />
-            <stop offset="100%" stopColor="#D4900A" />
+          <linearGradient id="zb-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#6366f1" />
           </linearGradient>
         </defs>
-        {/* Crown band base */}
-        <rect x="8" y="34" width="40" height="8" rx="2" fill="url(#ok-crown-grad)" />
-        {/* Crown M-shape body */}
+        {/* Lightning bolt */}
         <polygon
-          points="8,34 14,12 22,22 28,10 34,22 42,12 48,34"
-          fill="url(#ok-crown-grad)"
+          points="32,4 18,28 27,28 24,52 38,28 29,28"
+          fill="url(#zb-grad)"
         />
-        {/* Diamond gem at top */}
-        <polygon points="28,2 34,10 28,16 22,10" fill="#FFE57A" />
-        {/* Peak dots */}
-        <circle cx="14" cy="12" r="3.5" fill="#FFD740" />
-        <circle cx="42" cy="12" r="3.5" fill="#FFD740" />
       </svg>
 
       {/* Wordmark */}
@@ -208,10 +200,13 @@ function OddsKingLogo() {
             fontStyle: 'italic',
             fontSize: '1.25rem',
             letterSpacing: '-0.02em',
-            color: 'var(--text-main)',
+            background: 'linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
           }}
         >
-          Odds
+          Zyno
         </span>
         <span
           style={{
@@ -220,13 +215,10 @@ function OddsKingLogo() {
             fontStyle: 'italic',
             fontSize: '1.25rem',
             letterSpacing: '-0.02em',
-            background: 'linear-gradient(135deg, #FFD740 0%, #D4900A 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
+            color: 'var(--text-main)',
           }}
         >
-          King
+          Bet
         </span>
       </div>
     </div>
@@ -315,7 +307,7 @@ export default function Header() {
 
         {/* LOGO */}
         <Link to="/" className="flex items-center shrink-0">
-          <OddsKingLogo />
+          <ZynoBetLogo />
         </Link>
 
         {/* DESKTOP NAV */}
@@ -328,8 +320,8 @@ export default function Header() {
                 to={l.to}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors"
                 style={{
-                  backgroundColor: active ? 'color-mix(in srgb, #D4900A 12%, transparent)' : undefined,
-                  color: active ? '#D4900A' : 'var(--text-muted)',
+                  backgroundColor: active ? 'color-mix(in srgb, #6366f1 12%, transparent)' : undefined,
+                  color: active ? '#6366f1' : 'var(--text-muted)',
                 }}
                 onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--card-alt)'; }}
                 onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
@@ -430,7 +422,7 @@ export default function Header() {
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
-                  style={{ background: 'linear-gradient(135deg, #D4900A 0%, #FFD740 100%)' }}
+                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)' }}
                 >
                   {getUserInitials(user.fullName)}
                 </div>
@@ -457,19 +449,19 @@ export default function Header() {
                 to="/register"
                 className="flex items-center gap-1.5 text-sm py-2 px-4 rounded-full touch-manipulation font-bold whitespace-nowrap"
                 style={{
-                  background: 'linear-gradient(90deg, #D4900A 0%, #FFD740 100%)',
-                  color: '#1a1a1a',
-                  boxShadow: '0 2px 8px rgba(212, 144, 10, 0.45)',
+                  background: 'linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.45)',
                   border: 'none',
                   textDecoration: 'none',
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.opacity = '0.9';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(212, 144, 10, 0.6)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.6)';
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLElement).style.opacity = '1';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(212, 144, 10, 0.45)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(99, 102, 241, 0.45)';
                 }}
               >
                 <PersonAddIcon fontSize="small" />
@@ -513,8 +505,8 @@ export default function Header() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors min-h-[48px] touch-manipulation"
                   style={{
-                    backgroundColor: active ? 'color-mix(in srgb, #D4900A 12%, transparent)' : undefined,
-                    color: active ? '#D4900A' : 'var(--text-muted)',
+                    backgroundColor: active ? 'color-mix(in srgb, #6366f1 12%, transparent)' : undefined,
+                    color: active ? '#6366f1' : 'var(--text-muted)',
                   }}
                 >
                   {l.icon}
@@ -578,8 +570,8 @@ export default function Header() {
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                       style={{
-                        background: 'linear-gradient(135deg, #D4900A 0%, #FFD740 100%)',
-                        color: '#1a1a1a',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)',
+                        color: '#ffffff',
                       }}
                     >
                       {getUserInitials(user.fullName)}
@@ -604,9 +596,9 @@ export default function Header() {
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center justify-center gap-2 text-sm min-h-[48px] rounded-full touch-manipulation font-bold"
                     style={{
-                      background: 'linear-gradient(90deg, #D4900A 0%, #FFD740 100%)',
-                      color: '#1a1a1a',
-                      boxShadow: '0 2px 10px rgba(212, 144, 10, 0.45)',
+                      background: 'linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)',
+                      color: '#ffffff',
+                      boxShadow: '0 2px 10px rgba(99, 102, 241, 0.45)',
                       textDecoration: 'none',
                     }}
                   >
