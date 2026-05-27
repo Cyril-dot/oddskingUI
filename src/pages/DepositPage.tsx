@@ -58,6 +58,7 @@ async function moolreInit(body: {
   phone: string;
   channel: string;
   otpcode?: string;
+  externalref?: string; // send back on OTP resubmission to reuse the same transaction
 }): Promise<Record<string, unknown>> {
   const res = await fetch(
     'https://futballbackend-production-aefb.up.railway.app/api/wallet/deposit/moolre/init',
@@ -184,6 +185,13 @@ export default function DepositPage() {
   const [step,          setStep]          = useState<Step>('form');
   const [loading,       setLoading]       = useState(false);
   const [errorMsg,      setErrorMsg]      = useState('');
+
+  /**
+   * externalRef is set on the FIRST init call and must be sent back on every
+   * subsequent call (OTP resubmission, verify). This is the fix for the
+   * infinite OTP loop — without reusing the same ref, Moolre treats each
+   * submission as a brand-new transaction and fires a new OTP every time.
+   */
   const [externalRef,   setExternalRef]   = useState('');
   const [verifyMsg,     setVerifyMsg]     = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -209,9 +217,9 @@ export default function DepositPage() {
   const amountValid  = !isNaN(parsedAmount) && parsedAmount >= MIN_GHS;
   const phoneValid   = phone.replace(/\D/g, '').length >= 9;
 
-  // ── Step 1: Init deposit (or submit OTP) ───────────────────────────────────
+  // ── Step 1: Init deposit — first call, no OTP yet ─────────────────────────
 
-  const handleInit = async (withOtp = false) => {
+  const handleInit = async () => {
     if (!amountValid || !phoneValid) return;
     setLoading(true);
     setErrorMsg('');
@@ -220,22 +228,22 @@ export default function DepositPage() {
         amount:  parsedAmount.toString(),
         phone:   phone.trim(),
         channel: channel.id,
+        // No externalref on the first call — backend generates a new one
       };
-      if (withOtp && otp.trim()) body.otpcode = otp.trim();
 
       const res   = await moolreInit(body);
       const inner = (res?.data ?? res) as Record<string, unknown>;
-      const code  = (inner?.code ?? res?.code ?? '') as string;
+      const code  = (inner?.code  ?? res?.code  ?? '') as string;
       const ref   = (inner?.externalref ?? res?.externalref ?? '') as string;
 
+      // Save the ref — it MUST be sent back on OTP resubmission and /verify.
       if (ref) setExternalRef(ref);
 
-      // FIX: treat both "OTP_REQ" and "TP14" as the OTP step.
-      // "TP14" is Moolre's production code for "OTP sent — please verify."
       if (OTP_REQUIRED_CODES.has(code)) {
+        // Moolre sent OTP to phone — show OTP entry screen
         setStep('otp');
       } else {
-        // code === "PAYMENT_REQ" or similar — USSD prompt sent to phone
+        // USSD prompt sent directly — customer just needs to approve on phone
         setStep('awaiting');
       }
     } catch (e: unknown) {
@@ -247,8 +255,42 @@ export default function DepositPage() {
   };
 
   // ── Step 2: Submit OTP ─────────────────────────────────────────────────────
+  //
+  // KEY FIX: we send back the SAME externalref from the first call.
+  // Without this, every OTP submission creates a brand-new transaction on
+  // Moolre's side, which responds with another TP14 — causing the infinite loop.
 
-  const handleSubmitOtp = () => handleInit(true);
+  const handleSubmitOtp = async () => {
+    if (!otp.trim() || !externalRef) return;
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const body: Parameters<typeof moolreInit>[0] = {
+        amount:      parsedAmount.toString(),
+        phone:       phone.trim(),
+        channel:     channel.id,
+        otpcode:     otp.trim(),
+        externalref: externalRef, // ← reuse the SAME ref, don't generate new
+      };
+
+      const res   = await moolreInit(body);
+      const inner = (res?.data ?? res) as Record<string, unknown>;
+      const code  = (inner?.code ?? res?.code ?? '') as string;
+
+      if (OTP_REQUIRED_CODES.has(code)) {
+        // Moolre rejected the OTP (wrong code) — stay on OTP screen with error
+        setOtp('');
+        setErrorMsg('Incorrect OTP. Please check the code sent to your phone and try again.');
+      } else {
+        // OTP accepted — USSD prompt now sent to phone for final approval
+        setStep('awaiting');
+      }
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Failed to submit OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ── Step 3: Verify payment ─────────────────────────────────────────────────
 
@@ -269,14 +311,13 @@ export default function DepositPage() {
         setErrorMsg('Payment failed or was cancelled.');
         setStep('error');
       } else if (txStatus === TX_NOT_FOUND) {
-        // FIX: txstatus=3 means "transaction not found" — the OTP step was not
-        // completed. Show a clear, actionable message instead of "contact support".
+        // txstatus=3: OTP step was not completed — guide user back to OTP screen
         setVerifyMsg(
           message ||
           'Payment not found. Please complete the OTP verification first, then approve the USSD prompt on your phone.'
         );
       } else {
-        // still pending (txstatus=0) or unknown
+        // txstatus=0 (still pending) or anything else
         setVerifyMsg(
           message || 'Payment is still pending. Please approve the USSD prompt on your phone, then tap Check Again.'
         );
@@ -292,12 +333,13 @@ export default function DepositPage() {
     setStep('form');
     setAmount('');
     setOtp('');
-    setExternalRef('');
+    setExternalRef('');  // clear the ref so the next deposit gets a fresh one
     setErrorMsg('');
     setVerifyMsg('');
   };
 
   // ── OTP screen ─────────────────────────────────────────────────────────────
+
   if (step === 'otp') return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--card-alt)' }}>
       <div className="max-w-sm w-full mx-auto p-6 space-y-5">
@@ -312,6 +354,14 @@ export default function DepositPage() {
           </p>
         </div>
 
+        {/* Show OTP error inline on the OTP screen */}
+        {errorMsg && (
+          <div className="px-4 py-3 rounded-xl text-xs text-left"
+            style={{ backgroundColor: 'color-mix(in srgb, #e11d48 8%, var(--card-alt))', border: '1px solid color-mix(in srgb, #e11d48 25%, var(--border-light))', color: '#e11d48' }}>
+            {errorMsg}
+          </div>
+        )}
+
         <div
           className="flex items-center rounded-xl overflow-hidden"
           style={{ border: '1.5px solid var(--border-light)', backgroundColor: 'var(--card-bg)' }}
@@ -323,7 +373,7 @@ export default function DepositPage() {
           <input
             type="number"
             value={otp}
-            onChange={e => setOtp(e.target.value)}
+            onChange={e => { setOtp(e.target.value); setErrorMsg(''); }}
             placeholder="e.g. 123456"
             className="flex-1 h-14 px-4 text-xl font-bold outline-none bg-transparent"
             style={{ color: 'var(--text-main)', caretColor: 'var(--primary)' } as React.CSSProperties}
@@ -340,6 +390,7 @@ export default function DepositPage() {
   );
 
   // ── Awaiting approval screen ───────────────────────────────────────────────
+
   if (step === 'awaiting') return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--card-alt)' }}>
       <div className="max-w-sm w-full mx-auto p-6 text-center space-y-5">
@@ -372,6 +423,7 @@ export default function DepositPage() {
   );
 
   // ── Success ────────────────────────────────────────────────────────────────
+
   if (step === 'success') return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--card-alt)' }}>
       <div className="max-w-sm w-full mx-auto p-6 text-center space-y-4">
@@ -401,6 +453,7 @@ export default function DepositPage() {
   );
 
   // ── Error ──────────────────────────────────────────────────────────────────
+
   if (step === 'error') return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--card-alt)' }}>
       <div className="max-w-sm w-full mx-auto p-6 text-center space-y-4">
@@ -420,6 +473,7 @@ export default function DepositPage() {
   );
 
   // ── Form ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen pb-10" style={{ backgroundColor: 'var(--card-alt)' }}>
       <div className="max-w-lg mx-auto p-4 space-y-4">
@@ -560,7 +614,7 @@ export default function DepositPage() {
 
         {/* CTA */}
         <BtnPrimary
-          onClick={() => handleInit(false)}
+          onClick={handleInit}
           disabled={!amountValid || !phoneValid}
           loading={loading}
         >
