@@ -58,11 +58,11 @@ function getNamePlaceholders(countryCode: string): [string, string] {
 }
 
 // ---------------------------------------------------------------------------
-// OddsKingLogo — same as Header
+// ZynoBetLogo — same as Header
 // ---------------------------------------------------------------------------
-function OddsKingLogo() {
+function ZynoBetLogo() {
   return (
-    <div className="flex items-center gap-0 select-none" aria-label="OddsKing">
+    <div className="flex items-center gap-0 select-none" aria-label="ZynoBet">
       <svg
         width="28"
         height="28"
@@ -73,22 +73,30 @@ function OddsKingLogo() {
         style={{ marginRight: 6, flexShrink: 0 }}
       >
         <defs>
-          <linearGradient id="ok-crown-grad-reg" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#FFD740" />
-            <stop offset="100%" stopColor="#D4900A" />
+          <linearGradient id="zb-grad-reg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#6366f1" />
           </linearGradient>
         </defs>
-        <rect x="8" y="34" width="40" height="8" rx="2" fill="url(#ok-crown-grad-reg)" />
-        <polygon
-          points="8,34 14,12 22,22 28,10 34,22 42,12 48,34"
-          fill="url(#ok-crown-grad-reg)"
-        />
-        <polygon points="28,2 34,10 28,16 22,10" fill="#FFE57A" />
-        <circle cx="14" cy="12" r="3.5" fill="#FFD740" />
-        <circle cx="42" cy="12" r="3.5" fill="#FFD740" />
+        <polygon points="32,4 18,28 27,28 24,52 38,28 29,28" fill="url(#zb-grad-reg)" />
       </svg>
 
       <div style={{ display: 'flex', alignItems: 'baseline', lineHeight: 1 }}>
+        <span
+          style={{
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            fontWeight: 900,
+            fontStyle: 'italic',
+            fontSize: '1.25rem',
+            letterSpacing: '-0.02em',
+            background: 'linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
+        >
+          Zyno
+        </span>
         <span
           style={{
             fontFamily: 'Georgia, "Times New Roman", serif',
@@ -99,22 +107,7 @@ function OddsKingLogo() {
             color: 'var(--text-main)',
           }}
         >
-          Odds
-        </span>
-        <span
-          style={{
-            fontFamily: 'Georgia, "Times New Roman", serif',
-            fontWeight: 900,
-            fontStyle: 'italic',
-            fontSize: '1.25rem',
-            letterSpacing: '-0.02em',
-            background: 'linear-gradient(135deg, #FFD740 0%, #D4900A 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          King
+          Bet
         </span>
       </div>
     </div>
@@ -122,11 +115,11 @@ function OddsKingLogo() {
 }
 
 // ---------------------------------------------------------------------------
-// OddsKingLogo — large variant for left panel
+// ZynoBetLogoLarge — large variant for left panel
 // ---------------------------------------------------------------------------
-function OddsKingLogoLarge() {
+function ZynoBetLogoLarge() {
   return (
-    <div className="flex flex-col items-center gap-3 select-none" aria-label="OddsKing">
+    <div className="flex flex-col items-center gap-3 select-none" aria-label="ZynoBet">
       <svg
         width="72"
         height="72"
@@ -136,19 +129,12 @@ function OddsKingLogoLarge() {
         aria-hidden="true"
       >
         <defs>
-          <linearGradient id="ok-crown-grad-reg-lg" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#FFD740" />
-            <stop offset="100%" stopColor="#D4900A" />
+          <linearGradient id="zb-grad-reg-lg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="100%" stopColor="#6366f1" />
           </linearGradient>
         </defs>
-        <rect x="8" y="34" width="40" height="8" rx="2" fill="url(#ok-crown-grad-reg-lg)" />
-        <polygon
-          points="8,34 14,12 22,22 28,10 34,22 42,12 48,34"
-          fill="url(#ok-crown-grad-reg-lg)"
-        />
-        <polygon points="28,2 34,10 28,16 22,10" fill="#FFE57A" />
-        <circle cx="14" cy="12" r="3.5" fill="#FFD740" />
-        <circle cx="42" cy="12" r="3.5" fill="#FFD740" />
+        <polygon points="32,4 18,28 27,28 24,52 38,28 29,28" fill="url(#zb-grad-reg-lg)" />
       </svg>
 
       <div style={{ display: 'flex', alignItems: 'baseline', lineHeight: 1 }}>
@@ -159,10 +145,10 @@ function OddsKingLogoLarge() {
             fontStyle: 'italic',
             fontSize: '2.5rem',
             letterSpacing: '-0.02em',
-            color: '#ffffff',
+            color: '#38bdf8',
           }}
         >
-          Odds
+          Zyno
         </span>
         <span
           style={{
@@ -171,10 +157,10 @@ function OddsKingLogoLarge() {
             fontStyle: 'italic',
             fontSize: '2.5rem',
             letterSpacing: '-0.02em',
-            color: '#FFD740',
+            color: '#ffffff',
           }}
         >
-          King
+          Bet
         </span>
       </div>
     </div>
@@ -400,7 +386,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 // Default country → France
 // ---------------------------------------------------------------------------
-const DEFAULT_COUNTRY = COUNTRIES.find(c => c.code === 'FR')!;
+const DEFAULT_COUNTRY = COUNTRIES.find(c => c.code === 'GH')!;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -496,7 +482,7 @@ export default function RegisterPage() {
         referralCode: '',
       });
 
-      showToast('Welcome to OddsKing! 🎉', 'success');
+      showToast('Welcome to ZynoBet! ⚡', 'success');
 
       if (res.data.mustSetup2fa) {
         navigate('/setup-2fa');
@@ -522,7 +508,7 @@ export default function RegisterPage() {
       <aside
         className="hidden md:flex md:w-2/5 lg:w-[38%] xl:w-1/3 shrink-0 flex-col items-center justify-center p-10 relative overflow-hidden"
         style={{
-          background: 'linear-gradient(145deg, var(--primary) 0%, #b91c1c 100%)',
+          background: 'linear-gradient(145deg, #6366f1 0%, #1e40af 100%)',
           position:   'sticky',
           top:        '4rem',
           height:     'calc(100vh - 4rem)',
@@ -533,9 +519,9 @@ export default function RegisterPage() {
         <div className="absolute -bottom-28 -right-16 w-96 h-96 rounded-full opacity-10" style={{ backgroundColor: '#fff' }} />
 
         <div className="relative text-white text-center w-full max-w-xs">
-          {/* OddsKing logo — large */}
+          {/* ZynoBet logo — large */}
           <div className="mb-6">
-            <OddsKingLogoLarge />
+            <ZynoBetLogoLarge />
           </div>
 
           <p className="text-xs font-semibold tracking-[3px] uppercase mb-6" style={{ opacity: 0.6 }}>
@@ -572,10 +558,10 @@ export default function RegisterPage() {
       {/* ═══ MOBILE BANNER ═══ */}
       <div
         className="md:hidden px-5 py-5 text-white"
-        style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #b91c1c 100%)' }}
+        style={{ background: 'linear-gradient(135deg, #6366f1 0%, #1e40af 100%)' }}
       >
         <div className="flex items-center gap-3 mb-3">
-          {/* Crown icon — small for mobile banner */}
+          {/* Lightning bolt icon — small for mobile banner */}
           <svg
             width="32"
             height="32"
@@ -586,16 +572,12 @@ export default function RegisterPage() {
             style={{ flexShrink: 0 }}
           >
             <defs>
-              <linearGradient id="ok-crown-grad-reg-mob" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#FFD740" />
-                <stop offset="100%" stopColor="#D4900A" />
+              <linearGradient id="zb-grad-reg-mob" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#ffffff" />
               </linearGradient>
             </defs>
-            <rect x="8" y="34" width="40" height="8" rx="2" fill="url(#ok-crown-grad-reg-mob)" />
-            <polygon points="8,34 14,12 22,22 28,10 34,22 42,12 48,34" fill="url(#ok-crown-grad-reg-mob)" />
-            <polygon points="28,2 34,10 28,16 22,10" fill="#FFE57A" />
-            <circle cx="14" cy="12" r="3.5" fill="#FFD740" />
-            <circle cx="42" cy="12" r="3.5" fill="#FFD740" />
+            <polygon points="32,4 18,28 27,28 24,52 38,28 29,28" fill="url(#zb-grad-reg-mob)" />
           </svg>
 
           <div>
@@ -607,10 +589,10 @@ export default function RegisterPage() {
                   fontStyle: 'italic',
                   fontSize: '1.25rem',
                   letterSpacing: '-0.02em',
-                  color: '#ffffff',
+                  color: '#38bdf8',
                 }}
               >
-                Odds
+                Zyno
               </span>
               <span
                 style={{
@@ -619,10 +601,10 @@ export default function RegisterPage() {
                   fontStyle: 'italic',
                   fontSize: '1.25rem',
                   letterSpacing: '-0.02em',
-                  color: '#FFD740',
+                  color: '#ffffff',
                 }}
               >
-                King
+                Bet
               </span>
             </div>
             <p className="text-xs mt-0.5" style={{ opacity: 0.7 }}>Sports Betting</p>
