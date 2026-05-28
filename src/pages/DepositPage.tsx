@@ -25,6 +25,7 @@ export default function DepositPage() {
   const [info,        setInfo]    = useState("");
   const [externalRef, setRef]     = useState("");
   const [countdown,   setCount]   = useState(120);
+  const [actionRequired, setActionRequired] = useState(false);
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (!res.ok) return setError(data?.message || data?.error || "Payment initiation failed. Please try again.");
       setRef(data?.data?.externalref || "");
+      setActionRequired(data?.data?.actionRequired === true);
       setSub(SUB.WAIT);
       setStep(STEP.APPROVE);
     } catch { setError("Network error. Please try again."); }
@@ -199,28 +201,55 @@ export default function DepositPage() {
 
             {/* ── sub: WAIT — user needs to approve on phone ── */}
             {sub === SUB.WAIT && (<>
-              <div style={{ background:"rgba(255,204,0,0.06)", border:"1px solid rgba(255,204,0,0.18)", borderRadius:"12px", padding:"18px", marginBottom:"16px", textAlign:"center" }}>
-                <div style={{ fontSize:"28px", marginBottom:"8px" }}>📳</div>
-                <div style={{ color:"#ffe066", fontWeight:700, fontSize:"14px", marginBottom:"6px" }}>
-                  Check your phone
-                </div>
-                <div style={{ color:"#998844", fontSize:"12px", lineHeight:"1.6" }}>
-                  A USSD prompt has been sent to <strong style={{ color:"#ccaa44" }}>{phone}</strong>.<br />
-                  Approve the <strong>GH₵{parseFloat(amount).toFixed(2)}</strong> payment on your {NETWORKS.find(n=>n.id===network)?.label} to continue.
-                </div>
-                {countdown > 0
-                  ? <div style={{ marginTop:"10px", fontSize:"12px", color:"#665522" }}>Expires in <strong style={{ color:"#ffcc00" }}>{fmt(countdown)}</strong></div>
-                  : <div style={{ marginTop:"10px", fontSize:"12px", color:"#994433" }}>Prompt may have expired — you can still verify below</div>
-                }
-              </div>
 
-              <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:"8px", padding:"10px 12px", color:"#667788", fontSize:"12px", marginBottom:"16px", lineHeight:"1.5" }}>
-                ⚠️ <strong style={{ color:"#8899aa" }}>Received an SMS instead?</strong> Some accounts require a one-time SMS verification. Complete the steps in the SMS, then tap the button below.
-              </div>
+              {/* SMS + USSD two-step flow (actionRequired=true from backend) */}
+              {actionRequired ? (<>
+                <div style={{ background:"rgba(255,204,0,0.06)", border:"1px solid rgba(255,204,0,0.18)", borderRadius:"12px", padding:"18px", marginBottom:"14px" }}>
+                  <div style={{ color:"#ffe066", fontWeight:700, fontSize:"13px", marginBottom:"14px", textAlign:"center" }}>
+                    📋 Complete these steps to finish your deposit
+                  </div>
+
+                  {/* Step 1 — SMS code */}
+                  <div style={{ display:"flex", gap:"12px", alignItems:"flex-start", marginBottom:"14px" }}>
+                    <div style={{ minWidth:"24px", height:"24px", borderRadius:"50%", background:"#2563eb", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:800, color:"#fff", flexShrink:0 }}>1</div>
+                    <div>
+                      <div style={{ color:"#ffe066", fontWeight:700, fontSize:"13px", marginBottom:"3px" }}>Check your SMS</div>
+                      <div style={{ color:"#998844", fontSize:"12px", lineHeight:"1.6" }}>
+                        MTN has sent a verification code to <strong style={{ color:"#ccaa44" }}>{phone}</strong>. Enter that code in the SMS prompt on your phone to approve.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2 — USSD */}
+                  <div style={{ display:"flex", gap:"12px", alignItems:"flex-start" }}>
+                    <div style={{ minWidth:"24px", height:"24px", borderRadius:"50%", background:"rgba(74,158,255,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", fontWeight:800, color:"#fff", flexShrink:0 }}>2</div>
+                    <div>
+                      <div style={{ color:"#8899bb", fontWeight:700, fontSize:"13px", marginBottom:"3px" }}>Approve the USSD prompt</div>
+                      <div style={{ color:"#556677", fontSize:"12px", lineHeight:"1.6" }}>
+                        After completing the SMS step, a USSD menu will appear. Approve the <strong style={{ color:"#7799bb" }}>GH₵{parseFloat(amount).toFixed(2)}</strong> payment on your {NETWORKS.find(n=>n.id===network)?.label}.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>) : (<>
+                {/* Normal USSD-only flow */}
+                <div style={{ background:"rgba(255,204,0,0.06)", border:"1px solid rgba(255,204,0,0.18)", borderRadius:"12px", padding:"18px", marginBottom:"14px", textAlign:"center" }}>
+                  <div style={{ fontSize:"28px", marginBottom:"8px" }}>📳</div>
+                  <div style={{ color:"#ffe066", fontWeight:700, fontSize:"14px", marginBottom:"6px" }}>Check your phone</div>
+                  <div style={{ color:"#998844", fontSize:"12px", lineHeight:"1.6" }}>
+                    A USSD prompt has been sent to <strong style={{ color:"#ccaa44" }}>{phone}</strong>.<br />
+                    Approve the <strong>GH₵{parseFloat(amount).toFixed(2)}</strong> payment on your {NETWORKS.find(n=>n.id===network)?.label} to continue.
+                  </div>
+                  {countdown > 0
+                    ? <div style={{ marginTop:"10px", fontSize:"12px", color:"#665522" }}>Expires in <strong style={{ color:"#ffcc00" }}>{fmt(countdown)}</strong></div>
+                    : <div style={{ marginTop:"10px", fontSize:"12px", color:"#994433" }}>Prompt may have expired — you can still verify below</div>
+                  }
+                </div>
+              </>)}
 
               <button onClick={() => { setSub(SUB.VERIFY); setError(""); setInfo(""); }}
                 style={{ width:"100%", padding:"15px", background:"linear-gradient(135deg,#2563eb,#1d4ed8)", border:"none", borderRadius:"10px", color:"#fff", fontSize:"15px", fontWeight:700, cursor:"pointer", marginBottom:"10px" }}>
-                I've Approved — Verify Payment ✓
+                I've Done Both Steps — Verify Payment ✓
               </button>
 
               <button onClick={restart}
