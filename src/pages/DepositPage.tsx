@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 
 const API_BASE = "https://futballbackend-production-aefb.up.railway.app";
 const MIN_DEPOSIT = 1;
-const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
+const QUICK_AMOUNTS = [1, 2, 5, 10, 20, 50, 100, 200];
 const NETWORKS = [
   { id: "MTN",        label: "MTN MoMo",        check: true  },
   { id: "VODAFONE",   label: "Telecel Cash",     check: false },
@@ -140,7 +140,7 @@ export default function DepositPage() {
                   <button key={q}
                     onClick={() => setAmount(String(q))}
                     style={{ background: parseFloat(amount)===q ? "rgba(74,158,255,0.15)" : "rgba(255,255,255,0.04)", border:`1px solid ${parseFloat(amount)===q ? "rgba(74,158,255,0.4)" : "rgba(255,255,255,0.07)"}`, borderRadius:"8px", padding:"8px 0", color: parseFloat(amount)===q ? "#4a9eff" : "#667788", fontSize:"13px", fontWeight:600, cursor:"pointer" }}>
-                    {q >= 1000 ? `${q/1000}k` : q}
+                    {q}
                   </button>
                 ))}
               </div>
