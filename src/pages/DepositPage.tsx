@@ -91,11 +91,14 @@ export default function DepositPage() {
     if (!/^0\d{9}$/.test(phone.trim()))
       return setError("Enter a valid 10-digit number starting with 0.");
 
+    // Normalise to 233XXXXXXXXX — Moolre requires country-code format
+    const normalisedPhone = "233" + phone.trim().slice(1);
+
     setLoading(true);
     try {
       const data = await post("/api/wallet/deposit/moolre/init", {
         amount:  amt,
-        phone:   phone.trim(),
+        phone:   normalisedPhone,
         network,
       });
 
