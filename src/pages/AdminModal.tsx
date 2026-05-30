@@ -407,11 +407,22 @@ function CreateMatchModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const set = (key: string, val: unknown) => setForm((f) => ({ ...f, [key]: val }));
   const canNext = form.homeTeam.trim() && form.awayTeam.trim();
 
-  const create = async () => {
+ const create = async () => {
     if (!canNext) { setError('Home and away team names are required.'); return; }
     setSaving(true); setError('');
     try {
-      const payload: Record<string, unknown> = { homeTeam: form.homeTeam.trim(), awayTeam: form.awayTeam.trim(), league: form.league?.trim() || undefined, sport: form.sport || 'football', homeLogo: form.homeLogo?.trim() || undefined, awayLogo: form.awayLogo?.trim() || undefined, leagueLogo: form.leagueLogo?.trim() || undefined, status: form.status || 'SCHEDULED', featured: form.featured };
+      const isUrl = (v: string) => v.startsWith('http://') || v.startsWith('https://');
+      const payload: Record<string, unknown> = {
+        homeTeam: form.homeTeam.trim(),
+        awayTeam: form.awayTeam.trim(),
+        league: form.league?.trim() || undefined,
+        sport: form.sport || 'football',
+        homeLogo:   form.homeLogo   && isUrl(form.homeLogo)   ? form.homeLogo   : undefined,
+        awayLogo:   form.awayLogo   && isUrl(form.awayLogo)   ? form.awayLogo   : undefined,
+        leagueLogo: form.leagueLogo && isUrl(form.leagueLogo) ? form.leagueLogo : undefined,
+        status: form.status || 'SCHEDULED',
+        featured: form.featured
+      };
       if (form.kickoffDate && form.kickoffTime) payload.kickoffAt = new Date(`${form.kickoffDate}T${form.kickoffTime}:00`).toISOString();
       else if (form.kickoffDate) payload.kickoffAt = new Date(`${form.kickoffDate}T00:00:00`).toISOString();
       const raw = await adminMatches.create(payload as unknown as Parameters<typeof adminMatches.create>[0]);
