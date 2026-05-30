@@ -134,9 +134,9 @@ function ghsToLocal(ghsAmount: number, currency: CurrencyInfo): number {
 
 const MIN_STAKE_GHS = 300;
 
-const DEBUG = (() => { try { return localStorage.getItem('ODDSKING_DEBUG') === 'true'; } catch { return false; } })();
-function log(area: string, ...args: unknown[]) { if (!DEBUG) return; console.log(`%c[OddsKing:${area}]`, 'color:#D4900A;font-weight:bold', ...args); }
-function logError(area: string, ...args: unknown[]) { console.error(`[OddsKing:${area}]`, ...args); }
+const DEBUG = (() => { try { return localStorage.getItem('ZYNOBET_DEBUG') === 'true'; } catch { return false; } })();
+function log(area: string, ...args: unknown[]) { if (!DEBUG) return; console.log(`%c[ZynoBet:${area}]`, 'color:#D4900A;font-weight:bold', ...args); }
+function logError(area: string, ...args: unknown[]) { console.error(`[ZynoBet:${area}]`, ...args); }
 
 function buildMatchLabel(s: Record<string, unknown>): string {
   if (!s) return 'Unknown match';
@@ -180,9 +180,9 @@ function normaliseBet(bet: Bet): Bet {
   };
 }
 
-// ─── OddsKing crown SVG (inline, reusable) ────────────────────────────────────
+// ─── ZynoBet Z-bolt SVG (inline, reusable) ────────────────────────────────────
 
-function OddsKingCrownSvg({ size = 20 }: { size?: number }) {
+function ZynoBetLogoSvg({ size = 20 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -194,34 +194,32 @@ function OddsKingCrownSvg({ size = 20 }: { size?: number }) {
       style={{ flexShrink: 0 }}
     >
       <defs>
-        <linearGradient id="ok-slip-crown" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#FFD740" />
-          <stop offset="100%" stopColor="#D4900A" />
+        <linearGradient id="zb-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="100%" stopColor="#2563eb" />
         </linearGradient>
       </defs>
-      <rect x="8" y="34" width="40" height="8" rx="2" fill="url(#ok-slip-crown)" />
-      <polygon points="8,34 14,12 22,22 28,10 34,22 42,12 48,34" fill="url(#ok-slip-crown)" />
-      <polygon points="28,2 34,10 28,16 22,10" fill="#FFE57A" />
-      <circle cx="14" cy="12" r="3.5" fill="#FFD740" />
-      <circle cx="42" cy="12" r="3.5" fill="#FFD740" />
+      <rect width="56" height="56" rx="12" fill="url(#zb-logo-grad)" />
+      {/* Bold Z letter */}
+      <text x="10" y="42" fontSize="38" fontWeight="900" fill="#ffffff" fontFamily="Georgia, serif" letterSpacing="-2">Z</text>
     </svg>
   );
 }
 
 /** Inline wordmark for dark backgrounds (used in modals/slips) */
-function OddsKingWordmarkDark({ size = 14 }: { size?: number }) {
+function ZynoBetWordmarkDark({ size = 14 }: { size?: number }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'baseline', lineHeight: 1 }}>
       <span style={{
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontWeight: 900, fontStyle: 'italic',
-        fontSize: size, letterSpacing: '-0.02em', color: '#ffffff',
-      }}>Odds</span>
+        fontSize: size, letterSpacing: '-0.02em', color: '#60a5fa',
+      }}>Zyno</span>
       <span style={{
         fontFamily: 'Georgia, "Times New Roman", serif',
         fontWeight: 900, fontStyle: 'italic',
-        fontSize: size, letterSpacing: '-0.02em', color: '#FFD740',
-      }}>King</span>
+        fontSize: size, letterSpacing: '-0.02em', color: '#ffffff',
+      }}>Bet</span>
     </span>
   );
 }
@@ -297,77 +295,109 @@ function GuestPrompt({ message }: { message: string }) {
 
 async function generateSlipImage(bet: Bet, isWin: boolean, currency: CurrencyInfo): Promise<string> {
   const container = document.createElement('div');
-  container.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:380px;background:#0f172a;border-radius:24px;overflow:hidden;font-family:'Inter',sans-serif;`;
+  // Make container wide enough for all content, no clipping
+  container.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:420px;background:#0f172a;border-radius:24px;overflow:hidden;font-family:'Inter',sans-serif;`;
 
   const payoutGhs = bet.potentialReturn;
   const headlineAmount = isWin ? formatLocal(payoutGhs, currency) : formatLocal(bet.stake, currency);
   const headlineSubGhs = currency.code !== 'GHS' ? (isWin ? `(GH₵${payoutGhs.toFixed(2)})` : `(GH₵${bet.stake.toFixed(2)})`) : '';
 
-  // Crown SVG as data URI for the slip image
-  const crownSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 56 56'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='0%25' y2='100%25'><stop offset='0%25' stop-color='%23FFD740'/><stop offset='100%25' stop-color='%23D4900A'/></linearGradient></defs><rect x='8' y='34' width='40' height='8' rx='2' fill='url(%23g)'/><polygon points='8,34 14,12 22,22 28,10 34,22 42,12 48,34' fill='url(%23g)'/><polygon points='28,2 34,10 28,16 22,10' fill='%23FFE57A'/><circle cx='14' cy='12' r='3.5' fill='%23FFD740'/><circle cx='42' cy='12' r='3.5' fill='%23FFD740'/></svg>`;
-  const crownDataUri = `data:image/svg+xml,${crownSvg}`;
+  // ZynoBet logo SVG as data URI
+  const logoSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 56 56'><defs><linearGradient id='zg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2360a5fa'/><stop offset='100%25' stop-color='%232563eb'/></linearGradient></defs><rect width='56' height='56' rx='12' fill='url(%23zg)'/><text x='10' y='42' font-size='38' font-weight='900' fill='%23ffffff' font-family='Georgia,serif' letter-spacing='-2'>Z</text></svg>`;
+  const logoDataUri = `data:image/svg+xml,${logoSvg}`;
+
+  const placedDate = bet.placedAt ? new Date(bet.placedAt).toLocaleString() : '';
+
+  // Build all selections rows — no limit
+  const selectionRows = bet.selections.map((sel, i) => `
+    <div style="display:grid;grid-template-columns:22px 1fr 54px 60px;gap:0;padding:10px 14px;border-top:1px solid rgba(255,255,255,0.06);background:${i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'};">
+      <span style="font-size:12px;font-weight:800;color:#60a5fa;padding-top:2px;">${i + 1}</span>
+      <div style="padding-right:6px;">
+        <div style="font-size:12px;font-weight:700;color:#fff;line-height:1.3;">${sel.selection}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;line-height:1.3;">${sel.homeTeam && sel.awayTeam ? `${sel.homeTeam} vs ${sel.awayTeam}` : sel.matchId}</div>
+        <div style="font-size:9px;color:rgba(96,165,250,0.6);margin-top:1px;">${sel.market}</div>
+      </div>
+      <span style="font-size:12px;font-weight:800;color:#fff;padding-top:2px;text-align:center;">${sel.oddsLocked.toFixed(2)}</span>
+      <span style="font-size:11px;font-weight:800;color:${sel.result === 'WON' ? '#22c55e' : sel.result === 'LOST' ? '#ef4444' : '#94a3b8'};padding-top:2px;text-align:right;">${sel.result === 'WON' ? 'WON ✓' : sel.result === 'LOST' ? 'LOST ✗' : 'PENDING'}</span>
+    </div>
+  `).join('');
 
   container.innerHTML = `
     <style>* { box-sizing: border-box; margin: 0; padding: 0; }</style>
-    <div style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1200 50%, #0a0a0a 100%);">
-      <div style="background: linear-gradient(90deg, #1a1200, #b91c1c, #1a1200); padding:6px 20px; display:flex; align-items:center; justify-content:space-between;">
-        <span style="display:flex;align-items:center;gap:6px;">
-          <img src="${crownDataUri}" width="18" height="18" style="display:inline-block;vertical-align:middle;" />
-          <span style="font-size:13px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#fff;">Odds<span style="color:#FFD740;">King</span></span>
+    <div style="background: linear-gradient(135deg, #0a0f1a 0%, #0f1a2e 50%, #0a0f1a 100%);">
+
+      <!-- HEADER -->
+      <div style="background: linear-gradient(90deg, #1e3a5f, #1e40af, #1e3a5f); padding:8px 20px; display:flex; align-items:center; justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:8px;">
+          <img src="${logoDataUri}" width="20" height="20" style="display:inline-block;vertical-align:middle;border-radius:5px;" />
+          <span style="font-size:14px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#60a5fa;">Zyno<span style="color:#ffffff;">Bet</span></span>
         </span>
-        <span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">Bet Slip</span>
+        <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:1px;text-transform:uppercase;">Bet Slip</span>
       </div>
-      <div style="padding:24px 24px 16px;text-align:center;">
-        <div style="font-size:14px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#FFD700;margin-bottom:8px;">${isWin ? '🏆 YOU WON!' : '😭 BETTER LUCK NEXT TIME'}</div>
-        <div style="font-size:38px;font-weight:900;color:#FFD700;line-height:1.1;">${headlineAmount}</div>
-        ${headlineSubGhs ? `<div style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:4px;">${headlineSubGhs}</div>` : ''}
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Your bet on OddsKing.</div>
+
+      <!-- HEADLINE -->
+      <div style="padding:22px 24px 18px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="font-size:13px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:${isWin ? '#22c55e' : '#ef4444'};margin-bottom:8px;">${isWin ? '🏆 YOU WON!' : '😭 BETTER LUCK NEXT TIME'}</div>
+        <div style="font-size:36px;font-weight:900;color:${isWin ? '#22c55e' : '#fff'};line-height:1.1;">${headlineAmount}</div>
+        ${headlineSubGhs ? `<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:4px;">${headlineSubGhs}</div>` : ''}
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Placed on ZynoBet · ${placedDate}</div>
       </div>
-      <div style="background:rgba(255,255,255,0.05);margin:0 16px;border-radius:12px;overflow:hidden;">
-        <div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:0;padding:8px 12px;background:rgba(180,20,40,0.4);">
-          <span style="font-size:10px;font-weight:800;color:#FFD700;text-transform:uppercase;padding-right:12px;">#</span>
-          <span style="font-size:10px;font-weight:800;color:#FFD700;text-transform:uppercase;">SELECTION</span>
-          <span style="font-size:10px;font-weight:800;color:#FFD700;text-transform:uppercase;padding:0 12px;">ODDS</span>
-          <span style="font-size:10px;font-weight:800;color:#FFD700;text-transform:uppercase;">RESULT</span>
+
+      <!-- BET SUMMARY ROW -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 16px;gap:0;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(96,165,250,0.7);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">TOTAL ODDS</div>
+          <div style="font-size:16px;font-weight:900;color:#60a5fa;">${bet.totalOdds.toFixed(2)}x</div>
         </div>
-        ${bet.selections.map((sel, i) => `
-          <div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:0;padding:10px 12px;border-top:1px solid rgba(255,255,255,0.06);">
-            <span style="font-size:12px;font-weight:800;color:#FFD700;padding-right:12px;">${i + 1}</span>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:#fff;">${sel.selection}</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.4);">${sel.homeTeam && sel.awayTeam ? `${sel.homeTeam} vs ${sel.awayTeam}` : sel.matchId}</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.5);">${sel.market}</div>
-            </div>
-            <span style="font-size:12px;font-weight:800;color:#fff;padding:0 12px;">${sel.oddsLocked.toFixed(2)}</span>
-            <span style="font-size:12px;font-weight:800;color:${sel.result === 'WON' ? '#22c55e' : sel.result === 'LOST' ? '#ef4444' : '#FFD700'};">${sel.result === 'WON' ? 'WON ✓' : sel.result === 'LOST' ? 'LOST ✗' : '—'}</span>
-          </div>
-        `).join('')}
-      </div>
-      <div style="padding:16px 24px;display:flex;justify-content:space-between;gap:8px;margin-top:8px;">
-        <div style="text-align:center;flex:1;">
-          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;">TOTAL ODDS</div>
-          <div style="font-size:14px;font-weight:900;color:#FFD700;">${bet.totalOdds.toFixed(2)}</div>
-        </div>
-        <div style="text-align:center;flex:1;">
-          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;">STAKE</div>
-          <div style="font-size:14px;font-weight:900;color:#fff;">${formatLocal(bet.stake, currency)}</div>
+        <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.08);border-right:1px solid rgba(255,255,255,0.08);">
+          <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">STAKE</div>
+          <div style="font-size:16px;font-weight:900;color:#fff;">${formatLocal(bet.stake, currency)}</div>
           ${currency.code !== 'GHS' ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">GH₵${bet.stake.toFixed(2)}</div>` : ''}
         </div>
-        <div style="text-align:center;flex:1;">
-          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;">TOTAL WINNINGS</div>
-          <div style="font-size:14px;font-weight:900;color:#FFD700;">${formatLocal(bet.potentialReturn, currency)}</div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">POTENTIAL WIN</div>
+          <div style="font-size:16px;font-weight:900;color:#22c55e;">${formatLocal(bet.potentialReturn, currency)}</div>
           ${currency.code !== 'GHS' ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">GH₵${bet.potentialReturn.toFixed(2)}</div>` : ''}
         </div>
       </div>
-      <div style="background:rgba(0,0,0,0.4);padding:10px 24px;display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);">${new Date(bet.placedAt).toLocaleString()}</div>
+
+      <!-- TICKET META -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div>
+          <span style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:6px;">TICKET</span>
+          <span style="font-size:11px;color:#fff;font-weight:800;font-family:monospace;letter-spacing:1px;">ZB${bet.id.slice(-8).toUpperCase()}</span>
+        </div>
+        <div>
+          <span style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:6px;">TYPE</span>
+          <span style="font-size:11px;color:#60a5fa;font-weight:800;">${bet.selections.length > 1 ? 'MULTIPLE' : 'SINGLE'} · ${bet.selections.length} LEG${bet.selections.length !== 1 ? 'S' : ''}</span>
+        </div>
+        <div>
+          <span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;background:${bet.status === 'WON' ? 'rgba(34,197,94,0.2)' : bet.status === 'LOST' ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'};color:${bet.status === 'WON' ? '#22c55e' : bet.status === 'LOST' ? '#ef4444' : '#fbbf24'};">${bet.status}</span>
+        </div>
+      </div>
+
+      <!-- SELECTIONS TABLE HEADER -->
+      <div style="display:grid;grid-template-columns:22px 1fr 54px 60px;gap:0;padding:8px 14px;background:rgba(30,64,175,0.4);">
+        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">#</span>
+        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">SELECTION</span>
+        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;text-align:center;">ODDS</span>
+        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;text-align:right;">RESULT</span>
+      </div>
+
+      <!-- ALL SELECTION ROWS -->
+      ${selectionRows}
+
+      <!-- FOOTER -->
+      <div style="background:rgba(0,0,0,0.5);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.25);">zynob.et · Bet Responsibly 18+</div>
         <div style="display:flex;align-items:center;gap:6px;">
-          <img src="${crownDataUri}" width="14" height="14" style="display:inline-block;vertical-align:middle;" />
-          <span style="font-size:12px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#fff;">Odds<span style="color:#FFD740;">King</span></span>
+          <img src="${logoDataUri}" width="14" height="14" style="display:inline-block;vertical-align:middle;border-radius:3px;" />
+          <span style="font-size:12px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#60a5fa;">Zyno<span style="color:#ffffff;">Bet</span></span>
         </div>
       </div>
     </div>
   `;
+
   document.body.appendChild(container);
   try {
     const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: null, logging: false });
@@ -382,14 +412,14 @@ async function generateSlipImage(bet: Bet, isWin: boolean, currency: CurrencyInf
 function ShareImageModal({ imageUrl, onClose }: { imageUrl: string; onClose: () => void }) {
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = imageUrl; a.download = `oddsking-slip-${Date.now()}.png`; a.click();
+    a.href = imageUrl; a.download = `zynobet-slip-${Date.now()}.png`; a.click();
   };
   const handleShare = async () => {
     try {
       const blob = await (await fetch(imageUrl)).blob();
-      const file = new File([blob], 'oddsking-bet.png', { type: 'image/png' });
+      const file = new File([blob], 'zynobet-bet.png', { type: 'image/png' });
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'My OddsKing Bet Slip' });
+        await navigator.share({ files: [file], title: 'My ZynoBet Slip' });
       } else { handleDownload(); }
     } catch { handleDownload(); }
   };
@@ -400,7 +430,7 @@ function ShareImageModal({ imageUrl, onClose }: { imageUrl: string; onClose: () 
           <h3 className="font-bold text-white text-base">Your Bet Slip</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"><CloseIcon fontSize="small" /></button>
         </div>
-        <div className="p-4"><img src={imageUrl} alt="Bet slip" className="w-full rounded-2xl shadow-xl" /></div>
+        <div className="p-4 max-h-[60vh] overflow-y-auto"><img src={imageUrl} alt="Bet slip" className="w-full rounded-2xl shadow-xl" /></div>
         <div className="px-4 pb-5 flex gap-3">
           <button onClick={handleDownload} className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors">
             <DownloadIcon fontSize="small" /> Save
@@ -426,7 +456,7 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
       delay: Math.random() * 2,
       duration: 2 + Math.random() * 2,
       size: 4 + Math.random() * 8,
-      color: ['#FFD700','#FFA500','#b91c1c','#ffffff','#FFD700','#22c55e'][Math.floor(Math.random() * 6)],
+      color: ['#60a5fa','#93c5fd','#3b82f6','#ffffff','#bfdbfe','#22c55e'][Math.floor(Math.random() * 6)],
       shape: Math.random() > 0.5 ? '50%' : '2px',
     }))
   );
@@ -461,12 +491,12 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes trophyGlow {
-          0%, 100% { filter: drop-shadow(0 0 20px #FFD700) drop-shadow(0 0 40px #FFA500) drop-shadow(0 0 60px #FF6B00); }
-          50%       { filter: drop-shadow(0 0 30px #FFD700) drop-shadow(0 0 60px #FFA500) drop-shadow(0 0 90px #FF8C00); }
+          0%, 100% { filter: drop-shadow(0 0 10px rgba(96,165,250,0.6)) drop-shadow(0 0 20px rgba(59,130,246,0.4)); }
+          50%       { filter: drop-shadow(0 0 16px rgba(96,165,250,0.8)) drop-shadow(0 0 30px rgba(59,130,246,0.5)); }
         }
         @keyframes trophyBounce {
           0%, 100% { transform: translateY(0) scale(1); }
-          50%       { transform: translateY(-8px) scale(1.04); }
+          50%       { transform: translateY(-6px) scale(1.03); }
         }
         @keyframes rayRotate {
           from { transform: rotate(0deg); }
@@ -476,9 +506,9 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           0%   { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
-        @keyframes pulseGold {
-          0%, 100% { opacity: 0.6; }
-          50%       { opacity: 1; }
+        @keyframes pulseBlue {
+          0%, 100% { opacity: 0.4; }
+          50%       { opacity: 0.7; }
         }
         @keyframes countUp {
           from { opacity: 0; transform: scale(0.8); }
@@ -490,7 +520,7 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
         }
         .rays-anim { animation: rayRotate 12s linear infinite; }
         .shimmer-text {
-          background: linear-gradient(90deg, #FFD700 0%, #FFF8DC 40%, #FFD700 60%, #FFA500 100%);
+          background: linear-gradient(90deg, #60a5fa 0%, #bfdbfe 40%, #60a5fa 60%, #3b82f6 100%);
           background-size: 200% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -520,10 +550,10 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
         <div
           className="relative z-20 w-full sm:max-w-md overflow-hidden win-modal-enter"
           style={{
-            background: 'linear-gradient(180deg, #0a0800 0%, #140d00 40%, #0a0000 100%)',
-            borderTop: '1px solid rgba(255,215,0,0.3)',
-            borderLeft: '1px solid rgba(255,215,0,0.15)',
-            borderRight: '1px solid rgba(255,215,0,0.15)',
+            background: 'linear-gradient(180deg, #0a0f1a 0%, #0d1829 40%, #0a0f1a 100%)',
+            borderTop: '1px solid rgba(96,165,250,0.3)',
+            borderLeft: '1px solid rgba(96,165,250,0.15)',
+            borderRight: '1px solid rgba(96,165,250,0.15)',
             borderRadius: '24px 24px 0 0',
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
             maxHeight: '95vh',
@@ -539,31 +569,31 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           </button>
 
           {/* ── HERO SECTION ── */}
-          <div className="relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #1a0d00 0%, #0d0500 100%)', paddingTop: '32px', paddingBottom: '24px' }}>
-            {/* Radial glow */}
+          <div className="relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0d1829 0%, #0a0f1a 100%)', paddingTop: '32px', paddingBottom: '24px' }}>
+            {/* Radial glow — softer blue */}
             <div className="absolute inset-0 pointer-events-none" style={{
-              background: 'radial-gradient(ellipse 70% 60% at 50% 60%, rgba(255,165,0,0.25) 0%, rgba(255,100,0,0.1) 40%, transparent 70%)',
+              background: 'radial-gradient(ellipse 70% 60% at 50% 60%, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.08) 40%, transparent 70%)',
             }} />
 
             {/* Rotating rays */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: '10%' }}>
-              <div className="rays-anim" style={{ width: '280px', height: '280px', opacity: 0.15 }}>
+              <div className="rays-anim" style={{ width: '280px', height: '280px', opacity: 0.08 }}>
                 <svg viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {Array.from({ length: 16 }, (_, i) => {
                     const angle = (i * 360) / 16;
                     const rad = (angle * Math.PI) / 180;
                     const x1 = 140 + 50 * Math.cos(rad); const y1 = 140 + 50 * Math.sin(rad);
                     const x2 = 140 + 140 * Math.cos(rad); const y2 = 140 + 140 * Math.sin(rad);
-                    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#FFD700" strokeWidth="2" />;
+                    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#60a5fa" strokeWidth="2" />;
                   })}
                 </svg>
               </div>
             </div>
 
-            {/* OddsKing branding */}
+            {/* ZynoBet branding */}
             <div className="flex items-center justify-center gap-2 mb-2">
-              <OddsKingCrownSvg size={22} />
-              <OddsKingWordmarkDark size={16} />
+              <ZynoBetLogoSvg size={22} />
+              <ZynoBetWordmarkDark size={16} />
             </div>
 
             {/* YOU WON */}
@@ -573,60 +603,59 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
               </h1>
             </div>
 
-            {/* Trophy SVG */}
+            {/* Trophy SVG — reduced brightness/saturation */}
             <div className="flex justify-center mb-3">
               <div className="trophy-anim relative">
                 <div style={{
                   position: 'absolute', inset: '-20px', borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(255,165,0,0.4) 0%, rgba(255,100,0,0.2) 50%, transparent 70%)',
-                  animation: 'pulseGold 2s ease-in-out infinite',
+                  background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(37,99,235,0.1) 50%, transparent 70%)',
+                  animation: 'pulseBlue 2s ease-in-out infinite',
                 }} />
-                <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="130" height="130" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
+                    {/* Muted silver-blue trophy — much less bright than original gold */}
                     <linearGradient id="trophyGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#FFF8DC"/>
-                      <stop offset="20%" stopColor="#FFD700"/>
-                      <stop offset="50%" stopColor="#FFA500"/>
-                      <stop offset="70%" stopColor="#FFD700"/>
-                      <stop offset="100%" stopColor="#B8860B"/>
+                      <stop offset="0%" stopColor="#93c5fd"/>
+                      <stop offset="25%" stopColor="#60a5fa"/>
+                      <stop offset="55%" stopColor="#3b82f6"/>
+                      <stop offset="75%" stopColor="#60a5fa"/>
+                      <stop offset="100%" stopColor="#1d4ed8"/>
                     </linearGradient>
                     <linearGradient id="trophyShine" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FFFDE7" stopOpacity="0.9"/>
-                      <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.3"/>
+                      <stop offset="0%" stopColor="#bfdbfe" stopOpacity="0.6"/>
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1"/>
                     </linearGradient>
                     <radialGradient id="cupGlow" cx="50%" cy="30%" r="60%">
-                      <stop offset="0%" stopColor="#FFFDE7" stopOpacity="0.8"/>
-                      <stop offset="100%" stopColor="#FFD700" stopOpacity="0"/>
+                      <stop offset="0%" stopColor="#dbeafe" stopOpacity="0.4"/>
+                      <stop offset="100%" stopColor="#60a5fa" stopOpacity="0"/>
                     </radialGradient>
-                    <filter id="glow">
-                      <feGaussianBlur stdDeviation="3" result="blur"/>
+                    <filter id="glow2">
+                      <feGaussianBlur stdDeviation="2" result="blur"/>
                       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                     </filter>
                   </defs>
-                  <rect x="52" y="138" width="56" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow)"/>
-                  <rect x="44" y="134" width="72" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow)"/>
-                  <rect x="68" y="112" width="24" height="24" rx="3" fill="url(#trophyGrad)" filter="url(#glow)"/>
+                  <rect x="52" y="138" width="56" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow2)"/>
+                  <rect x="44" y="134" width="72" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow2)"/>
+                  <rect x="68" y="112" width="24" height="24" rx="3" fill="url(#trophyGrad)" filter="url(#glow2)"/>
                   <rect x="72" y="112" width="16" height="24" rx="2" fill="url(#trophyShine)" opacity="0.4"/>
-                  <path d="M36 28 L124 28 L116 92 Q110 116 80 116 Q50 116 44 92 Z" fill="url(#trophyGrad)" filter="url(#glow)"/>
+                  <path d="M36 28 L124 28 L116 92 Q110 116 80 116 Q50 116 44 92 Z" fill="url(#trophyGrad)" filter="url(#glow2)"/>
                   <path d="M46 28 L90 28 L84 85 Q78 108 60 112 Q44 100 44 92 Z" fill="url(#cupGlow)" opacity="0.5"/>
-                  <path d="M50 35 L110 35 L103 88 Q98 108 80 110 Q62 108 57 88 Z" fill="none" stroke="rgba(139,90,0,0.3)" strokeWidth="1"/>
-                  <path d="M36 38 Q16 38 16 58 Q16 76 36 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow)"/>
+                  <path d="M36 38 Q16 38 16 58 Q16 76 36 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow2)"/>
                   <path d="M36 44 Q22 44 22 58 Q22 72 36 70" stroke="url(#trophyShine)" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.5"/>
-                  <path d="M124 38 Q144 38 144 58 Q144 76 124 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow)"/>
+                  <path d="M124 38 Q144 38 144 58 Q144 76 124 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow2)"/>
                   <path d="M124 44 Q138 44 138 58 Q138 72 124 70" stroke="url(#trophyShine)" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.5"/>
-                  <text x="80" y="82" textAnchor="middle" fontSize="28" fill="#FFF8DC" opacity="0.9">★</text>
-                  {/* OddsKing crown shape on cup */}
-                  <text x="80" y="58" textAnchor="middle" fontSize="8" fontWeight="900" fill="#7C4A00" letterSpacing="1" opacity="0.7">ODDS</text>
-                  <text x="80" y="70" textAnchor="middle" fontSize="8" fontWeight="900" fill="#7C4A00" letterSpacing="1" opacity="0.7">KING</text>
-                  <rect x="48" y="120" width="64" height="16" rx="3" fill="#b91c1c"/>
-                  <text x="80" y="131" textAnchor="middle" fontSize="8" fontWeight="900" fill="#FFD700" letterSpacing="2">WINNER</text>
+                  <text x="80" y="82" textAnchor="middle" fontSize="28" fill="#bfdbfe" opacity="0.7">★</text>
+                  <text x="80" y="58" textAnchor="middle" fontSize="8" fontWeight="900" fill="#1e3a5f" letterSpacing="1" opacity="0.7">ZYNO</text>
+                  <text x="80" y="70" textAnchor="middle" fontSize="8" fontWeight="900" fill="#1e3a5f" letterSpacing="1" opacity="0.7">BET</text>
+                  <rect x="48" y="120" width="64" height="16" rx="3" fill="#1e40af"/>
+                  <text x="80" y="131" textAnchor="middle" fontSize="8" fontWeight="900" fill="#bfdbfe" letterSpacing="2">WINNER</text>
                 </svg>
               </div>
             </div>
 
             {/* Payout amount */}
             <div className="text-center win-amount-anim">
-              <div className="font-black" style={{ fontSize: '32px', color: '#FFD700', letterSpacing: '-0.5px' }}>
+              <div className="font-black" style={{ fontSize: '32px', color: '#60a5fa', letterSpacing: '-0.5px' }}>
                 {formatLocal(payoutGhs, currency)}
               </div>
               {currency.code !== 'GHS' && (
@@ -634,7 +663,7 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
                   GH₵{payoutGhs.toFixed(2)}
                 </div>
               )}
-              <div style={{ fontSize: '12px', color: 'rgba(255,200,0,0.7)', marginTop: '4px', fontWeight: 600 }}>
+              <div style={{ fontSize: '12px', color: 'rgba(96,165,250,0.7)', marginTop: '4px', fontWeight: 600 }}>
                 Congrats! Your bet was successful.
               </div>
             </div>
@@ -644,15 +673,15 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(95vh - 380px)' }}>
 
             {/* Ticket meta row */}
-            <div className="grid grid-cols-3 gap-0 mx-4 mt-4 rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(255,215,0,0.15)' }}>
+            <div className="grid grid-cols-3 gap-0 mx-4 mt-4 rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(96,165,250,0.2)' }}>
               {[
-                { icon: '🎫', label: 'TICKET ID', value: `OK${bet.id.slice(-8).toUpperCase()}` },
+                { icon: '🎫', label: 'TICKET ID', value: `ZB${bet.id.slice(-8).toUpperCase()}` },
                 { icon: '📅', label: 'DATE', value: placedDate },
                 { icon: '🏆', label: 'BET TYPE', value: bet.selections.length > 1 ? 'MULTIPLE' : 'SINGLE' },
               ].map((item, i) => (
-                <div key={i} className="flex flex-col items-center justify-center py-3 px-2 text-center" style={{ background: 'rgba(255,255,255,0.03)', borderRight: i < 2 ? '1px solid rgba(255,215,0,0.1)' : 'none' }}>
+                <div key={i} className="flex flex-col items-center justify-center py-3 px-2 text-center" style={{ background: 'rgba(255,255,255,0.03)', borderRight: i < 2 ? '1px solid rgba(96,165,250,0.1)' : 'none' }}>
                   <span style={{ fontSize: '14px', marginBottom: '3px' }}>{item.icon}</span>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,215,0,0.6)', fontWeight: 700, letterSpacing: '0.8px', marginBottom: '2px' }}>{item.label}</span>
+                  <span style={{ fontSize: '9px', color: 'rgba(96,165,250,0.7)', fontWeight: 700, letterSpacing: '0.8px', marginBottom: '2px' }}>{item.label}</span>
                   <span style={{ fontSize: '10px', color: '#fff', fontWeight: 700 }}>{item.value}</span>
                 </div>
               ))}
@@ -667,10 +696,10 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
             </div>
 
             {/* Selections table */}
-            <div className="mx-4 mt-4 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,215,0,0.15)' }}>
-              <div className="grid gap-0 px-3 py-2" style={{ gridTemplateColumns: '20px 1fr 50px 56px', background: 'rgba(180,20,40,0.5)' }}>
+            <div className="mx-4 mt-4 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(96,165,250,0.2)' }}>
+              <div className="grid gap-0 px-3 py-2" style={{ gridTemplateColumns: '20px 1fr 50px 56px', background: 'rgba(30,64,175,0.4)' }}>
                 {['#', 'SELECTION', 'ODDS', 'RESULT'].map(h => (
-                  <span key={h} style={{ fontSize: '9px', fontWeight: 800, color: '#FFD700', letterSpacing: '1px', textTransform: 'uppercase' }}>{h}</span>
+                  <span key={h} style={{ fontSize: '9px', fontWeight: 800, color: '#60a5fa', letterSpacing: '1px', textTransform: 'uppercase' }}>{h}</span>
                 ))}
               </div>
 
@@ -684,11 +713,11 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
                     className="grid gap-0 px-3 py-3"
                     style={{
                       gridTemplateColumns: '20px 1fr 50px 56px',
-                      borderTop: '1px solid rgba(255,215,0,0.08)',
+                      borderTop: '1px solid rgba(96,165,250,0.08)',
                       background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                     }}
                   >
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#FFD700', paddingTop: '2px' }}>{i + 1}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#60a5fa', paddingTop: '2px' }}>{i + 1}</span>
                     <div>
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
                         {sel.selection || sel.market}
@@ -696,7 +725,7 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
                       <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '1px', lineHeight: 1.3 }}>
                         {matchLabel}
                       </div>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,215,0,0.5)', marginTop: '1px' }}>
+                      <div style={{ fontSize: '9px', color: 'rgba(96,165,250,0.5)', marginTop: '1px' }}>
                         {sel.market}
                       </div>
                     </div>
@@ -721,15 +750,15 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
 
             {/* Dashed separator */}
             <div className="mx-4 my-3 relative flex items-center">
-              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(255,215,0,0.2)' }} />
-              <div className="mx-2"><OddsKingCrownSvg size={14} /></div>
-              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(255,215,0,0.2)' }} />
+              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(96,165,250,0.2)' }} />
+              <div className="mx-2"><ZynoBetLogoSvg size={14} /></div>
+              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(96,165,250,0.2)' }} />
             </div>
 
             {/* Summary rows */}
             <div className="mx-4 space-y-2.5 pb-3">
               {[
-                { label: 'TOTAL ODDS:', value: bet.totalOdds.toFixed(2), valueColor: '#FFD700' },
+                { label: 'TOTAL ODDS:', value: bet.totalOdds.toFixed(2), valueColor: '#60a5fa' },
                 { label: 'STAKE:', value: formatLocal(bet.stake, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.stake.toFixed(2)}` : undefined, valueColor: '#fff' },
                 ...(hasBonus ? [{ label: 'BONUS:', value: formatLocal(bonusGhs, currency), sub: currency.code !== 'GHS' ? `GH₵${bonusGhs.toFixed(2)}` : undefined, valueColor: '#22c55e' }] : []),
               ].map(row => (
@@ -743,22 +772,22 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
               ))}
 
               {/* Total winnings — highlighted */}
-              <div className="flex items-start justify-between pt-2 mt-1" style={{ borderTop: '1.5px solid rgba(255,215,0,0.3)' }}>
-                <span style={{ fontSize: '13px', fontWeight: 900, color: '#FFD700', letterSpacing: '0.5px' }}>TOTAL WINNINGS:</span>
+              <div className="flex items-start justify-between pt-2 mt-1" style={{ borderTop: '1.5px solid rgba(96,165,250,0.3)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 900, color: '#60a5fa', letterSpacing: '0.5px' }}>TOTAL WINNINGS:</span>
                 <div className="text-right">
-                  <span style={{ fontSize: '20px', fontWeight: 900, color: '#FFD700' }}>
+                  <span style={{ fontSize: '20px', fontWeight: 900, color: '#60a5fa' }}>
                     {formatLocal(payoutGhs, currency)}
                   </span>
                   {currency.code !== 'GHS' && (
-                    <p style={{ fontSize: '11px', color: 'rgba(255,215,0,0.5)', marginTop: '2px' }}>GH₵{payoutGhs.toFixed(2)}</p>
+                    <p style={{ fontSize: '11px', color: 'rgba(96,165,250,0.5)', marginTop: '2px' }}>GH₵{payoutGhs.toFixed(2)}</p>
                   )}
                 </div>
               </div>
 
               {/* Non-GHS note */}
               {currency.code !== 'GHS' && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.1)' }}>
-                  <InfoOutlinedIcon sx={{ fontSize: 13, color: 'rgba(255,215,0,0.6)', flexShrink: 0, marginTop: '1px' }} />
+                <div className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(96,165,250,0.1)' }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 13, color: 'rgba(96,165,250,0.6)', flexShrink: 0, marginTop: '1px' }} />
                   <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
                     GH₵{payoutGhs.toFixed(2)} credited to your wallet · displayed as{' '}
                     <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatLocal(payoutGhs, currency)}</span> in {currency.code}
@@ -781,7 +810,7 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
                 to="/wallet"
                 onClick={onClose}
                 className="flex-1 py-3.5 rounded-xl font-black text-sm flex items-center justify-center transition-all active:scale-[0.97]"
-                style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,140,0,0.15))', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}
+                style={{ background: 'linear-gradient(135deg, rgba(96,165,250,0.2), rgba(59,130,246,0.15))', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
               >
                 Withdraw
               </Link>
@@ -870,12 +899,12 @@ function LossModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInf
               );
             })}
 
-            {/* OddsKing divider */}
+            {/* ZynoBet divider */}
             <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
               <div className="flex items-center gap-1.5">
-                <OddsKingCrownSvg size={14} />
-                <OddsKingWordmarkDark size={13} />
+                <ZynoBetLogoSvg size={14} />
+                <ZynoBetWordmarkDark size={13} />
               </div>
               <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
             </div>
