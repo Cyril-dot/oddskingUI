@@ -598,18 +598,45 @@ function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; siz
   );
 }
 
-function TeamLogoAdmin({ poolUrl, name, size = 32 }: { poolUrl?: string; name?: string; size?: number }) {
-  const cleanUrl = sanitizeLogo(poolUrl);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => { setFailed(false); }, [cleanUrl]);
+function TeamLogoAdmin({ poolUrl, actualUrl, name, size = 32 }: { poolUrl?: string; actualUrl?: string; name?: string; size?: number }) {
+  const cleanActual = sanitizeLogo(actualUrl);
+  const cleanPool   = sanitizeLogo(poolUrl);
+  const primary     = cleanActual || cleanPool;
+  const [src, setSrc]       = useState(primary);
+  const [triedPool, setTriedPool] = useState(false);
+
+  useEffect(() => {
+    const p = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
+    setSrc(p);
+    setTriedPool(false);
+    console.log(`[AdminLogo] team="${name}" actualUrl="${cleanActual}" poolUrl="${cleanPool}" → using="${p}"`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualUrl, poolUrl]);
+
   const teamName = name ?? '';
-  if (cleanUrl && !failed) {
+
+  const handleError = () => {
+    if (!triedPool && cleanPool && src !== cleanPool) {
+      console.warn(`[AdminLogo] team="${teamName}" primary failed (${src}), falling back to pool: ${cleanPool}`);
+      setTriedPool(true);
+      setSrc(cleanPool);
+    } else {
+      console.error(`[AdminLogo] team="${teamName}" all sources failed. actual="${cleanActual}" pool="${cleanPool}"`);
+      setSrc('');
+    }
+  };
+
+  if (src) {
     return (
-      <img src={cleanUrl} alt={teamName}
+      <img
+        src={src}
+        alt={teamName}
         style={{ width: size, height: size, borderRadius: '50%', objectFit: 'contain', flexShrink: 0 }}
-        onError={() => setFailed(true)} />
+        onError={handleError}
+      />
     );
   }
+
   const initials = getTeamInitials(teamName);
   const bg = teamColour(teamName);
   return (
@@ -904,6 +931,7 @@ function normalizeAdminMatch(raw: unknown): Match | null {
   const minutePlayed = r.minutePlayed != null ? Number(r.minutePlayed) : r.minute_played != null ? Number(r.minute_played) : undefined;
   const hardcodedHomeLogo = sanitizeLogo(String(r.hardcodedHomeLogo ?? r.hardcoded_home_logo ?? r.homeLogo ?? r.home_logo ?? '').trim());
   const hardcodedAwayLogo = sanitizeLogo(String(r.hardcodedAwayLogo ?? r.hardcoded_away_logo ?? r.awayLogo ?? r.away_logo ?? '').trim());
+  console.log(`[normalizeAdminMatch] id="${id}" home="${homeTeam}" homeLogo="${hardcodedHomeLogo}" away="${awayTeam}" awayLogo="${hardcodedAwayLogo}"`);
   return {
     id, source: 'ADMIN_CREATED' as Match['source'],
     homeTeam: homeTeam || 'Home Team',
@@ -1268,10 +1296,10 @@ function MatchCard({
         { key: '2', label: 'Away', val: odds?.away ?? 0 },
       ];
   const renderHomeLogo = (size: number) => isAdmin
-    ? <TeamLogoAdmin poolUrl={match.adminHomeLogo} name={match.homeTeam} size={size} />
+    ? <TeamLogoAdmin actualUrl={match.homeLogo} poolUrl={match.adminHomeLogo} name={match.homeTeam} size={size} />
     : <TeamLogo logo={match.homeLogo} name={match.homeTeam} size={size} />;
   const renderAwayLogo = (size: number) => isAdmin
-    ? <TeamLogoAdmin poolUrl={match.adminAwayLogo} name={match.awayTeam} size={size} />
+    ? <TeamLogoAdmin actualUrl={match.awayLogo} poolUrl={match.adminAwayLogo} name={match.awayTeam} size={size} />
     : <TeamLogo logo={match.awayLogo} name={match.awayTeam} size={size} />;
 
   return (
@@ -1430,6 +1458,15 @@ function SpecialGamesSection({
         });
         const withOdds = enriched.filter(hasValidOdds);
         const withLogos = assignAdminLogos(withOdds);
+        console.log('[SpecialGames] loaded admin matches:', withLogos.map(m => ({
+  id: m.id,
+  home: m.homeTeam,
+  away: m.awayTeam,
+  homeLogo: m.homeLogo,
+  awayLogo: m.awayLogo,
+  adminHomeLogo: m.adminHomeLogo,
+  adminAwayLogo: m.adminAwayLogo,
+})));
         const now = Date.now();
         for (const m of withLogos) {
           const isFinished = FINISHED_STATUSES.has(m.status ?? '');
