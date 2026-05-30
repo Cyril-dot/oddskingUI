@@ -41,36 +41,36 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 // ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LOGO_POOL: string[] = [
-  'https://media.api-sports.io/football/teams/772.png',   // Famalicao
-  'https://media.api-sports.io/football/teams/773.png',   // Portimonense
-  'https://media.api-sports.io/football/teams/775.png',   // Belenenses
-  'https://media.api-sports.io/football/teams/776.png',   // Maritimo
-  'https://media.api-sports.io/football/teams/778.png',   // Tondela
-  'https://media.api-sports.io/football/teams/780.png',   // Nacional
-  'https://media.api-sports.io/football/teams/798.png',   // Arouca
-  'https://media.api-sports.io/football/teams/799.png',   // Pacos Ferreira
-  'https://media.api-sports.io/football/teams/801.png',   // Vizela
-  'https://media.api-sports.io/football/teams/802.png',   // Chaves
-  'https://media.api-sports.io/football/teams/808.png',   // Estrela Amadora
-  'https://media.api-sports.io/football/teams/810.png',   // Casa Pia
-  'https://media.api-sports.io/football/teams/813.png',   // Moreirense
-  'https://media.api-sports.io/football/teams/1044.png',  // Dundee
-  'https://media.api-sports.io/football/teams/1052.png',  // Ross County
-  'https://media.api-sports.io/football/teams/1053.png',  // Motherwell
-  'https://media.api-sports.io/football/teams/1054.png',  // St Mirren
-  'https://media.api-sports.io/football/teams/1055.png',  // St Johnstone
-  'https://media.api-sports.io/football/teams/1056.png',  // Livingston
-  'https://media.api-sports.io/football/teams/1057.png',  // Hamilton
-  'https://media.api-sports.io/football/teams/1058.png',  // Kilmarnock
-  'https://media.api-sports.io/football/teams/1060.png',  // Inverness
-  'https://media.api-sports.io/football/teams/1093.png',  // Sligo Rovers
-  'https://media.api-sports.io/football/teams/1094.png',  // Bohemian
-  'https://media.api-sports.io/football/teams/1095.png',  // Shelbourne
-  'https://media.api-sports.io/football/teams/1096.png',  // Drogheda
-  'https://media.api-sports.io/football/teams/1097.png',  // Dundalk
-  'https://media.api-sports.io/football/teams/1098.png',  // Derry City
-  'https://media.api-sports.io/football/teams/1099.png',  // Shamrock Rovers
-  'https://media.api-sports.io/football/teams/1100.png',  // Cork City
+  'https://media.api-sports.io/football/teams/2284.png',  // Hapoel Tel Aviv
+  'https://media.api-sports.io/football/teams/2285.png',  // Maccabi Tel Aviv
+  'https://media.api-sports.io/football/teams/2290.png',  // Bnei Sakhnin
+  'https://media.api-sports.io/football/teams/2291.png',  // Beitar Jerusalem
+  'https://media.api-sports.io/football/teams/2292.png',  // Maccabi Haifa
+  'https://media.api-sports.io/football/teams/2537.png',  // Vissel Kobe
+  'https://media.api-sports.io/football/teams/2538.png',  // Gamba Osaka
+  'https://media.api-sports.io/football/teams/2539.png',  // Urawa Reds
+  'https://media.api-sports.io/football/teams/2540.png',  // Kashima Antlers
+  'https://media.api-sports.io/football/teams/2541.png',  // Yokohama F Marinos
+  'https://media.api-sports.io/football/teams/2542.png',  // Nagoya Grampus
+  'https://media.api-sports.io/football/teams/2543.png',  // FC Tokyo
+  'https://media.api-sports.io/football/teams/2553.png',  // Cerezo Osaka
+  'https://media.api-sports.io/football/teams/2563.png',  // Sanfrecce Hiroshima
+  'https://media.api-sports.io/football/teams/2670.png',  // Al Ahly
+  'https://media.api-sports.io/football/teams/2671.png',  // Zamalek
+  'https://media.api-sports.io/football/teams/2672.png',  // Pyramids FC
+  'https://media.api-sports.io/football/teams/2699.png',  // Raja Casablanca
+  'https://media.api-sports.io/football/teams/2700.png',  // Wydad Casablanca
+  'https://media.api-sports.io/football/teams/2701.png',  // FAR Rabat
+  'https://media.api-sports.io/football/teams/3005.png',  // Buriram United
+  'https://media.api-sports.io/football/teams/3006.png',  // Chiang Rai United
+  'https://media.api-sports.io/football/teams/3007.png',  // Muangthong United
+  'https://media.api-sports.io/football/teams/3008.png',  // BG Pathum United
+  'https://media.api-sports.io/football/teams/3009.png',  // Port FC
+  'https://media.api-sports.io/football/teams/3754.png',  // Mamelodi Sundowns
+  'https://media.api-sports.io/football/teams/3755.png',  // Kaizer Chiefs
+  'https://media.api-sports.io/football/teams/3756.png',  // Orlando Pirates
+  'https://media.api-sports.io/football/teams/3757.png',  // SuperSport United
+  'https://media.api-sports.io/football/teams/3758.png',  // Cape Town City
 ];
 
 
