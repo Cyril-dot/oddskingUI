@@ -41,47 +41,37 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 // ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LOGO_POOL: string[] = [
-  // 1-10
-  'https://i.pinimg.com/236x/77/b8/04/77b80432080aad2fe91abaf36e572344.jpg',
-  'https://img0-placeit-net.s3-accelerate.amazonaws.com/uploads/stage/stage_image/163210/optimized_large_thumb_stage.jpg',
-  'https://www.jetpunk.com/img/user-img/83/83e86d7aa9-450.webp',
-  'https://images-platform.99static.com//K9D4-6yayoSJS7QOin2kW3JpKmc=/116x1328:935x2146/fit-in/500x500/projects-files/160/16047/1604748/bf2276ed-0325-480a-ba81-7259641922ec.png',
-  'https://preview.redd.it/i-made-some-logos-for-random-teams-v0-dozuo7j3z7b71.jpg?width=640&crop=smart&auto=webp&s=3e2f7e9e2390448299bc0e71063b0b66f705ddc4',
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR40YAbEhXuwX5kvjjs3-x5OsDGbTJbTVUeKQ&s',
-  'https://www.jetpunk.com/img/user-img/1a/1a33e46fff-450.webp',
-  'https://www.jetpunk.com/img/user-img/4e/4e96325794-450.webp',
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS3zGUwR86wUAyjqHNuSL9ca_FrbrV3QM93Og&s',
-  'https://w7.pngwing.com/pngs/107/240/png-transparent-bulgaria-national-football-team-logo-kit-sport-football-sport-logo-sports.png',
-  // 11-20
-  'https://www.shutterstock.com/shutterstock/photos/2270243575/display_1500/stock-vector-rising-team-and-arrow-logo-unique-design-color-transitions-team-logo-template-advancing-to-the-2270243575.jpg',
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjhe9HanbUxHBpWC2UAV0ODLQEuJMpWv4FGA&s',
-  'https://www.thewordfinder.com/random-nfl-team-generator/data/images/NOR.webp',
-  'https://www.shutterstock.com/image-vector/letter-4-soccer-logo-football-260nw-2309970181.jpg',
-  'https://cdn.dribbble.com/userupload/47259186/file/3464815a0e0c721f57701450969711dd.png?resize=400x0',
-  'https://cdn.mos.cms.futurecdn.net/nHKJY7hGsRiTDXjhbPhQRd.jpg',
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXxJRaM2ta0nkFdfRfJtGt7TwgsuS6Xw_Ftw&s',
-  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT44ph_rUyP-so0IqhGvqD1uAbT4REvnTSfNA&s',
-  'https://sanfl-content.imgix.net/content/uploads/sites/3/2025/03/27163635/teams-banner-4.png?fit=crop&cs=strip&crop=faces&auto=format&w=500&h=425&dpr=2.625',
-  'https://cdn.mos.cms.futurecdn.net/aYFodgQMWesqjStrnaDkXG.jpg',
-  // 21-30
-'https://picsum.photos/seed/img1/400/400',
-  'https://picsum.photos/seed/img2/400/400',
-  'https://picsum.photos/seed/img3/400/400',
-  
-  // LoremFlickr (Random images based on keywords)
-  'https://loremflickr.com/400/400/city',
-  'https://loremflickr.com/400/400/nature',
-  'https://loremflickr.com/400/400/abstract',
-  
-  // PlaceDog (Random pictures of dogs)
-  'https://placedog.net/400/400?id=12',
-  'https://placedog.net/400/400?id=45',
-  
-  // PlaceBear (Random pictures of bears)
-  'https://placebear.com/400/400',
-  
-  // DummyImage (Solid color blocks with text - great for basic placeholders)
-  'https://dummyimage.com/400x400/282c34/61dafb.png&text=Random+1'
+  // UI Avatars — generates clean letter-based team badges, always works
+  'https://ui-avatars.com/api/?name=Alpha+FC&background=1a6b3c&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Beta+United&background=c0392b&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=City+SC&background=2471a3&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Delta+FC&background=6c3483&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Eagles+AC&background=d35400&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Foxes+FC&background=117a65&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Galaxy+SC&background=1f618d&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Hawks+United&background=784212&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Iron+FC&background=1a5276&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Jets+SC&background=4a235a&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Kings+AC&background=922b21&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Lions+FC&background=1e8449&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Metros+SC&background=1a237e&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Nova+FC&background=6a1b9a&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Olympia+AC&background=bf360c&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Panthers+FC&background=006064&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Queens+SC&background=4e342e&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Rangers+FC&background=37474f&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Storm+AC&background=880e4f&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Titans+SC&background=1b5e20&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Union+FC&background=b71c1c&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Vikings+AC&background=0d47a1&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Wolves+SC&background=e65100&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Xpress+FC&background=33691e&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Yankee+AC&background=4527a0&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Zenith+SC&background=00695c&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Aztecs+FC&background=c62828&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Broncos+AC&background=2e7d32&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Cobras+SC&background=283593&color=fff&size=128&bold=true&rounded=true',
+  'https://ui-avatars.com/api/?name=Dynamo+FC&background=6d4c41&color=fff&size=128&bold=true&rounded=true',
 ];
 
 
