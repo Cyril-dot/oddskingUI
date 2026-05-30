@@ -676,53 +676,67 @@ function TeamLogoAdmin({
   size?: number;
 }) {
   const cleanActual = sanitizeLogo(actualUrl);
-  const cleanPool   = sanitizeLogo(poolUrl);
 
-  // Start immediately with the best available source — no two-step wait.
-  const initialSrc = cleanActual || cleanPool;
-  const [src, setSrc]         = useState<string>(initialSrc);
-  const [failed, setFailed]   = useState(false);
+  // Deterministically pick a pool logo using the team name as seed
+  // This works even if adminHomeLogo/adminAwayLogo never got assigned
+  const poolFallback = useMemo(() => {
+    const seed = name ?? 'team';
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+    return FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
+  }, [name]);
+
+  const bestSrc = cleanActual || sanitizeLogo(poolUrl) || poolFallback;
+
+  const [src, setSrc] = useState<string>(bestSrc);
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
-    const best = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
-    setSrc(best);
-    setFailed(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actualUrl, poolUrl]);
+    const next = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl) || poolFallback;
+    setSrc(next);
+    setImgFailed(false);
+  }, [actualUrl, poolUrl, poolFallback]);
 
-  const teamName = name ?? '';
-
-  const handleError = () => {
-    // If the actual logo failed and we haven't tried the pool yet, try pool
-    if (src === cleanActual && cleanPool && cleanActual !== cleanPool) {
-      setSrc(cleanPool);
-    } else {
-      // All image sources exhausted — show initials avatar
-      setFailed(true);
-    }
-  };
-
-  if (src && !failed) {
+  // Always try to show an image — never fall through to initials
+  if (!imgFailed && src) {
     return (
       <img
         src={src}
-        alt={teamName}
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'contain', flexShrink: 0 }}
-        onError={handleError}
+        alt={name ?? ''}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          objectFit: 'contain',
+          flexShrink: 0,
+          background: '#1a1f2e', // dark bg while image loads
+        }}
+        onError={() => {
+          // Try next pool slot before giving up
+          const seed = (name ?? 'x') + '2';
+          let h = 0;
+          for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+          const nextSlot = FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
+          if (nextSlot !== src) {
+            setSrc(nextSlot);
+          } else {
+            setImgFailed(true);
+          }
+        }}
       />
     );
   }
 
-  // Final fallback: coloured initials avatar
-  const initials = getTeamInitials(teamName);
-  const bg = teamColour(teamName);
+  // Only reach here if ALL image URLs failed (network down etc.)
+  const initials = getTeamInitials(name ?? '');
+  const bg = teamColour(name ?? '');
   return (
     <div style={{
       width: size, height: size, background: bg,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       borderRadius: '50%', flexShrink: 0, fontSize: size * 0.28,
       fontWeight: 700, color: '#fff', letterSpacing: '0.02em', userSelect: 'none',
-    }} aria-label={teamName}>
+    }}>
       {initials}
     </div>
   );
