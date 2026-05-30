@@ -676,60 +676,56 @@ function TeamLogoAdmin({
   size?: number;
 }) {
   const cleanActual = sanitizeLogo(actualUrl);
+  const cleanPool   = sanitizeLogo(poolUrl);
+  const initialSrc  = cleanActual || cleanPool;
 
-  // Deterministically pick a pool logo using the team name as seed
-  // This works even if adminHomeLogo/adminAwayLogo never got assigned
-  const poolFallback = useMemo(() => {
-    const seed = name ?? 'team';
-    let h = 0;
-    for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-    return FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
-  }, [name]);
-
-  const bestSrc = cleanActual || sanitizeLogo(poolUrl) || poolFallback;
-
-  const [src, setSrc] = useState<string>(bestSrc);
-  const [imgFailed, setImgFailed] = useState(false);
+  const [src, setSrc]       = useState<string>(initialSrc);
+  const [slotOffset, setSlotOffset] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const next = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl) || poolFallback;
-    setSrc(next);
-    setImgFailed(false);
-  }, [actualUrl, poolUrl, poolFallback]);
+    const best = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
+    setSrc(best);
+    setSlotOffset(0);
+    setFailed(false);
+  }, [actualUrl, poolUrl]);
 
-  // Always try to show an image — never fall through to initials
-  if (!imgFailed && src) {
+  const handleError = () => {
+    // Keep trying next slots in the pool until one works
+    const nextOffset = slotOffset + 1;
+    if (nextOffset < FALLBACK_LOGO_POOL.length) {
+      const seed = (name ?? 'team') + nextOffset;
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+      const nextUrl = FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
+      setSlotOffset(nextOffset);
+      setSrc(nextUrl);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  const teamName = name ?? '';
+
+  if (src && !failed) {
     return (
       <img
         src={src}
-        alt={name ?? ''}
+        alt={teamName}
         style={{
-          width: size,
-          height: size,
+          width: size, height: size,
           borderRadius: '50%',
           objectFit: 'contain',
           flexShrink: 0,
-          background: '#1a1f2e', // dark bg while image loads
         }}
-        onError={() => {
-          // Try next pool slot before giving up
-          const seed = (name ?? 'x') + '2';
-          let h = 0;
-          for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-          const nextSlot = FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
-          if (nextSlot !== src) {
-            setSrc(nextSlot);
-          } else {
-            setImgFailed(true);
-          }
-        }}
+        onError={handleError}
       />
     );
   }
 
-  // Only reach here if ALL image URLs failed (network down etc.)
-  const initials = getTeamInitials(name ?? '');
-  const bg = teamColour(name ?? '');
+  // Only if every pool slot failed
+  const initials = getTeamInitials(teamName);
+  const bg = teamColour(teamName);
   return (
     <div style={{
       width: size, height: size, background: bg,
