@@ -284,18 +284,15 @@ function sanitizeLogo(url: string | undefined | null): string {
   if (!url) return '';
   const trimmed = url.trim();
   if (trimmed.startsWith('blob:')) return '';
+  if (trimmed.startsWith('data:image/')) return trimmed;
   return trimmed;
 }
-
 function assignAdminLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
-  const poolSize = Math.max(HOME_LOGO_POOL.length, AWAY_LOGO_POOL.length, 1);
-  return matches.map((m, idx) => {
-    const hardHome = sanitizeLogo((m as unknown as Record<string, string>).hardcodedHomeLogo);
-    const hardAway = sanitizeLogo((m as unknown as Record<string, string>).hardcodedAwayLogo);
-    const homeUrl = hardHome || sanitizeLogo(HOME_LOGO_POOL[idx % poolSize]) || '';
-    const awayUrl = hardAway || sanitizeLogo(AWAY_LOGO_POOL[idx % poolSize]) || '';
-    return { ...m, adminHomeLogo: homeUrl, adminAwayLogo: awayUrl };
-  });
+  return matches.map((m, idx) => ({
+    ...m,
+    adminHomeLogo: HOME_LOGO_POOL[idx % HOME_LOGO_POOL.length],
+    adminAwayLogo: AWAY_LOGO_POOL[idx % AWAY_LOGO_POOL.length],
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -609,7 +606,6 @@ function TeamLogoAdmin({ poolUrl, actualUrl, name, size = 32 }: { poolUrl?: stri
     const p = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
     setSrc(p);
     setTriedPool(false);
-    console.log(`[AdminLogo] team="${name}" actualUrl="${cleanActual}" poolUrl="${cleanPool}" → using="${p}"`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualUrl, poolUrl]);
 
@@ -1295,12 +1291,10 @@ function MatchCard({
         { key: '1', label: 'Home', val: odds?.home ?? 0 },
         { key: '2', label: 'Away', val: odds?.away ?? 0 },
       ];
-  const renderHomeLogo = (size: number) => isAdmin
-    ? <TeamLogoAdmin actualUrl={match.homeLogo} poolUrl={match.adminHomeLogo} name={match.homeTeam} size={size} />
-    : <TeamLogo logo={match.homeLogo} name={match.homeTeam} size={size} />;
-  const renderAwayLogo = (size: number) => isAdmin
-    ? <TeamLogoAdmin actualUrl={match.awayLogo} poolUrl={match.adminAwayLogo} name={match.awayTeam} size={size} />
-    : <TeamLogo logo={match.awayLogo} name={match.awayTeam} size={size} />;
+ const renderHomeLogo = (size: number) =>
+    <TeamLogo logo={match.homeLogo || match.adminHomeLogo} name={match.homeTeam} size={size} />;
+  const renderAwayLogo = (size: number) =>
+    <TeamLogo logo={match.awayLogo || match.adminAwayLogo} name={match.awayTeam} size={size} />;
 
   return (
     <div className={`match-card ${stateClass}`} onClick={onClick} role="button" tabIndex={0}
