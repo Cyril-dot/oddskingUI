@@ -26,25 +26,23 @@ import PeopleAltIcon           from '@mui/icons-material/PeopleAlt';
 import PaidIcon                from '@mui/icons-material/Paid';
 import AccountBalanceIcon      from '@mui/icons-material/AccountBalance';
 import VolunteerActivismIcon   from '@mui/icons-material/VolunteerActivism';
+import InfoOutlinedIcon        from '@mui/icons-material/InfoOutlined';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface WalletData {
   balance: number;
   currency?: string;
-  depositCountToday?: number; // Added to track daily deposits
-  hasMadeFirstDepositToday?: boolean; // New field to track if the first deposit has been made today
-  hasEverDeposited?: boolean; // **NEW**: Flag to check if the user has ever made a deposit
+  depositCountToday?: number;   // How many deposits the user has made today (resets midnight)
+  hasEverDeposited?: boolean;   // Permanent flag: true once the user has made any deposit ever
   [key: string]: unknown;
 }
 
 interface CurrencyInfo {
-  code: string;        // e.g. "GHS", "NGN", "USD"
-  symbol: string;      // e.g. "GH₵", "₦", "$"
-  countryCode: string; // e.g. "GH", "NG", "US"
-  name: string;        // e.g. "Ghanaian Cedi"
-  // Rate: how many units of this currency = 1 GHS (the backend's base currency)
-  // For GHS itself, rate = 1
+  code: string;
+  symbol: string;
+  countryCode: string;
+  name: string;
   rateFromGhs: number;
 }
 
@@ -64,7 +62,6 @@ const MOMO_NETWORKS: Record<string, string[]> = {
 
 // ── Geo + currency detection ──────────────────────────────────────────────────
 
-// Fallback map: country ISO → currency code + symbol
 const COUNTRY_CURRENCY: Record<string, { code: string; symbol: string; name: string }> = {
   GH: { code: 'GHS', symbol: 'GH₵', name: 'Ghanaian Cedi' },
   NG: { code: 'NGN', symbol: '₦',   name: 'Nigerian Naira' },
@@ -98,106 +95,57 @@ const DEFAULT_CURRENCY: CurrencyInfo = {
 async function detectCurrencyInfo(): Promise<CurrencyInfo> {
   let countryCode = '';
 
-  // 1. ipapi.co — free, HTTPS, browser-friendly, 1k req/day
   try {
-    const res = await fetch('https://ipapi.co/json/', {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (res.ok) {
-      const d = await res.json();
-      countryCode = d.country_code ?? '';
-    }
+    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
+    if (res.ok) { const d = await res.json(); countryCode = d.country_code ?? ''; }
   } catch { /* fall through */ }
 
-  // 2. freeipapi.com — free, HTTPS, no key needed
   if (!countryCode) {
     try {
-      const res = await fetch('https://freeipapi.com/api/json', {
-        signal: AbortSignal.timeout(4000),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        countryCode = d.countryCode ?? '';
-      }
+      const res = await fetch('https://freeipapi.com/api/json', { signal: AbortSignal.timeout(4000) });
+      if (res.ok) { const d = await res.json(); countryCode = d.countryCode ?? ''; }
     } catch { /* fall through */ }
   }
 
-  // 3. ip.guide — free, HTTPS, no key needed
   if (!countryCode) {
     try {
-      const res = await fetch('https://ip.guide/', {
-        signal: AbortSignal.timeout(4000),
-        headers: { Accept: 'application/json' },
-      });
-      if (res.ok) {
-        const d = await res.json();
-        countryCode = d.location?.country_code ?? '';
-      }
+      const res = await fetch('https://ip.guide/', { signal: AbortSignal.timeout(4000), headers: { Accept: 'application/json' } });
+      if (res.ok) { const d = await res.json(); countryCode = d.location?.country_code ?? ''; }
     } catch { /* fall through */ }
   }
 
   const localCurrency = countryCode ? COUNTRY_CURRENCY[countryCode] : undefined;
   if (!localCurrency) return DEFAULT_CURRENCY;
 
-  // 4. Fetch GHS → localCurrency rate
-  //    Backend stores everything in GHS, so we need: 1 GHS = X localCurrency
   let rateFromGhs = 1;
-
   if (localCurrency.code !== 'GHS') {
     try {
-      const res = await fetch('https://open.er-api.com/v6/latest/GHS', {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        rateFromGhs = d.rates?.[localCurrency.code] ?? 1;
-      }
+      const res = await fetch('https://open.er-api.com/v6/latest/GHS', { signal: AbortSignal.timeout(5000) });
+      if (res.ok) { const d = await res.json(); rateFromGhs = d.rates?.[localCurrency.code] ?? 1; }
     } catch { /* fall through */ }
 
-    // Fallback rate API
     if (rateFromGhs === 1) {
       try {
-        const res = await fetch(
-          `https://api.exchangerate.host/convert?from=GHS&to=${localCurrency.code}&amount=1`,
-          { signal: AbortSignal.timeout(5000) },
-        );
-        if (res.ok) {
-          const d = await res.json();
-          if (d.success && d.result) rateFromGhs = d.result;
-        }
+        const res = await fetch(`https://api.exchangerate.host/convert?from=GHS&to=${localCurrency.code}&amount=1`, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) { const d = await res.json(); if (d.success && d.result) rateFromGhs = d.result; }
       } catch { /* fall through */ }
     }
   }
 
-  return {
-    code: localCurrency.code,
-    symbol: localCurrency.symbol,
-    name: localCurrency.name,
-    countryCode,
-    rateFromGhs,
-  };
+  return { code: localCurrency.code, symbol: localCurrency.symbol, name: localCurrency.name, countryCode, rateFromGhs };
 }
 
 // ── Currency formatting ───────────────────────────────────────────────────────
 
 function formatCurrency(amountInGhs: number, currency: CurrencyInfo): string {
   const converted = amountInGhs * currency.rateFromGhs;
-
-  // Use Intl if we can (handles decimals, grouping, etc.)
   try {
-    return new Intl.NumberFormat('en', {
-      style: 'currency',
-      currency: currency.code,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(converted);
+    return new Intl.NumberFormat('en', { style: 'currency', currency: currency.code, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(converted);
   } catch {
-    // Fallback for codes Intl doesn't know
     return `${currency.symbol} ${converted.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 }
 
-// Convert a user-entered amount in local currency back to GHS for the API
 function localToGhs(localAmount: number, currency: CurrencyInfo): number {
   if (currency.rateFromGhs === 0) return localAmount;
   return localAmount / currency.rateFromGhs;
@@ -234,10 +182,7 @@ function txLabel(kind: string): string {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleString('en-US', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+    return new Date(iso).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch { return iso; }
 }
 
@@ -406,22 +351,32 @@ function ModalRow({ label, value, last = false }: { label: string; value: string
   );
 }
 
-function AlertBanner({ type, message }: { type: 'error' | 'success'; message: string }) {
-  const isError = type === 'error';
+function AlertBanner({ type, message }: { type: 'error' | 'success' | 'info'; message: string }) {
+  const styles = {
+    error: {
+      bg: 'color-mix(in srgb, #f43f5e 10%, transparent)',
+      border: 'color-mix(in srgb, #f43f5e 25%, transparent)',
+      color: '#e11d48',
+    },
+    success: {
+      bg: 'color-mix(in srgb, #10b981 10%, transparent)',
+      border: 'color-mix(in srgb, #10b981 25%, transparent)',
+      color: '#059669',
+    },
+    info: {
+      bg: 'color-mix(in srgb, #3b82f6 10%, transparent)',
+      border: 'color-mix(in srgb, #3b82f6 25%, transparent)',
+      color: '#2563eb',
+    },
+  };
+  const s = styles[type];
   return (
     <div
       className="flex items-start gap-2.5 px-4 py-3 rounded-2xl text-sm font-medium"
-      style={{
-        backgroundColor: isError
-          ? 'color-mix(in srgb, #f43f5e 10%, transparent)'
-          : 'color-mix(in srgb, #10b981 10%, transparent)',
-        border: `1px solid ${isError
-          ? 'color-mix(in srgb, #f43f5e 25%, transparent)'
-          : 'color-mix(in srgb, #10b981 25%, transparent)'}`,
-        color: isError ? '#e11d48' : '#059669',
-      }}
+      style={{ backgroundColor: s.bg, border: `1px solid ${s.border}`, color: s.color }}
     >
-      {isError && <CancelIcon sx={{ fontSize: 16 }} className="shrink-0 mt-0.5" />}
+      {type === 'error' && <CancelIcon sx={{ fontSize: 16 }} className="shrink-0 mt-0.5" />}
+      {type === 'info'  && <InfoOutlinedIcon sx={{ fontSize: 16 }} className="shrink-0 mt-0.5" />}
       <span>{message}</span>
     </div>
   );
@@ -452,6 +407,52 @@ function MethodToggle({ value, onChange, options }: { value: string; onChange: (
   );
 }
 
+// ── Deposit Progress Indicator ────────────────────────────────────────────────
+// Shows how many of the 3 required daily deposits the user has completed.
+
+function DepositProgressBar({
+  depositCountToday,
+  minRequired,
+}: {
+  depositCountToday: number;
+  minRequired: number;
+}) {
+  const dots = Array.from({ length: minRequired }, (_, i) => i < depositCountToday);
+  return (
+    <div
+      className="rounded-2xl px-4 py-3 space-y-2"
+      style={{ backgroundColor: 'color-mix(in srgb, #3b82f6 8%, transparent)', border: '1px solid color-mix(in srgb, #3b82f6 20%, transparent)' }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>
+          Daily deposit progress
+        </span>
+        <span className="text-xs font-bold tabular-nums" style={{ color: '#2563eb' }}>
+          {depositCountToday}/{minRequired}
+        </span>
+      </div>
+      <div className="flex gap-2">
+        {dots.map((filled, i) => (
+          <div
+            key={i}
+            className="flex-1 h-2 rounded-full transition-all duration-300"
+            style={{
+              backgroundColor: filled
+                ? '#3b82f6'
+                : 'color-mix(in srgb, #3b82f6 20%, transparent)',
+            }}
+          />
+        ))}
+      </div>
+      <p className="text-xs" style={{ color: 'color-mix(in srgb, #2563eb 80%, transparent)' }}>
+        {depositCountToday >= minRequired
+          ? 'Requirement met — you can now withdraw!'
+          : `Make ${minRequired - depositCountToday} more deposit${minRequired - depositCountToday > 1 ? 's' : ''} today to unlock withdrawals.`}
+      </p>
+    </div>
+  );
+}
+
 // ── Withdraw Modal ────────────────────────────────────────────────────────────
 
 interface WithdrawModalProps {
@@ -460,11 +461,10 @@ interface WithdrawModalProps {
   onSuccess: () => void;
   balanceGhs: number;
   currency: CurrencyInfo;
-  minDepositsForWithdrawal: number; // New prop for minimum deposits
-  userDepositsToday: number;        // New prop for user's deposits today
-  hasMadeFirstDepositToday?: boolean; // Prop to check if first deposit was made today
-  hasEverDeposited?: boolean; // **NEW PROP**: Flag to determine if the user has ever made a deposit
-  isAdmin: boolean;                 // New prop to check if user is admin
+  minDepositsRequired: number;   // How many deposits per day are required (= 3)
+  depositCountToday: number;     // How many deposits the user has made today
+  hasEverDeposited: boolean;     // Has the user EVER made a deposit?
+  isAdmin: boolean;
 }
 
 function WithdrawModal({
@@ -473,10 +473,9 @@ function WithdrawModal({
   onSuccess,
   balanceGhs,
   currency,
-  minDepositsForWithdrawal,
-  userDepositsToday,
-  hasMadeFirstDepositToday,
-  hasEverDeposited, // Use the new prop
+  minDepositsRequired,
+  depositCountToday,
+  hasEverDeposited,
   isAdmin,
 }: WithdrawModalProps) {
   const [step, setStep]                   = useState<'form' | 'confirm' | 'done'>('form');
@@ -490,14 +489,44 @@ function WithdrawModal({
 
   const momoNetworks = MOMO_NETWORKS[currency.countryCode] ?? MOMO_NETWORKS['GH'];
 
-  // Initialize default network when networks change
   useEffect(() => {
     setNetwork(momoNetworks[0] ?? '');
   }, [currency.countryCode]);
 
-  const amountLocal = parseFloat(amount) || 0;
-  const amountGhs   = localToGhs(amountLocal, currency);
+  const amountLocal  = parseFloat(amount) || 0;
+  const amountGhs    = localToGhs(amountLocal, currency);
   const balanceLocal = balanceGhs * currency.rateFromGhs;
+
+  // ── Withdrawal eligibility ────────────────────────────────────────────────
+  //
+  // RULE:
+  //   • Admins       → always allowed.
+  //   • Never deposited before → NOT allowed (must deposit first).
+  //   • Has deposited before → allowed ONLY when depositCountToday >= 3.
+  //     (The 3-deposit-per-day requirement kicks in after the very first deposit ever.)
+  //
+  const canWithdraw: boolean =
+    isAdmin ||
+    (hasEverDeposited && depositCountToday >= minDepositsRequired);
+
+  // ── What banner to show the user ─────────────────────────────────────────
+  type BannerKind = 'never_deposited' | 'need_more_today' | null;
+  const bannerKind: BannerKind = (() => {
+    if (isAdmin) return null;
+    if (!hasEverDeposited) return 'never_deposited';
+    if (depositCountToday < minDepositsRequired) return 'need_more_today';
+    return null;
+  })();
+
+  // Form is valid when all inputs are filled AND amount is within balance
+  const formValid =
+    amountLocal > 0 &&
+    amountLocal <= balanceLocal &&
+    !!accountNumber &&
+    !!accountName;
+
+  // Continue button only enabled when form AND eligibility are both satisfied
+  const canProceed = formValid && canWithdraw;
 
   const reset = () => {
     setStep('form'); setAmount(''); setMethod('momo');
@@ -510,7 +539,7 @@ function WithdrawModal({
     setLoading(true); setError('');
     try {
       await withdrawals.submit({
-        amount: amountGhs, // API always receives GHS
+        amount: amountGhs,
         method,
         accountNumber,
         accountName,
@@ -525,23 +554,10 @@ function WithdrawModal({
     }
   };
 
-  // Revised Logic for Withdrawal Eligibility:
-  // - Admins are always eligible.
-  // - Users who have NEVER deposited are eligible.
-  // - Users who HAVE deposited before are eligible ONLY IF:
-  //   - They made their first deposit today (`hasMadeFirstDepositToday`) AND
-  //   - They have met the minimum daily deposit count (`userDepositsToday >= minDepositsForWithdrawal`).
-  const canWithdraw = isAdmin ||
-                      !hasEverDeposited || // If they've never deposited, they can withdraw.
-                      (hasMadeFirstDepositToday && userDepositsToday >= minDepositsForWithdrawal);
-
-
-  const canProceed = amountLocal > 0 && amountLocal <= balanceLocal && !!accountNumber && !!accountName && canWithdraw;
-
-  const currencyLabel = `Amount (${currency.code})`;
-
   return (
     <ModalShell open={open} onClose={handleClose}>
+
+      {/* ── Step: Done ── */}
       {step === 'done' && (
         <div className="text-center py-4 space-y-5">
           <div
@@ -560,6 +576,7 @@ function WithdrawModal({
         </div>
       )}
 
+      {/* ── Step: Confirm ── */}
       {step === 'confirm' && (
         <div className="space-y-5">
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-main)' }}>Confirm Withdrawal</h3>
@@ -583,6 +600,7 @@ function WithdrawModal({
         </div>
       )}
 
+      {/* ── Step: Form ── */}
       {step === 'form' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
@@ -602,6 +620,21 @@ function WithdrawModal({
             </span>
           </div>
 
+          {/* ── Eligibility banners shown at top of form ── */}
+          {bannerKind === 'never_deposited' && (
+            <AlertBanner
+              type="info"
+              message="You need to make a deposit before you can withdraw. Please deposit first to get started."
+            />
+          )}
+
+          {bannerKind === 'need_more_today' && (
+            <DepositProgressBar
+              depositCountToday={depositCountToday}
+              minRequired={minDepositsRequired}
+            />
+          )}
+
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Method</p>
             <MethodToggle
@@ -612,7 +645,7 @@ function WithdrawModal({
           </div>
 
           <GroupedFields>
-            <GroupedField label={currencyLabel}>
+            <GroupedField label={`Amount (${currency.code})`}>
               <GroupedInput
                 type="number" value={amount}
                 onChange={e => setAmount(e.target.value)}
@@ -643,49 +676,32 @@ function WithdrawModal({
             </GroupedField>
 
             <GroupedField label="Account Name" last>
-              <GroupedInput type="text" value={accountName} onChange={e => setAccountName(e.target.value)} placeholder="Full name on account" />
+              <GroupedInput
+                type="text" value={accountName}
+                onChange={e => setAccountName(e.target.value)}
+                placeholder="Full name on account"
+              />
             </GroupedField>
           </GroupedFields>
 
-          {/* Alert banner for withdrawal conditions FOR USERS WHO HAVE DEPOSITED BEFORE */}
-          {!isAdmin && hasEverDeposited && !hasMadeFirstDepositToday && (
-            <AlertBanner
-              type="error"
-              message="You must make at least one deposit today to be eligible for withdrawals."
-            />
-          )}
-          {!isAdmin && hasEverDeposited && hasMadeFirstDepositToday && userDepositsToday < minDepositsForWithdrawal && (
-            <AlertBanner
-              type="error"
-              message={`You need to make ${minDepositsForWithdrawal - userDepositsToday} more deposit(s) today to withdraw. Your current deposits today: ${userDepositsToday}.`}
-            />
-          )}
-          {/* This alert would be for users who have NEVER deposited, but according to the new rule,
-              they should bypass this restriction. If the backend doesn't provide `hasEverDeposited`,
-              and `hasMadeFirstDepositToday` is false, it could be that they never deposited OR
-              that they deposited previously but not today. The current logic would restrict them.
-              The NEW rule implies IF `!hasEverDeposited` THEN `canWithdraw = true`.
-              The alerts below are now ONLY for users who HAVE deposited before. */}
-
-
           {error && <AlertBanner type="error" message={error} />}
 
+          {/*
+            Continue button:
+            - Disabled when form inputs are incomplete (formValid = false)
+            - Also disabled when canWithdraw = false (eligibility not met)
+            - The banners above already explain WHY it's locked; no extra tooltip needed.
+          */}
           <BtnPrimary
             size="lg"
-            disabled={!canProceed} // Disabled if inputs are invalid OR if!canWithdraw
-            onClick={() => {
-              // Proceed to confirm step only if all conditions met (including canWithdraw)
-              if (canProceed) {
-                setStep('confirm');
-              }
-              // If not canProceed, the button is disabled, or the disabled state prevents this click.
-              // The alert banners will guide the user if they are not eligible but have valid inputs.
-            }}
+            disabled={!canProceed}
+            onClick={() => setStep('confirm')}
           >
             Continue
           </BtnPrimary>
         </div>
       )}
+
     </ModalShell>
   );
 }
@@ -710,8 +726,8 @@ function AffiliateWithdrawModal({ open, onClose, onSuccess, availableBalanceGhs,
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState('');
 
-  const amountLocal = parseFloat(amount) || 0;
-  const amountGhs   = localToGhs(amountLocal, currency);
+  const amountLocal    = parseFloat(amount) || 0;
+  const amountGhs      = localToGhs(amountLocal, currency);
   const availableLocal = availableBalanceGhs * currency.rateFromGhs;
 
   const reset = () => {
@@ -725,7 +741,7 @@ function AffiliateWithdrawModal({ open, onClose, onSuccess, availableBalanceGhs,
     setLoading(true); setError('');
     try {
       await affiliate.requestWithdrawal({
-        amount: amountGhs, // API always receives GHS
+        amount: amountGhs,
         accountDetails: { bankName, accountNumber, accountName, mobileMoneyNumber: momoNumber || undefined },
       });
       setStep('done');
@@ -809,6 +825,9 @@ function AffiliateWithdrawModal({ open, onClose, onSuccess, availableBalanceGhs,
 
 // ── Main WalletPage ───────────────────────────────────────────────────────────
 
+// How many deposits per day a user must make before withdrawals unlock.
+const MIN_DEPOSITS_REQUIRED = 3;
+
 export default function WalletPage() {
   const navigate = useNavigate();
   const { user: currentUser } = useAppStore();
@@ -828,19 +847,13 @@ export default function WalletPage() {
   const [currency,        setCurrency]        = useState<CurrencyInfo>(DEFAULT_CURRENCY);
   const [currencyLoading, setCurrencyLoading] = useState(true);
 
-  // Constants for withdrawal logic
-  const MIN_DEPOSITS_FOR_WITHDRAWAL = 3; // Minimum number of deposits required per day
-
   useEffect(() => {
     if (!currentUser) navigate('/login', { replace: true, state: { from: '/wallet' } });
   }, [currentUser, navigate]);
 
-  // Auto-detect country + currency
   useEffect(() => {
     setCurrencyLoading(true);
-    detectCurrencyInfo()
-      .then(setCurrency)
-      .finally(() => setCurrencyLoading(false));
+    detectCurrencyInfo().then(setCurrency).finally(() => setCurrencyLoading(false));
   }, []);
 
   const fetchWallet = useCallback(async () => {
@@ -882,16 +895,15 @@ export default function WalletPage() {
     if (currentUser) initLoad();
   }, [currentUser, initLoad]);
 
-  // ── All balances kept in GHS (backend native). Currency converts for display only.
-  const ghsBalance    = walletData?.balance ?? 0;
-  const affBalanceGhs = affiliateStats?.availableBalance   ?? 0;
-  const affLifetimeGhs = affiliateStats?.lifetimeCommission ?? 0;
+  // All balances kept in GHS (backend native). Currency converts for display only.
+  const ghsBalance     = walletData?.balance           ?? 0;
+  const affBalanceGhs  = affiliateStats?.availableBalance    ?? 0;
+  const affLifetimeGhs = affiliateStats?.lifetimeCommission  ?? 0;
 
-  // Extract user-specific data for withdrawal logic
-  const userDepositsToday = walletData?.depositCountToday ?? 0;
-  const hasMadeFirstDepositToday = walletData?.hasMadeFirstDepositToday ?? false; // Use the existing field
-  const hasEverDeposited = walletData?.hasEverDeposited ?? false; // **NEW**: Use the new flag from wallet data
-  const isAdmin = currentUser?.role === 'ADMIN'; // Assuming user object has a 'role' property
+  // Withdrawal eligibility data — sourced from backend via walletApi.getWallet()
+  const depositCountToday = walletData?.depositCountToday ?? 0;
+  const hasEverDeposited  = walletData?.hasEverDeposited  ?? false;
+  const isAdmin           = currentUser?.role === 'ADMIN';
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading || currencyLoading) {
@@ -917,7 +929,6 @@ export default function WalletPage() {
     );
   }
 
-  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <>
       <div className="min-h-screen pb-10" style={{ backgroundColor: 'var(--card-alt)' }}>
@@ -1114,17 +1125,16 @@ export default function WalletPage() {
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       <WithdrawModal
         open={showWithdraw}
         onClose={() => setShowWithdraw(false)}
         onSuccess={() => { setShowWithdraw(false); fetchWallet(); fetchTransactions(0); }}
         balanceGhs={ghsBalance}
         currency={currency}
-        minDepositsForWithdrawal={MIN_DEPOSITS_FOR_WITHDRAWAL}
-        userDepositsToday={userDepositsToday}
-        hasMadeFirstDepositToday={hasMadeFirstDepositToday}
-        hasEverDeposited={hasEverDeposited} // Pass the NEW flag
+        minDepositsRequired={MIN_DEPOSITS_REQUIRED}
+        depositCountToday={depositCountToday}
+        hasEverDeposited={hasEverDeposited}
         isAdmin={isAdmin}
       />
       <AffiliateWithdrawModal
