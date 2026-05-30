@@ -41,36 +41,36 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 // ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LOGO_POOL: string[] = [
-  'https://api.dicebear.com/7.x/shapes/svg?seed=alpha&backgroundColor=1a6b3c',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=beta&backgroundColor=c0392b',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=gamma&backgroundColor=2471a3',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=delta&backgroundColor=6c3483',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=epsilon&backgroundColor=d35400',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=foxes&backgroundColor=117a65',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=galaxy&backgroundColor=1f618d',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=hawks&backgroundColor=784212',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=iron&backgroundColor=1a5276',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=jets&backgroundColor=4a235a',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=kings&backgroundColor=922b21',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=lions&backgroundColor=1e8449',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=metros&backgroundColor=1a237e',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=nova&backgroundColor=6a1b9a',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=olympia&backgroundColor=bf360c',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=panthers&backgroundColor=006064',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=queens&backgroundColor=4e342e',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=rangers&backgroundColor=37474f',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=storm&backgroundColor=880e4f',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=titans&backgroundColor=1b5e20',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=union&backgroundColor=b71c1c',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=vikings&backgroundColor=0d47a1',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=wolves&backgroundColor=e65100',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=xpress&backgroundColor=33691e',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=yankee&backgroundColor=4527a0',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=zenith&backgroundColor=00695c',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=aztecs&backgroundColor=c62828',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=broncos&backgroundColor=2e7d32',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=cobras&backgroundColor=283593',
-  'https://api.dicebear.com/7.x/shapes/svg?seed=dynamo&backgroundColor=6d4c41',
+  'https://media.api-sports.io/football/teams/772.png',   // Famalicao
+  'https://media.api-sports.io/football/teams/773.png',   // Portimonense
+  'https://media.api-sports.io/football/teams/775.png',   // Belenenses
+  'https://media.api-sports.io/football/teams/776.png',   // Maritimo
+  'https://media.api-sports.io/football/teams/778.png',   // Tondela
+  'https://media.api-sports.io/football/teams/780.png',   // Nacional
+  'https://media.api-sports.io/football/teams/798.png',   // Arouca
+  'https://media.api-sports.io/football/teams/799.png',   // Pacos Ferreira
+  'https://media.api-sports.io/football/teams/801.png',   // Vizela
+  'https://media.api-sports.io/football/teams/802.png',   // Chaves
+  'https://media.api-sports.io/football/teams/808.png',   // Estrela Amadora
+  'https://media.api-sports.io/football/teams/810.png',   // Casa Pia
+  'https://media.api-sports.io/football/teams/813.png',   // Moreirense
+  'https://media.api-sports.io/football/teams/1044.png',  // Dundee
+  'https://media.api-sports.io/football/teams/1052.png',  // Ross County
+  'https://media.api-sports.io/football/teams/1053.png',  // Motherwell
+  'https://media.api-sports.io/football/teams/1054.png',  // St Mirren
+  'https://media.api-sports.io/football/teams/1055.png',  // St Johnstone
+  'https://media.api-sports.io/football/teams/1056.png',  // Livingston
+  'https://media.api-sports.io/football/teams/1057.png',  // Hamilton
+  'https://media.api-sports.io/football/teams/1058.png',  // Kilmarnock
+  'https://media.api-sports.io/football/teams/1060.png',  // Inverness
+  'https://media.api-sports.io/football/teams/1093.png',  // Sligo Rovers
+  'https://media.api-sports.io/football/teams/1094.png',  // Bohemian
+  'https://media.api-sports.io/football/teams/1095.png',  // Shelbourne
+  'https://media.api-sports.io/football/teams/1096.png',  // Drogheda
+  'https://media.api-sports.io/football/teams/1097.png',  // Dundalk
+  'https://media.api-sports.io/football/teams/1098.png',  // Derry City
+  'https://media.api-sports.io/football/teams/1099.png',  // Shamrock Rovers
+  'https://media.api-sports.io/football/teams/1100.png',  // Cork City
 ];
 
 
