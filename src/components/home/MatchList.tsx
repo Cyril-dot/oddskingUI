@@ -37,7 +37,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  FALLBACK LOGO POOL — 30 unique team badge images                        ║
-// ║  Used when an admin match has no logo set.                               ║
+// ║  Served from media.api-sports.io (reliable, no hotlink block).           ║
 // ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LOGO_POOL: string[] = [
@@ -83,6 +83,7 @@ const FALLBACK_LOGO_POOL: string[] = [
   // DummyImage (Solid color blocks with text - great for basic placeholders)
   'https://dummyimage.com/400x400/282c34/61dafb.png&text=Random+1'
 ];
+
 
 /**
  * Deterministic but "randomised-looking" shuffle of the pool using a
@@ -670,7 +671,9 @@ function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; siz
 
 // ---------------------------------------------------------------------------
 // TeamLogoAdmin — for admin matches
-// Priority chain: actual logo set by admin → pool fallback → initials avatar
+// Priority: admin-set logo → hardcoded pool fallback → initials avatar
+// The pool URL is used IMMEDIATELY as src when no actual logo is set,
+// so there is no wasted first render / failed request before fallback kicks in.
 // ---------------------------------------------------------------------------
 function TeamLogoAdmin({
   poolUrl,
@@ -686,29 +689,31 @@ function TeamLogoAdmin({
   const cleanActual = sanitizeLogo(actualUrl);
   const cleanPool   = sanitizeLogo(poolUrl);
 
-  // Primary = admin-set logo; secondary = hardcoded pool fallback
-  const [src, setSrc]         = useState<string>(cleanActual || cleanPool);
-  const [triedPool, setTriedPool] = useState(false);
+  // Start immediately with the best available source — no two-step wait.
+  const initialSrc = cleanActual || cleanPool;
+  const [src, setSrc]         = useState<string>(initialSrc);
+  const [failed, setFailed]   = useState(false);
 
   useEffect(() => {
-    const primary = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
-    setSrc(primary);
-    setTriedPool(false);
+    const best = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
+    setSrc(best);
+    setFailed(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualUrl, poolUrl]);
 
   const teamName = name ?? '';
 
   const handleError = () => {
-    if (!triedPool && cleanPool && src !== cleanPool) {
-      setTriedPool(true);
+    // If the actual logo failed and we haven't tried the pool yet, try pool
+    if (src === cleanActual && cleanPool && cleanActual !== cleanPool) {
       setSrc(cleanPool);
     } else {
-      setSrc('');
+      // All image sources exhausted — show initials avatar
+      setFailed(true);
     }
   };
 
-  if (src) {
+  if (src && !failed) {
     return (
       <img
         src={src}
