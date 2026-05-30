@@ -333,33 +333,30 @@ const LEAGUE_SUGGESTIONS = [
 function LogoInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [mode, setMode] = useState<'upload' | 'url'>('url');
-  const handleFile = (file: File) => { if (!file || !file.type.startsWith('image/')) return; onChange(URL.createObjectURL(file)); };
+  const handleFile = (file: File) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        onChange(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+      <div style={{ marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>{label}</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['url', 'upload'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setMode(m)} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', borderRadius: 4, border: '1px solid', borderColor: mode === m ? 'rgba(99,210,255,0.5)' : 'rgba(255,255,255,0.1)', background: mode === m ? 'rgba(99,210,255,0.1)' : 'transparent', color: mode === m ? '#63d2ff' : 'rgba(255,255,255,0.3)', cursor: 'pointer' }}>
-              {m === 'upload' ? '📁 Upload' : '🔗 URL'}
-            </button>
-          ))}
-        </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0, background: 'rgba(255,255,255,0.04)', border: '1.5px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {value ? <img src={value} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <span style={{ fontSize: 18, opacity: 0.3 }}>🏟️</span>}
         </div>
         <div style={{ flex: 1 }}>
-          {mode === 'upload' ? (
-            <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }} onClick={() => fileRef.current?.click()} style={{ border: `1.5px dashed ${dragging ? '#63d2ff' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '10px 14px', cursor: 'pointer', background: dragging ? 'rgba(99,210,255,0.05)' : 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
-              <span style={{ fontSize: 11, color: dragging ? '#63d2ff' : 'rgba(255,255,255,0.3)', fontWeight: 600 }}>{dragging ? 'Drop it!' : 'Click or drag image here'}</span>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
-            </div>
-          ) : (
-            <input type="url" value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://example.com/logo.png" style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 14px', color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} onFocus={(e) => (e.target.style.borderColor = 'rgba(99,210,255,0.5)')} onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')} />
-          )}
+          <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }} onClick={() => fileRef.current?.click()} style={{ border: `1.5px dashed ${dragging ? '#63d2ff' : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '10px 14px', cursor: 'pointer', background: dragging ? 'rgba(99,210,255,0.05)' : 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
+            <span style={{ fontSize: 11, color: dragging ? '#63d2ff' : 'rgba(255,255,255,0.3)', fontWeight: 600 }}>{dragging ? 'Drop it!' : 'Click or drag image here'}</span>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          </div>
         </div>
         {value && <button type="button" onClick={() => onChange('')} style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: 'rgba(255,71,87,0.15)', border: '1px solid rgba(255,71,87,0.3)', color: '#ff4757', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>}
       </div>
