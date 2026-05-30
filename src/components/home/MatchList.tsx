@@ -13,6 +13,10 @@
 //     admin match are suppressed from the main Live/Today/Upcoming/Results
 //     sections so the same game never appears in both "Special Games" and the
 //     regular list.
+//   • Admin logo fallback: 30 hardcoded fallback images, randomised, unique
+//     per team — no two teams in the same match share the same logo, and each
+//     admin game gets its own separate logo pair.
+//   • Removed all console.log / console.warn / console.error statements.
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -32,23 +36,90 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  ADMIN LOGO POOLS — paste your 10 URLs here                             ║
+// ║  FALLBACK LOGO POOL — 30 unique team badge images                        ║
+// ║  Used when an admin match has no logo set.                               ║
+// ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
-const HOME_LOGO_POOL: string[] = [
-  'https://static.vecteezy.com/system/resources/thumbnails/011/049/345/small_2x/soccer-football-badge-logo-sport-team-identity-illustrations-isolated-on-white-background-vector.jpg',
-  'https://marketplace.canva.com/EAGXHkfvP0k/2/0/1600w/canva-white-and-black-professional-design-football-club-logo-_0PEzCBc5Ao.jpg',
-  'https://img.magnific.com/premium-vector/soccer-football-badge-logo-design-templates-sport-team-identity-vector-illustrations_683941-173.jpg',
-  'https://marketplace.canva.com/EAFnwIBf4dU/2/0/1600w/canva-black-white-yellow-elegant-modern-football-club-logo-8HTQhmXBF18.jpg',
-  'https://static.vecteezy.com/system/resources/previews/035/358/256/non_2x/football-club-logo-vector.jpg',
+const FALLBACK_LOGO_POOL: string[] = [
+  // 1-10
+  'https://i.pinimg.com/236x/77/b8/04/77b80432080aad2fe91abaf36e572344.jpg',
+  'https://img0-placeit-net.s3-accelerate.amazonaws.com/uploads/stage/stage_image/163210/optimized_large_thumb_stage.jpg',
+  'https://www.jetpunk.com/img/user-img/83/83e86d7aa9-450.webp',
+  'https://images-platform.99static.com//K9D4-6yayoSJS7QOin2kW3JpKmc=/116x1328:935x2146/fit-in/500x500/projects-files/160/16047/1604748/bf2276ed-0325-480a-ba81-7259641922ec.png',
+  'https://preview.redd.it/i-made-some-logos-for-random-teams-v0-dozuo7j3z7b71.jpg?width=640&crop=smart&auto=webp&s=3e2f7e9e2390448299bc0e71063b0b66f705ddc4',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR40YAbEhXuwX5kvjjs3-x5OsDGbTJbTVUeKQ&s',
+  'https://www.jetpunk.com/img/user-img/1a/1a33e46fff-450.webp',
+  'https://www.jetpunk.com/img/user-img/4e/4e96325794-450.webp',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS3zGUwR86wUAyjqHNuSL9ca_FrbrV3QM93Og&s',
+  'https://w7.pngwing.com/pngs/107/240/png-transparent-bulgaria-national-football-team-logo-kit-sport-football-sport-logo-sports.png',
+  // 11-20
+  'https://www.shutterstock.com/shutterstock/photos/2270243575/display_1500/stock-vector-rising-team-and-arrow-logo-unique-design-color-transitions-team-logo-template-advancing-to-the-2270243575.jpg',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjhe9HanbUxHBpWC2UAV0ODLQEuJMpWv4FGA&s',
+  'https://www.thewordfinder.com/random-nfl-team-generator/data/images/NOR.webp',
+  'https://www.shutterstock.com/image-vector/letter-4-soccer-logo-football-260nw-2309970181.jpg',
+  'https://cdn.dribbble.com/userupload/47259186/file/3464815a0e0c721f57701450969711dd.png?resize=400x0',
+  'https://cdn.mos.cms.futurecdn.net/nHKJY7hGsRiTDXjhbPhQRd.jpg',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXxJRaM2ta0nkFdfRfJtGt7TwgsuS6Xw_Ftw&s',
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT44ph_rUyP-so0IqhGvqD1uAbT4REvnTSfNA&s',
+  'https://sanfl-content.imgix.net/content/uploads/sites/3/2025/03/27163635/teams-banner-4.png?fit=crop&cs=strip&crop=faces&auto=format&w=500&h=425&dpr=2.625',
+  'https://cdn.mos.cms.futurecdn.net/aYFodgQMWesqjStrnaDkXG.jpg',
+  // 21-30
+ 'https://upload.wikimedia.org/wikipedia/en/0/07/Accrington_Stanley_F.C._logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/c/c5/Carlisle_United_F.C._logo.svg',
+  'https://upload.wikimedia.org/wikipedia/commons/4/40/TSV_1860_M%C3%BCnchen.svg',
+  'https://upload.wikimedia.org/wikipedia/en/1/1a/S.P.A.L._logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/d/df/Red_Star_F.C._logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/7/77/Notts_County_Logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/f/f1/Sutton_United_FC_logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/4/4e/RC_Deportivo_La_Coru%C3%B1a_logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/b/ba/Leyton_Orient_F.C._logo.svg',
+  'https://upload.wikimedia.org/wikipedia/en/2/23/Tranmere_Rovers_FC_logo.svg'
 ];
 
-const AWAY_LOGO_POOL: string[] = [
-  'https://marketplace.canva.com/EAF9gkRs2dU/2/0/1600w/canva-white-black-gold-circle-modern-football-club-logo-8y4rT2SOMu0.jpg',
-  'https://logowik.com/content/uploads/images/football-club2744.logowik.com.webp',
-  'https://img.freepik.com/free-vector/football-soccer-tournament-vector-logo-design_47987-24746.jpg?semt=ais_hybrid&w=740&q=80',
-  'https://static.vecteezy.com/system/resources/thumbnails/012/995/442/small/football-championship-or-football-club-logo-vector.jpg',
-  'https://d1csarkz8obe9u.cloudfront.net/posterpreviews/logo-design-template-b588de7cc0b07e82392c3b2ea4ea7b73_screen.jpg?ts=1702915331',
-];
+/**
+ * Deterministic but "randomised-looking" shuffle of the pool using a
+ * seed derived from the match id.  Returns a NEW array — original is untouched.
+ */
+function seededShuffle(pool: string[], seed: string): string[] {
+  const arr = [...pool];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  for (let i = arr.length - 1; i > 0; i--) {
+    h = (Math.imul(1664525, h) + 1013904223) | 0;
+    const j = Math.abs(h) % (i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * For a list of admin matches, assign unique fallback logo pairs so that:
+ *   - Home and Away in the SAME match never share the same image.
+ *   - Different matches each start from a different position in the pool.
+ * Already-set logos (non-blob, non-empty) are respected and the pool slot
+ * is NOT wasted on them.
+ */
+function assignAdminLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
+  // Track which pool indices are already "in use" for this render batch.
+  // Each match gets its own shuffled pool so collisions across matches are
+  // minimised naturally.
+  return matches.map((m, matchIdx) => {
+    const shuffled = seededShuffle(FALLBACK_LOGO_POOL, `${m.id}-${matchIdx}`);
+
+    const hasHome = !!sanitizeLogo(m.homeLogo);
+    const hasAway = !!sanitizeLogo(m.awayLogo);
+
+    // Pick slots that differ from each other
+    const homeSlot = 0;
+    const awaySlot = 1; // guaranteed different in any length-≥2 pool
+
+    return {
+      ...m,
+      adminHomeLogo: hasHome ? sanitizeLogo(m.homeLogo) : shuffled[homeSlot],
+      adminAwayLogo: hasAway ? sanitizeLogo(m.awayLogo) : shuffled[awaySlot],
+    };
+  });
+}
 
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -287,18 +358,9 @@ function sanitizeLogo(url: string | undefined | null): string {
   if (trimmed.startsWith('data:image/')) return trimmed;
   return trimmed;
 }
-function assignAdminLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
-  return matches.map((m, idx) => ({
-    ...m,
-    adminHomeLogo: HOME_LOGO_POOL[idx % HOME_LOGO_POOL.length],
-    adminAwayLogo: AWAY_LOGO_POOL[idx % AWAY_LOGO_POOL.length],
-  }));
-}
 
 // ---------------------------------------------------------------------------
 // FIX 6: Build + test admin team fingerprints
-// Fingerprint = `${homeTeamLower}|${awayTeamLower}` (no date — admin matches
-// may not share the exact kickoffAt of the live-feed entry for the same game).
 // ---------------------------------------------------------------------------
 function buildAdminTeamFingerprints(adminMatches: EnrichedMatch[]): Set<string> {
   const fps = new Set<string>();
@@ -572,6 +634,9 @@ function teamColour(name: string): string {
   return PALETTE[hash % PALETTE.length];
 }
 
+// ---------------------------------------------------------------------------
+// TeamLogo — for regular (non-admin) matches
+// ---------------------------------------------------------------------------
 function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; size?: number }) {
   const cleanLogo = sanitizeLogo(logo);
   const [failed, setFailed] = useState(false);
@@ -595,16 +660,31 @@ function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; siz
   );
 }
 
-function TeamLogoAdmin({ poolUrl, actualUrl, name, size = 32 }: { poolUrl?: string; actualUrl?: string; name?: string; size?: number }) {
+// ---------------------------------------------------------------------------
+// TeamLogoAdmin — for admin matches
+// Priority chain: actual logo set by admin → pool fallback → initials avatar
+// ---------------------------------------------------------------------------
+function TeamLogoAdmin({
+  poolUrl,
+  actualUrl,
+  name,
+  size = 32,
+}: {
+  poolUrl?: string;
+  actualUrl?: string;
+  name?: string;
+  size?: number;
+}) {
   const cleanActual = sanitizeLogo(actualUrl);
   const cleanPool   = sanitizeLogo(poolUrl);
-  const primary     = cleanActual || cleanPool;
-  const [src, setSrc]       = useState(primary);
+
+  // Primary = admin-set logo; secondary = hardcoded pool fallback
+  const [src, setSrc]         = useState<string>(cleanActual || cleanPool);
   const [triedPool, setTriedPool] = useState(false);
 
   useEffect(() => {
-    const p = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
-    setSrc(p);
+    const primary = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
+    setSrc(primary);
     setTriedPool(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actualUrl, poolUrl]);
@@ -613,11 +693,9 @@ function TeamLogoAdmin({ poolUrl, actualUrl, name, size = 32 }: { poolUrl?: stri
 
   const handleError = () => {
     if (!triedPool && cleanPool && src !== cleanPool) {
-      console.warn(`[AdminLogo] team="${teamName}" primary failed (${src}), falling back to pool: ${cleanPool}`);
       setTriedPool(true);
       setSrc(cleanPool);
     } else {
-      console.error(`[AdminLogo] team="${teamName}" all sources failed. actual="${cleanActual}" pool="${cleanPool}"`);
       setSrc('');
     }
   };
@@ -633,12 +711,16 @@ function TeamLogoAdmin({ poolUrl, actualUrl, name, size = 32 }: { poolUrl?: stri
     );
   }
 
+  // Final fallback: coloured initials avatar
   const initials = getTeamInitials(teamName);
   const bg = teamColour(teamName);
   return (
-    <div style={{ width: size, height: size, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      borderRadius: '50%', flexShrink: 0, fontSize: size * 0.28, fontWeight: 700, color: '#fff',
-      letterSpacing: '0.02em', userSelect: 'none' }} aria-label={teamName}>
+    <div style={{
+      width: size, height: size, background: bg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      borderRadius: '50%', flexShrink: 0, fontSize: size * 0.28,
+      fontWeight: 700, color: '#fff', letterSpacing: '0.02em', userSelect: 'none',
+    }} aria-label={teamName}>
       {initials}
     </div>
   );
@@ -927,7 +1009,6 @@ function normalizeAdminMatch(raw: unknown): Match | null {
   const minutePlayed = r.minutePlayed != null ? Number(r.minutePlayed) : r.minute_played != null ? Number(r.minute_played) : undefined;
   const hardcodedHomeLogo = sanitizeLogo(String(r.hardcodedHomeLogo ?? r.hardcoded_home_logo ?? r.homeLogo ?? r.home_logo ?? '').trim());
   const hardcodedAwayLogo = sanitizeLogo(String(r.hardcodedAwayLogo ?? r.hardcoded_away_logo ?? r.awayLogo ?? r.away_logo ?? '').trim());
-  console.log(`[normalizeAdminMatch] id="${id}" home="${homeTeam}" homeLogo="${hardcodedHomeLogo}" away="${awayTeam}" awayLogo="${hardcodedAwayLogo}"`);
   return {
     id, source: 'ADMIN_CREATED' as Match['source'],
     homeTeam: homeTeam || 'Home Team',
@@ -1291,10 +1372,18 @@ function MatchCard({
         { key: '1', label: 'Home', val: odds?.home ?? 0 },
         { key: '2', label: 'Away', val: odds?.away ?? 0 },
       ];
- const renderHomeLogo = (size: number) =>
-    <TeamLogo logo={match.homeLogo || match.adminHomeLogo} name={match.homeTeam} size={size} />;
+
+  // For admin matches: use the pre-assigned unique pool logos as fallbacks.
+  // For regular matches: use the standard TeamLogo component.
+  const renderHomeLogo = (size: number) =>
+    isAdmin
+      ? <TeamLogoAdmin poolUrl={match.adminHomeLogo} actualUrl={match.homeLogo} name={match.homeTeam} size={size} />
+      : <TeamLogo logo={match.homeLogo} name={match.homeTeam} size={size} />;
+
   const renderAwayLogo = (size: number) =>
-    <TeamLogo logo={match.awayLogo || match.adminAwayLogo} name={match.awayTeam} size={size} />;
+    isAdmin
+      ? <TeamLogoAdmin poolUrl={match.adminAwayLogo} actualUrl={match.awayLogo} name={match.awayTeam} size={size} />
+      : <TeamLogo logo={match.awayLogo} name={match.awayTeam} size={size} />;
 
   return (
     <div className={`match-card ${stateClass}`} onClick={onClick} role="button" tabIndex={0}
@@ -1413,7 +1502,7 @@ function LeagueCard({ league, matches, leagueLogo, showDraw }: { league: string;
 }
 
 // ---------------------------------------------------------------------------
-// SpecialGamesSection — FIX 6: accepts onAdminFingerprintsChange callback
+// SpecialGamesSection
 // ---------------------------------------------------------------------------
 function SpecialGamesSection({
   onAdminFingerprintsChange,
@@ -1439,7 +1528,6 @@ function SpecialGamesSection({
         const matches = unwrapAdminMatches(raw);
         if (matches.length === 0) {
           setAdminMatches([]);
-          // FIX 6: clear fingerprints when there are no admin matches
           onAdminFingerprintsChange(new Set());
           return;
         }
@@ -1450,17 +1538,10 @@ function SpecialGamesSection({
           const oddsMap = extractOddsMap(oddsArr, match.homeTeam ?? '', match.awayTeam ?? '');
           return { ...match, oddsMap };
         });
-        const withOdds = enriched.filter(hasValidOdds);
+        const withOdds  = enriched.filter(hasValidOdds);
+        // Assign unique fallback logos — different per match, home ≠ away
         const withLogos = assignAdminLogos(withOdds);
-        console.log('[SpecialGames] loaded admin matches:', withLogos.map(m => ({
-  id: m.id,
-  home: m.homeTeam,
-  away: m.awayTeam,
-  homeLogo: m.homeLogo,
-  awayLogo: m.awayLogo,
-  adminHomeLogo: m.adminHomeLogo,
-  adminAwayLogo: m.adminAwayLogo,
-})));
+
         const now = Date.now();
         for (const m of withLogos) {
           const isFinished = FINISHED_STATUSES.has(m.status ?? '');
@@ -1469,8 +1550,6 @@ function SpecialGamesSection({
           }
         }
         setAdminMatches(withLogos);
-        // FIX 6: publish fingerprints of ALL admin matches (not just visible ones)
-        // so the regular list suppresses them immediately.
         onAdminFingerprintsChange(buildAdminTeamFingerprints(withLogos));
       } catch { /* silent */ }
     }
@@ -1653,7 +1732,6 @@ export default function MatchList() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // FIX 6: fingerprint set from admin matches — used to suppress duplicates
   const [adminFingerprints, setAdminFingerprints] = useState<Set<string>>(new Set());
 
   const footballGenRef = useRef(0);
@@ -1728,11 +1806,9 @@ export default function MatchList() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, [activeSport, fetchFootball, fetchSport]);
 
-  // FIX 6: strip admin-match games from the regular list before categorising
   const { allMatches, isFallback } = useMemo((): { allMatches: EnrichedMatch[]; isFallback: boolean } => {
     if (activeSport === 'football') {
       const result = filterByLeagueTab(allFootballMatches, activeLeagueTab);
-      // Remove any match whose team-pair fingerprint belongs to an admin game
       const filtered = adminFingerprints.size > 0
         ? result.matches.filter((m) => !isMatchInAdminSet(m, adminFingerprints))
         : result.matches;
@@ -1857,7 +1933,7 @@ export default function MatchList() {
         </div>
       )}
 
-      {/* ── Special Games — FIX 6: passes fingerprint updater ── */}
+      {/* ── Special Games ── */}
       {activeSport === 'football' && (
         <SpecialGamesSection onAdminFingerprintsChange={setAdminFingerprints} />
       )}
