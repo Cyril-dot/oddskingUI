@@ -64,16 +64,24 @@ const FALLBACK_LOGO_POOL: string[] = [
   'https://sanfl-content.imgix.net/content/uploads/sites/3/2025/03/27163635/teams-banner-4.png?fit=crop&cs=strip&crop=faces&auto=format&w=500&h=425&dpr=2.625',
   'https://cdn.mos.cms.futurecdn.net/aYFodgQMWesqjStrnaDkXG.jpg',
   // 21-30
- 'https://upload.wikimedia.org/wikipedia/en/0/07/Accrington_Stanley_F.C._logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/c/c5/Carlisle_United_F.C._logo.svg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/40/TSV_1860_M%C3%BCnchen.svg',
-  'https://upload.wikimedia.org/wikipedia/en/1/1a/S.P.A.L._logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/d/df/Red_Star_F.C._logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/7/77/Notts_County_Logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/f/f1/Sutton_United_FC_logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/4/4e/RC_Deportivo_La_Coru%C3%B1a_logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/b/ba/Leyton_Orient_F.C._logo.svg',
-  'https://upload.wikimedia.org/wikipedia/en/2/23/Tranmere_Rovers_FC_logo.svg'
+'https://picsum.photos/seed/img1/400/400',
+  'https://picsum.photos/seed/img2/400/400',
+  'https://picsum.photos/seed/img3/400/400',
+  
+  // LoremFlickr (Random images based on keywords)
+  'https://loremflickr.com/400/400/city',
+  'https://loremflickr.com/400/400/nature',
+  'https://loremflickr.com/400/400/abstract',
+  
+  // PlaceDog (Random pictures of dogs)
+  'https://placedog.net/400/400?id=12',
+  'https://placedog.net/400/400?id=45',
+  
+  // PlaceBear (Random pictures of bears)
+  'https://placebear.com/400/400',
+  
+  // DummyImage (Solid color blocks with text - great for basic placeholders)
+  'https://dummyimage.com/400x400/282c34/61dafb.png&text=Random+1'
 ];
 
 /**
