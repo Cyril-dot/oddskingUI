@@ -17,6 +17,10 @@
 //     per team — no two teams in the same match share the same logo, and each
 //     admin game gets its own separate logo pair.
 //   • Removed all console.log / console.warn / console.error statements.
+//   • FIX ADMIN LOGOS: TeamLogoAdmin now ALWAYS shows a logo — it starts
+//     immediately with a pool URL (never empty src), cycles through the entire
+//     pool on error, and only falls back to initials avatar if every pool URL
+//     fails. No admin game ever shows a broken placeholder image.
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -98,24 +102,17 @@ function seededShuffle(pool: string[], seed: string): string[] {
  * is NOT wasted on them.
  */
 function assignAdminLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
-  // Track which pool indices are already "in use" for this render batch.
-  // Each match gets its own shuffled pool so collisions across matches are
-  // minimised naturally.
   return matches.map((m, matchIdx) => {
     const shuffled = seededShuffle(FALLBACK_LOGO_POOL, `${m.id}-${matchIdx}`);
 
-    const hasHome = !!sanitizeLogo(m.homeLogo);
-    const hasAway = !!sanitizeLogo(m.awayLogo);
+    const cleanHome = sanitizeLogo(m.homeLogo);
+    const cleanAway = sanitizeLogo(m.awayLogo);
 
-    // Pick slots that differ from each other
-    const homeSlot = 0;
-    const awaySlot = 1; // guaranteed different in any length-≥2 pool
+    // Slots 0 and 1 are always different in a pool of 30
+    const adminHomeLogo = cleanHome || shuffled[0];
+    const adminAwayLogo = cleanAway || shuffled[1];
 
-    return {
-      ...m,
-      adminHomeLogo: hasHome ? sanitizeLogo(m.homeLogo) : shuffled[homeSlot],
-      adminAwayLogo: hasAway ? sanitizeLogo(m.awayLogo) : shuffled[awaySlot],
-    };
+    return { ...m, adminHomeLogo, adminAwayLogo };
   });
 }
 
@@ -659,10 +656,16 @@ function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; siz
 }
 
 // ---------------------------------------------------------------------------
-// TeamLogoAdmin — for admin matches
-// Priority: admin-set logo → hardcoded pool fallback → initials avatar
-// The pool URL is used IMMEDIATELY as src when no actual logo is set,
-// so there is no wasted first render / failed request before fallback kicks in.
+// TeamLogoAdmin — FIXED
+//
+// Strategy:
+//   1. Build a deduplicated candidate list: [actualUrl, poolUrl, ...rest of pool]
+//      where every entry is a non-empty, non-blob string.
+//   2. Start rendering the FIRST candidate immediately — never an empty src.
+//   3. On each onError, advance to the next candidate.
+//   4. Only render the initials avatar when the entire candidate list is exhausted.
+//
+// This guarantees no admin team ever shows a broken placeholder image.
 // ---------------------------------------------------------------------------
 function TeamLogoAdmin({
   poolUrl,
@@ -675,55 +678,48 @@ function TeamLogoAdmin({
   name?: string;
   size?: number;
 }) {
-  const cleanActual = sanitizeLogo(actualUrl);
-  const cleanPool   = sanitizeLogo(poolUrl);
-  const initialSrc  = cleanActual || cleanPool;
+  // Build the full ordered candidate list once per prop change.
+  const candidates = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    const tryAdd = (url: string | undefined | null) => {
+      const clean = sanitizeLogo(url);
+      if (clean && !seen.has(clean)) { seen.add(clean); list.push(clean); }
+    };
+    tryAdd(actualUrl);
+    tryAdd(poolUrl);
+    // Also seed the full pool in shuffled order so we have 30 fallbacks.
+    const shuffled = seededShuffle(FALLBACK_LOGO_POOL, (name ?? 'team') + (poolUrl ?? ''));
+    shuffled.forEach(tryAdd);
+    return list;
+  }, [actualUrl, poolUrl, name]);
 
-  const [src, setSrc]       = useState<string>(initialSrc);
-  const [slotOffset, setSlotOffset] = useState(0);
-  const [failed, setFailed] = useState(false);
+  const [idx, setIdx] = useState(0);
 
-  useEffect(() => {
-    const best = sanitizeLogo(actualUrl) || sanitizeLogo(poolUrl);
-    setSrc(best);
-    setSlotOffset(0);
-    setFailed(false);
-  }, [actualUrl, poolUrl]);
-
-  const handleError = () => {
-    // Keep trying next slots in the pool until one works
-    const nextOffset = slotOffset + 1;
-    if (nextOffset < FALLBACK_LOGO_POOL.length) {
-      const seed = (name ?? 'team') + nextOffset;
-      let h = 0;
-      for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-      const nextUrl = FALLBACK_LOGO_POOL[Math.abs(h) % FALLBACK_LOGO_POOL.length];
-      setSlotOffset(nextOffset);
-      setSrc(nextUrl);
-    } else {
-      setFailed(true);
-    }
-  };
+  // Reset when candidates change (different match).
+  useEffect(() => { setIdx(0); }, [candidates]);
 
   const teamName = name ?? '';
+  const src = candidates[idx];
 
-  if (src && !failed) {
+  if (src) {
     return (
       <img
         src={src}
         alt={teamName}
         style={{
-          width: size, height: size,
+          width: size,
+          height: size,
           borderRadius: '50%',
           objectFit: 'contain',
           flexShrink: 0,
         }}
-        onError={handleError}
+        onError={() => setIdx((prev) => prev + 1)}
       />
     );
   }
 
-  // Only if every pool slot failed
+  // Every candidate exhausted — render initials avatar as last resort.
   const initials = getTeamInitials(teamName);
   const bg = teamColour(teamName);
   return (
