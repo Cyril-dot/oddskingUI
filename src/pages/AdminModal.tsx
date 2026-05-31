@@ -1159,7 +1159,6 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const { showToast } = useAppStore();
   const { currency } = useCurrency();
   const [stats, setStats] = useState<AffiliateStatsDTO | null>(null);
-  const [payoutWindow, setPayoutWindow] = useState<boolean | null>(null);
   const [payoutHistory, setPayoutHistory] = useState<PayoutRequest[]>([]);
   const [links, setLinks] = useState<ReferralLink[]>([]);
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
@@ -1174,14 +1173,17 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRaw, windowRaw, historyRaw, linksRaw, usersRaw] = await Promise.all([adminAffiliate.getStats(), adminAffiliate.getPayoutWindow(), adminAffiliate.getPayoutHistory(), adminAffiliate.getLinks(), adminAffiliate.getReferredUsers()]);
+      const [statsRaw, historyRaw, linksRaw, usersRaw] = await Promise.all([
+        adminAffiliate.getStats(),
+        adminAffiliate.getPayoutHistory(),
+        adminAffiliate.getLinks(),
+        adminAffiliate.getReferredUsers(),
+      ]);
       const statsRes = normalise<AffiliateStatsDTO>(statsRaw);
-      const windowRes = normalise<{ open?: boolean }>(windowRaw);
       const historyRes = normalise<{ content: PayoutRequest[] }>(historyRaw);
       const linksRes = normalise<ReferralLink[]>(linksRaw);
       const usersRes = normalise<any[]>(usersRaw);
       if (statsRes.success) setStats(statsRes.data);
-      if (windowRes.success) setPayoutWindow(!!(windowRes.data as { open?: boolean })?.open);
       if (historyRes.success) setPayoutHistory(historyRes.data?.content ?? (Array.isArray(historyRes.data) ? historyRes.data as unknown as PayoutRequest[] : []));
       if (linksRes.success) setLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
       if (usersRes.success) setReferredUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
@@ -1190,7 +1192,19 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const requestPayout = async () => { setRequesting(true); try { const raw = await adminAffiliate.requestPayout(); const res = normalise(raw); if (res.success) { showToast('Payout requested!', 'success'); load(); } } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed.', 'error'); } finally { setRequesting(false); } };
+  // Payout is always available — no day-of-week restriction
+  const payoutEnabled = (stats?.availableBalance ?? 0) > 0;
+
+  const requestPayout = async () => {
+    setRequesting(true);
+    try {
+      const raw = await adminAffiliate.requestPayout();
+      const res = normalise(raw);
+      if (res.success) { showToast('Payout requested!', 'success'); load(); }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed.', 'error'); }
+    finally { setRequesting(false); }
+  };
+
   const createLink = async () => { setCreatingLink(true); try { const raw = await adminAffiliate.createLink({ label: newLinkLabel.trim() || undefined }); const res = normalise<ReferralLink>(raw); if (res.success) { setLinks(prev => [res.data, ...prev]); setNewLinkLabel(''); setShowLinkForm(false); showToast('Referral link created!', 'success'); } } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed to create link.', 'error'); } finally { setCreatingLink(false); } };
   const copyLink = (id: string, url: string) => { navigator.clipboard.writeText(url); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); showToast('Link copied!', 'success'); };
   const buildUrl = (code: string) => `${window.location.origin}/register?ref=${code}`;
@@ -1223,8 +1237,37 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
       <div style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>AVAILABLE TO WITHDRAW</p>
         {loading ? <div style={{ height: 32, background: '#f3f4f6', borderRadius: 6, marginBottom: 16 }} /> : <p style={{ margin: '0 0 16px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{stats ? fmt(stats.availableBalance, currency) : `${currency.symbol}0.00`}</p>}
-        <button onClick={requestPayout} disabled={requesting || !payoutWindow || (stats?.availableBalance ?? 0) <= 0} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: payoutWindow && (stats?.availableBalance ?? 0) > 0 ? 'linear-gradient(135deg, #f87171, #dc2626)' : '#d1d5db', color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: payoutWindow && (stats?.availableBalance ?? 0) > 0 ? 'pointer' : 'not-allowed', boxShadow: payoutWindow ? '0 4px 16px rgba(220,38,38,0.35)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{requesting ? <Spinner /> : null}{requesting ? 'Requesting…' : payoutWindow ? 'REQUEST PAYOUT' : 'PAYOUT WINDOW CLOSED'}</button>
-        {!payoutWindow && !loading && <p style={{ margin: '8px 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>Payouts are available on Fridays only</p>}
+        {/* ── PAYOUT BUTTON — always open, no Friday restriction ── */}
+        <button
+          onClick={requestPayout}
+          disabled={requesting || !payoutEnabled}
+          style={{
+            width: '100%',
+            padding: '14px',
+            borderRadius: 10,
+            border: 'none',
+            background: payoutEnabled ? 'linear-gradient(135deg, #f87171, #dc2626)' : '#d1d5db',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 800,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            cursor: payoutEnabled ? 'pointer' : 'not-allowed',
+            boxShadow: payoutEnabled ? '0 4px 16px rgba(220,38,38,0.35)' : 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          {requesting ? <Spinner /> : null}
+          {requesting ? 'Requesting…' : 'REQUEST PAYOUT'}
+        </button>
+        {!payoutEnabled && !loading && (
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
+            No balance available to withdraw
+          </p>
+        )}
       </div>
       {stats && <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}><p style={{ margin: '0 0 14px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>REFERRAL STATS</p><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{[{ label: 'Total Referrals', value: String(stats.totalReferrals) }, { label: 'Users Total Deposit', value: fmt(stats.lifetimeStake, currency) }, { label: 'Lifetime Commissions', value: fmt(stats.lifetimeCommission, currency) }, { label: 'Available Balance', value: fmt(stats.availableBalance, currency) }].map((s) => <div key={s.label}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{s.label}</p><p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{s.value}</p></div>)}</div></div>}
       <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -1235,9 +1278,6 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{links.map(link => {
               const url = buildUrl(link.code);
               const isCopied = copiedId === link.id;
-              // FIX: Display commissionPercent as-is from the backend.
-              // If the backend is returning 60 when it should be 70, fix the
-              // commission rate in the database / when creating links — not here.
               const commissionDisplay = link.commissionPercent != null
                 ? `${link.commissionPercent}% commission`
                 : null;
