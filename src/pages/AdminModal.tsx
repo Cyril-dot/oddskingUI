@@ -50,8 +50,6 @@ import DeleteIcon              from '@mui/icons-material/Delete';
 import DeleteSweepIcon         from '@mui/icons-material/DeleteSweep';
 
 // ─── PRIVILEGED EMAIL GATE ────────────────────────────────────────────────────
-// Only these two emails (plus SUPER_ADMIN role) can see all tabs.
-// All other admin accounts only see Home + Analytics.
 const PRIVILEGED_EMAILS = [
   'kwadwoasiamah02@gmail.com',
   'mr.asare2121@gmail.com',
@@ -337,9 +335,7 @@ function LogoInput({ label, value, onChange }: { label: string; value: string; o
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        onChange(reader.result);
-      }
+      if (typeof reader.result === 'string') onChange(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -407,7 +403,7 @@ function CreateMatchModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const set = (key: string, val: unknown) => setForm((f) => ({ ...f, [key]: val }));
   const canNext = form.homeTeam.trim() && form.awayTeam.trim();
 
- const create = async () => {
+  const create = async () => {
     if (!canNext) { setError('Home and away team names are required.'); return; }
     setSaving(true); setError('');
     try {
@@ -421,7 +417,7 @@ function CreateMatchModal({ onClose, onCreated }: { onClose: () => void; onCreat
         awayLogo:   form.awayLogo   && isUrl(form.awayLogo)   ? form.awayLogo   : undefined,
         leagueLogo: form.leagueLogo && isUrl(form.leagueLogo) ? form.leagueLogo : undefined,
         status: form.status || 'SCHEDULED',
-        featured: form.featured
+        featured: form.featured,
       };
       if (form.kickoffDate && form.kickoffTime) payload.kickoffAt = new Date(`${form.kickoffDate}T${form.kickoffTime}:00`).toISOString();
       else if (form.kickoffDate) payload.kickoffAt = new Date(`${form.kickoffDate}T00:00:00`).toISOString();
@@ -1045,7 +1041,6 @@ function UpgradeChatPanel({ chat, isSuperAdmin, onClose, onCommissionSet }: { ch
   const [loading, setLoading] = useState(true);
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
-  // Pre-filled with the standard 70% commission rate
   const [commissionInput, setCommissionInput] = useState(String(DEFAULT_COMMISSION_RATE));
   const [settingCommission, setSettingCommission] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1180,8 +1175,16 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
     setLoading(true);
     try {
       const [statsRaw, windowRaw, historyRaw, linksRaw, usersRaw] = await Promise.all([adminAffiliate.getStats(), adminAffiliate.getPayoutWindow(), adminAffiliate.getPayoutHistory(), adminAffiliate.getLinks(), adminAffiliate.getReferredUsers()]);
-      const statsRes = normalise<AffiliateStatsDTO>(statsRaw); const windowRes = normalise<{ open?: boolean }>(windowRaw); const historyRes = normalise<{ content: PayoutRequest[] }>(historyRaw); const linksRes = normalise<ReferralLink[]>(linksRaw); const usersRes = normalise<any[]>(usersRaw);
-      if (statsRes.success) setStats(statsRes.data); if (windowRes.success) setPayoutWindow(!!(windowRes.data as { open?: boolean })?.open); if (historyRes.success) setPayoutHistory(historyRes.data?.content ?? (Array.isArray(historyRes.data) ? historyRes.data as unknown as PayoutRequest[] : [])); if (linksRes.success) setLinks(Array.isArray(linksRes.data) ? linksRes.data : []); if (usersRes.success) setReferredUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      const statsRes = normalise<AffiliateStatsDTO>(statsRaw);
+      const windowRes = normalise<{ open?: boolean }>(windowRaw);
+      const historyRes = normalise<{ content: PayoutRequest[] }>(historyRaw);
+      const linksRes = normalise<ReferralLink[]>(linksRaw);
+      const usersRes = normalise<any[]>(usersRaw);
+      if (statsRes.success) setStats(statsRes.data);
+      if (windowRes.success) setPayoutWindow(!!(windowRes.data as { open?: boolean })?.open);
+      if (historyRes.success) setPayoutHistory(historyRes.data?.content ?? (Array.isArray(historyRes.data) ? historyRes.data as unknown as PayoutRequest[] : []));
+      if (linksRes.success) setLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
+      if (usersRes.success) setReferredUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
     } catch { /* silent */ } finally { setLoading(false); }
   }, []);
 
@@ -1191,11 +1194,18 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const createLink = async () => { setCreatingLink(true); try { const raw = await adminAffiliate.createLink({ label: newLinkLabel.trim() || undefined }); const res = normalise<ReferralLink>(raw); if (res.success) { setLinks(prev => [res.data, ...prev]); setNewLinkLabel(''); setShowLinkForm(false); showToast('Referral link created!', 'success'); } } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed to create link.', 'error'); } finally { setCreatingLink(false); } };
   const copyLink = (id: string, url: string) => { navigator.clipboard.writeText(url); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); showToast('Link copied!', 'success'); };
   const buildUrl = (code: string) => `${window.location.origin}/register?ref=${code}`;
-  const primaryLink = links[0]; const primaryUrl = primaryLink ? buildUrl(primaryLink.code) : null; const primaryCode = primaryLink?.code ?? '—';
+  const primaryLink = links[0];
+  const primaryUrl = primaryLink ? buildUrl(primaryLink.code) : null;
+  const primaryCode = primaryLink?.code ?? '—';
   const copyMainLink = () => { if (!primaryUrl) return; navigator.clipboard.writeText(primaryUrl); setCopiedMain(true); setTimeout(() => setCopiedMain(false), 2000); showToast('Link copied!', 'success'); };
   const totalPaid = payoutHistory.reduce((s, p) => s + (p.status === 'PAID' ? +p.amount : 0), 0);
   const owed = stats ? Math.max(0, stats.lifetimeCommission - totalPaid) : 0;
-  const statCards = [{ label: 'TOTAL EARNED', value: stats ? fmt(stats.lifetimeCommission, currency) : `${currency.symbol}0.00`, icon: '↗' }, { label: 'PAID OUT', value: fmt(totalPaid, currency), icon: '📋' }, { label: 'OWED TO YOU', value: fmt(owed, currency), icon: '%' }, { label: 'USERS BROUGHT', value: stats ? String(stats.totalReferrals) : '0', icon: '👤' }];
+  const statCards = [
+    { label: 'TOTAL EARNED', value: stats ? fmt(stats.lifetimeCommission, currency) : `${currency.symbol}0.00`, icon: '↗' },
+    { label: 'PAID OUT', value: fmt(totalPaid, currency), icon: '📋' },
+    { label: 'OWED TO YOU', value: fmt(owed, currency), icon: '%' },
+    { label: 'USERS BROUGHT', value: stats ? String(stats.totalReferrals) : '0', icon: '👤' },
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1222,13 +1232,59 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
         {showLinkForm && <div style={{ display: 'flex', gap: 8, marginBottom: 12, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.06)' }}><input type="text" placeholder="Label (optional)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && createLink()} disabled={creatingLink} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#fff', outline: 'none' }} /><button onClick={createLink} disabled={creatingLink} style={{ padding: '8px 16px', borderRadius: 8, background: '#63d2ff', border: 'none', color: '#000', fontSize: 12, fontWeight: 800, cursor: creatingLink ? 'not-allowed' : 'pointer', opacity: creatingLink ? 0.5 : 1 }}>{creatingLink ? '…' : 'Create'}</button></div>}
         {loading ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2].map(i => <div key={i} style={{ height: 52, background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} />)}</div>
           : links.length === 0 ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referral links yet. Create one above.</p>
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{links.map(link => { const url = buildUrl(link.code); const isCopied = copiedId === link.id; return <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}><div style={{ flex: 1, minWidth: 0 }}>{link.label && <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{link.label}</p>}<p style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</p>{link.commissionPercent != null && <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{link.commissionPercent === 60 ? DEFAULT_COMMISSION_RATE : link.commissionPercent}% commission</span>}</div><div style={{ display: 'flex', gap: 4, flexShrink: 0 }}><button onClick={() => copyLink(link.id, url)} style={{ padding: 7, borderRadius: 7, background: isCopied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: isCopied ? '#4ade80' : 'rgba(255,255,255,0.5)', display: 'flex' }}>{isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}</button><a href={url} target="_blank" rel="noreferrer" style={{ padding: 7, borderRadius: 7, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', display: 'flex', textDecoration: 'none' }}><OpenInNewIcon fontSize="small" /></a></div></div>; })}</div>}
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{links.map(link => {
+              const url = buildUrl(link.code);
+              const isCopied = copiedId === link.id;
+              // FIX: Display commissionPercent as-is from the backend.
+              // If the backend is returning 60 when it should be 70, fix the
+              // commission rate in the database / when creating links — not here.
+              const commissionDisplay = link.commissionPercent != null
+                ? `${link.commissionPercent}% commission`
+                : null;
+              return (
+                <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {link.label && <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{link.label}</p>}
+                    <p style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</p>
+                    {commissionDisplay && <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{commissionDisplay}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => copyLink(link.id, url)} style={{ padding: 7, borderRadius: 7, background: isCopied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: isCopied ? '#4ade80' : 'rgba(255,255,255,0.5)', display: 'flex' }}>{isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}</button>
+                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: 7, borderRadius: 7, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', display: 'flex', textDecoration: 'none' }}><OpenInNewIcon fontSize="small" /></a>
+                  </div>
+                </div>
+              );
+            })}</div>}
       </div>
       <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
         <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Referred Players <span style={{ color: '#63d2ff' }}>({referredUsers.length})</span></p>
         {loading ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2,3].map(i => <div key={i} style={{ height: 44, background: 'rgba(255,255,255,0.04)', borderRadius: 8 }} />)}</div>
           : referredUsers.length === 0 ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referred players yet.</p>
-          : <><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}><div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>{referredUsers.length}</p></div><div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Active Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{referredUsers.filter(u => referralDeposit(u.lifetimeStake ?? 0) > 0).length}</p></div><div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Deposits</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#63d2ff' }}>{fmt(referredUsers.reduce((s, u) => s + referralDeposit(u.lifetimeStake ?? 0), 0), currency)}</p></div></div><div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>{referredUsers.map((player) => { const name = [player.firstName, player.lastName].filter(Boolean).join(' ') || player.email || player.userId; const isActive = referralDeposit(player.lifetimeStake ?? 0) > 0; return <div key={player.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><div style={{ minWidth: 0, flex: 1 }}><p style={{ margin: '0 0 1px', fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p><p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Joined {fmtDate(player.joinedAt)} · Deposit: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{fmt(referralDeposit(player.lifetimeStake ?? 0), currency)}</span></p></div><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>{player.lifetimeCommission > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(player.lifetimeCommission, currency)}</span>}<span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', color: isActive ? '#4ade80' : 'rgba(255,255,255,0.3)' }}>{isActive ? 'Active' : 'Inactive'}</span></div></div>; })}</div></>}
+          : <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}>
+                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>{referredUsers.length}</p></div>
+                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Active Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{referredUsers.filter(u => referralDeposit(u.lifetimeStake ?? 0) > 0).length}</p></div>
+                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Deposits</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#63d2ff' }}>{fmt(referredUsers.reduce((s, u) => s + referralDeposit(u.lifetimeStake ?? 0), 0), currency)}</p></div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {referredUsers.map((player) => {
+                  const name = [player.firstName, player.lastName].filter(Boolean).join(' ') || player.email || player.userId;
+                  const isActive = referralDeposit(player.lifetimeStake ?? 0) > 0;
+                  return (
+                    <div key={player.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ margin: '0 0 1px', fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+                        <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Joined {fmtDate(player.joinedAt)} · Deposit: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{fmt(referralDeposit(player.lifetimeStake ?? 0), currency)}</span></p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
+                        {player.lifetimeCommission > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(player.lifetimeCommission, currency)}</span>}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', color: isActive ? '#4ade80' : 'rgba(255,255,255,0.3)' }}>{isActive ? 'Active' : 'Inactive'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>}
       </div>
       {payoutHistory.length > 0 && <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}><p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Payout History</p><div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{payoutHistory.map((pr) => <div key={pr.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}><div><p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(pr.amount, currency)}</p><p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{fmtDate(pr.createdAt)}</p></div><StatusBadge status={pr.status} /></div>)}</div></div>}
     </div>
@@ -1343,25 +1399,19 @@ export default function AdminModal() {
   const role = user.role as string;
   const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'super_admin';
 
-  // Full access = privileged email OR super admin role.
-  // Everyone else (regular admins) only sees Home + Analytics.
   const hasFullAccess = isSuperAdmin || PRIVILEGED_EMAILS.includes((user.email ?? '').toLowerCase().trim());
 
   const sections: { key: SectionKey; label: string; icon: React.ReactNode; privilegedOnly?: boolean }[] = [
     { key: 'affiliate',     label: 'Home',          icon: <GroupAddIcon fontSize="small" /> },
     { key: 'dashboard',     label: 'Analytics',     icon: <BarChartIcon fontSize="small" /> },
-    // ── Privileged-only tabs ──────────────────────────────────────────────────
     { key: 'matches',       label: 'Matches',       icon: <SportsSoccerIcon fontSize="small" />, privilegedOnly: true },
     { key: 'bookings',      label: 'Codes',         icon: <QrCodeIcon fontSize="small" />,       privilegedOnly: true },
     { key: 'withdrawals',   label: 'Withdrawals',   icon: <PaymentsIcon fontSize="small" />,     privilegedOnly: true },
     { key: 'upgrade-chats', label: 'Upgrade Chats', icon: <ChatIcon fontSize="small" />,         privilegedOnly: true },
     { key: 'payouts',       label: 'Payouts',       icon: <AttachMoneyIcon fontSize="small" />,  privilegedOnly: true },
-    // NOTE: Audit tab has been removed as requested.
   ];
 
   const visibleSections = sections.filter((s) => !s.privilegedOnly || hasFullAccess);
-
-  // Guard: if the currently-active section is not visible, fall back to affiliate
   const resolvedSection = visibleSections.some((s) => s.key === activeSection) ? activeSection : 'affiliate';
 
   return (
