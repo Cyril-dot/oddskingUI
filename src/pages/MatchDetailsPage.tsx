@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// super bet match details
+// super bet match details  — updated to match reference UI
 // --------------------------------------------------------------------------
 
 import { useParams, useNavigate } from 'react-router-dom';
@@ -14,6 +14,42 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SportsIcon from '@mui/icons-material/Sports';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LockIcon from '@mui/icons-material/Lock';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import WifiIcon from '@mui/icons-material/Wifi';
+
+// ---------------------------------------------------------------------------
+// Fallback lower-division league names (shown when no league name provided)
+// ---------------------------------------------------------------------------
+const FALLBACK_LEAGUES = [
+  'Northern Premier League Division One',
+  'Isthmian League South East',
+  'Midland Football League Premier Division',
+  'Southern Counties East Football League',
+  'Combined Counties League Division One',
+  'North West Counties Football League',
+  'Eastern Counties League Premier Division',
+  'Spartan South Midlands Football League',
+  'Hellenic Football League Premier Division',
+  'Western League Premier Division',
+  'United Counties League Premier Division',
+  'Wessex Football League Premier Division',
+  'Metropolitan Police League Division Two',
+  'Essex Senior League',
+  'Kent County Football League',
+  'Merseyside Amateur Football Combination',
+  'Lancashire Amateur League Division Three',
+  'Sheffield & Hallamshire County Senior League',
+  'East Riding County Football League',
+  'Devon & Exeter Football League',
+];
+
+function getFallbackLeague(matchId: string): string {
+  // Deterministic pick based on matchId so it's stable per match
+  let hash = 0;
+  for (let i = 0; i < matchId.length; i++) hash = (hash * 31 + matchId.charCodeAt(i)) >>> 0;
+  return FALLBACK_LEAGUES[hash % FALLBACK_LEAGUES.length];
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,7 +119,6 @@ function finishedLabel(status?: string) {
   return 'FT';
 }
 
-// Module-level norm helper (ported from reference)
 function norm(s: string) { return s.toLowerCase().replace(/[\s_\-]/g, ''); }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +172,7 @@ function detectSport(match: Match): SportKind {
 }
 
 // ---------------------------------------------------------------------------
-// Tab definitions — updated signature to accept data-availability flags
+// Tab definitions
 // ---------------------------------------------------------------------------
 type TabKey = '1x2' | 'halfTime' | 'correctScore' | 'handicap';
 interface TabDef { key: TabKey; label: string; icon: React.ReactNode; }
@@ -155,7 +190,6 @@ function getTabsForSport(
     { key: 'handicap',     label: 'Handicap',      icon: <SportsIcon fontSize="small" /> },
   ];
 
-  // Admin: show only tabs that actually have data
   if (sport === 'admin') {
     return base.filter((t) => {
       if (t.key === '1x2')          return true;
@@ -187,10 +221,8 @@ function getTabsForSport(
 }
 
 // ---------------------------------------------------------------------------
-// Admin odds classification helpers (ported from reference)
+// Admin odds classification helpers
 // ---------------------------------------------------------------------------
-
-/** Returns true if a label looks like a scoreline e.g. "1:0", "2-1" */
 function isScoreLabel(label: string): boolean {
   return /^\d+[\:\-]\d+$/.test(label.trim());
 }
@@ -214,21 +246,13 @@ interface AdminOddsClassified {
   oddsHandicap:     OddsGroup[];
 }
 
-/**
- * Given the raw array returned by /api/public/admin-matches/{id}/odds,
- * classify every row into 1X2, Half-Time, Correct Score, or Handicap buckets.
- *
- * Schema: { id, matchId, market, selection, value, line?, handicap?, capturedAt }
- */
 function classifyAdminOdds(raw: unknown[]): AdminOddsClassified {
   const result: AdminOddsClassified = {
     odds1x2: [], oddsHalfTime: [], oddsCorrectScore: [], oddsHandicap: [],
   };
-
   if (!raw.length) return result;
 
-  // Group by market
-  const marketMap = new Map<string, Array<{ selection: string; odd: number; handicap?: string }>> ();
+  const marketMap = new Map<string, Array<{ selection: string; odd: number; handicap?: string }>>();
   for (const row of raw as Array<Record<string, unknown>>) {
     const market    = String(row.market ?? row.name ?? 'match_result');
     const selection = String(row.selection ?? row.outcome ?? row.label ?? '');
@@ -244,44 +268,27 @@ function classifyAdminOdds(raw: unknown[]): AdminOddsClassified {
       label: e.handicap ? `${e.selection} (${e.handicap})` : e.selection,
       odd:   Math.round(e.odd * 100) / 100,
     }));
-
     const group: OddsGroup = { market, options };
 
-    // Handicap / Asian handicap
     if (isHandicapMarket(market) || entries.some((e) => e.handicap)) {
-      result.oddsHandicap.push(group);
-      continue;
+      result.oddsHandicap.push(group); continue;
     }
-
-    // Half-time markets
     if (isHalfTimeMarket(market)) {
-      result.oddsHalfTime.push(group);
-      continue;
+      result.oddsHalfTime.push(group); continue;
     }
-
-    // Correct score — all selections look like "N:M"
     if (options.length >= 2 && options.every((o) => isScoreLabel(o.label))) {
-      result.oddsCorrectScore.push(group);
-      continue;
+      result.oddsCorrectScore.push(group); continue;
     }
-
-    // Correct score — market name hints
     const mn = market.toLowerCase();
     if (mn.includes('correct') || mn.includes('exactscore') || mn.includes('exact score') || mn.includes('score')) {
       const selLabels = options.map((o) => norm(o.label));
       const is1x2 = selLabels.some(
         (l) => l === '1' || l === 'home' || l === '2' || l === 'away' || l === 'draw' || l === 'x',
       );
-      if (!is1x2) {
-        result.oddsCorrectScore.push(group);
-        continue;
-      }
+      if (!is1x2) { result.oddsCorrectScore.push(group); continue; }
     }
-
-    // Default → 1X2 bucket
     result.odds1x2.push(group);
   }
-
   return result;
 }
 
@@ -410,13 +417,11 @@ function parseCorrectScoreGroups(groups: OddsGroup[]) {
 // ---------------------------------------------------------------------------
 const ADMIN_ODDS_BASE = 'https://futballbackend-production-aefb.up.railway.app';
 
-/** Directly fetches raw odds rows from the admin-matches endpoint */
 async function fetchAdminOddsRaw(id: string): Promise<unknown[]> {
   try {
     const raw = await fetch(
-  `${ADMIN_ODDS_BASE}/api/public/admin-matches/${id}/odds`
-).then((r) => r.json());
-    // Unwrap { success, data: [...] }
+      `${ADMIN_ODDS_BASE}/api/public/admin-matches/${id}/odds`
+    ).then((r) => r.json());
     if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).data)) {
       return (raw as Record<string, unknown>).data as unknown[];
     }
@@ -452,19 +457,10 @@ interface AllOddsResult {
 async function fetchAllOddsForSport(id: string, sport: SportKind): Promise<AllOddsResult> {
   const empty: AllOddsResult = { odds1x2: [], oddsHalfTime: [], oddsCorrectScore: [], oddsHandicap: [] };
 
-  // Admin: fetch raw rows then classify into the four buckets
   if (sport === 'admin') {
     const rawOdds = await fetchAdminOddsRaw(id);
-    console.log(`[AdminOdds] Match ${id}: ${rawOdds.length} odds row(s) fetched`);
     if (!rawOdds.length) return empty;
-    const classified = classifyAdminOdds(rawOdds);
-    console.log('[AdminOdds] Classified →', {
-      '1x2':          classified.odds1x2.length,
-      'halfTime':     classified.oddsHalfTime.length,
-      'correctScore': classified.oddsCorrectScore.length,
-      'handicap':     classified.oddsHandicap.length,
-    });
-    return classified;
+    return classifyAdminOdds(rawOdds);
   }
 
   if (sport === 'football') {
@@ -521,12 +517,121 @@ async function fetchAllOddsForSport(id: string, sport: SportKind): Promise<AllOd
 }
 
 // ---------------------------------------------------------------------------
-// UI Primitives — all CSS-var themed (unchanged)
+// UI Primitives
 // ---------------------------------------------------------------------------
 function SkeletonBlock({ className }: { className?: string }) {
   return <div className={`skeleton-block ${className ?? ''}`} />;
 }
 
+// ---------------------------------------------------------------------------
+// Reference-style 3-column odds row  (1 · TEAM  |  odd )
+// ---------------------------------------------------------------------------
+function OddsRow({
+  sublabel, label, odd, selected, locked, onClick,
+}: {
+  sublabel: string; label: string; odd: number;
+  selected: boolean; locked?: boolean; onClick: () => void;
+}) {
+  const disabled = locked || odd <= 0;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-between w-full px-3 py-3 rounded-xl border transition-all
+        ${disabled
+          ? 'opacity-50 cursor-not-allowed'
+          : selected
+            ? 'bg-primary border-primary shadow-md'
+            : 'cursor-pointer active:scale-[0.98]'
+        }`}
+      style={!selected && !disabled ? { background: 'var(--card-alt)', borderColor: 'var(--border-light)' }
+           : disabled               ? { background: 'var(--card-alt)', borderColor: 'var(--border-light)' }
+           : undefined}
+    >
+      {/* sublabel e.g. "1", "X", "2" */}
+      <span
+        className="text-xs font-black w-6 shrink-0 text-left"
+        style={{ color: selected ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}
+      >
+        {sublabel}
+      </span>
+      {/* team / label */}
+      <span
+        className="flex-1 text-sm font-semibold text-left px-2 truncate"
+        style={{ color: selected ? '#fff' : 'var(--text-main)' }}
+      >
+        {label}
+      </span>
+      {/* odd or lock */}
+      <span
+        className="text-base font-black tabular-nums shrink-0"
+        style={{ color: selected ? '#fff' : locked ? 'var(--text-muted)' : 'var(--primary)' }}
+      >
+        {locked ? <LockIcon sx={{ fontSize: 15 }} /> : odd > 0 ? odd.toFixed(2) : '—'}
+      </span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible market section (used for all markets below the main 1X2)
+// ---------------------------------------------------------------------------
+function CollapsibleMarket({
+  title, children, defaultOpen = false,
+}: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{ borderColor: 'var(--border-light)', background: 'var(--card)' }}
+    >
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+        style={{ background: open ? 'var(--card-alt)' : 'var(--card)' }}
+      >
+        <span className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>{title}</span>
+        {open
+          ? <ExpandLessIcon fontSize="small" style={{ color: 'var(--text-muted)' }} />
+          : <ExpandMoreIcon fontSize="small" style={{ color: 'var(--text-muted)' }} />
+        }
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-2 space-y-2 border-t" style={{ borderColor: 'var(--border-light)' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Locked notice banner (betting closed)
+// ---------------------------------------------------------------------------
+function BettingClosedBanner({ reason }: { reason: 'live' | 'finished' }) {
+  const text = reason === 'live'
+    ? 'Betting closed — match has started.'
+    : 'Betting closed — match has finished.';
+  return (
+    <div
+      className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold border"
+      style={{
+        background: 'rgba(239,68,68,0.07)',
+        borderColor: 'rgba(239,68,68,0.25)',
+        color: '#ef4444',
+      }}
+    >
+      <LockIcon sx={{ fontSize: 16 }} />
+      {text}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Generic OddButton (kept for CorrectScore / Handicap panels)
+// ---------------------------------------------------------------------------
 function OddButton({
   label, sublabel, odd, selected, locked, onClick,
 }: {
@@ -596,21 +701,7 @@ function OddButton({
 }
 
 // ---------------------------------------------------------------------------
-// Locked notice banner
-// ---------------------------------------------------------------------------
-function LockedBanner() {
-  return (
-    <div
-      className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-      style={{ background: 'var(--card-alt)', color: 'var(--text-muted)' }}
-    >
-      <LockIcon sx={{ fontSize: 14 }} /> Odds locked — match has finished
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Match 1X2 / Moneyline Panel
+// Match 1X2 / Moneyline Panel  — reference style vertical rows
 // ---------------------------------------------------------------------------
 function Match1x2Panel({ groups, matchId, matchName, homeTeam, awayTeam, locked, sport }: {
   groups: OddsGroup[]; matchId: string; matchName: string;
@@ -630,7 +721,7 @@ function Match1x2Panel({ groups, matchId, matchName, homeTeam, awayTeam, locked,
   );
 
   const hasDraw    = sport === 'football' || sport === 'admin';
-  const panelTitle = sport === 'basketball' || sport === 'nfl' ? 'Moneyline' : 'Match Result (1X2)';
+  const panelTitle = sport === 'basketball' || sport === 'nfl' ? 'MONEYLINE' : 'MATCH RESULT';
 
   const main = groups.find((g) => {
     const m = norm(g.market);
@@ -655,45 +746,56 @@ function Match1x2Panel({ groups, matchId, matchName, homeTeam, awayTeam, locked,
   if (hasDraw) drawOpt ??= rem.shift() ?? { label: '—', odd: 0 };
   awayOpt ??= rem.shift() ?? { label: '—', odd: 0 };
 
-  const slots = hasDraw
+  const rows = hasDraw
     ? [
-        { slot: 'Home', team: homeTeam, opt: homeOpt! },
-        { slot: 'Draw', team: 'Draw',   opt: drawOpt! },
-        { slot: 'Away', team: awayTeam, opt: awayOpt! },
+        { sublabel: '1', label: homeTeam, opt: homeOpt! },
+        { sublabel: 'X', label: 'Draw',   opt: drawOpt! },
+        { sublabel: '2', label: awayTeam, opt: awayOpt! },
       ]
     : [
-        { slot: 'Home', team: homeTeam, opt: homeOpt! },
-        { slot: 'Away', team: awayTeam, opt: awayOpt! },
+        { sublabel: '1', label: homeTeam, opt: homeOpt! },
+        { sublabel: '2', label: awayTeam, opt: awayOpt! },
       ];
 
   return (
     <div className="space-y-3">
-      {locked && <LockedBanner />}
+      {/* Main 1X2 card */}
       <div className="card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
           {panelTitle}
         </p>
-        <div className={`grid gap-2 grid-cols-${slots.length}`}>
-          {slots.map(({ slot, team, opt }) => (
-            <OddButton key={slot} sublabel={slot} label={team} odd={opt.odd}
-              selected={isSel(main.market, opt.label)} locked={locked}
-              onClick={() => opt.odd > 0 && pick(main.market, opt.label, opt.odd)} />
+        <div className="space-y-2">
+          {rows.map(({ sublabel, label, opt }) => (
+            <OddsRow
+              key={sublabel}
+              sublabel={sublabel}
+              label={label}
+              odd={opt.odd}
+              selected={isSel(main.market, opt.label)}
+              locked={locked}
+              onClick={() => opt.odd > 0 && pick(main.market, opt.label, opt.odd)}
+            />
           ))}
         </div>
       </div>
+
+      {/* Additional markets as collapsible sections */}
       {rest.map((group, gi) => (
-        <div key={gi} className="card p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-            {group.market.replace(/_/g, ' ')}
-          </p>
-          <div className={`grid gap-2 ${group.options.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <CollapsibleMarket key={gi} title={group.market.replace(/_/g, ' ')}>
+          <div className="space-y-2">
             {group.options.map((opt, oi) => (
-              <OddButton key={oi} label={opt.label} odd={opt.odd}
-                selected={isSel(group.market, opt.label)} locked={locked}
-                onClick={() => pick(group.market, opt.label, opt.odd)} />
+              <OddsRow
+                key={oi}
+                sublabel={String(oi + 1)}
+                label={opt.label}
+                odd={opt.odd}
+                selected={isSel(group.market, opt.label)}
+                locked={locked}
+                onClick={() => pick(group.market, opt.label, opt.odd)}
+              />
             ))}
           </div>
-        </div>
+        </CollapsibleMarket>
       ))}
     </div>
   );
@@ -724,34 +826,36 @@ function HalfTimePanel({ groups, matchId, matchName, locked, sport }: {
 
   return (
     <div className="space-y-3">
-      {locked && <LockedBanner />}
       {groups.map((group, gi) => {
         const drawOpt = group.options.find((o) => norm(o.label) === 'draw' || norm(o.label) === 'x');
         const nonDraw = group.options.filter((o) => o !== drawOpt);
-        const slots = drawOpt
+        const rows = drawOpt
           ? [
-              { sublabel: 'Home', opt: nonDraw[0] },
-              { sublabel: 'Draw', opt: drawOpt },
-              { sublabel: 'Away', opt: nonDraw[1] },
+              { sublabel: '1',  opt: nonDraw[0] },
+              { sublabel: 'X',  opt: drawOpt },
+              { sublabel: '2',  opt: nonDraw[1] },
             ].filter((s) => s.opt)
           : group.options.map((opt, i) => ({
-              sublabel: sport === 'basketball' ? (i === 0 ? 'Over' : 'Under') : (i === 0 ? 'Home' : 'Away'),
+              sublabel: sport === 'basketball' ? (i === 0 ? 'O' : 'U') : String(i + 1),
               opt,
             }));
 
         return (
-          <div key={gi} className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-muted)' }}>
-              {group.market.replace(/_/g, ' ') || panelTitle}
-            </p>
-            <div className={`grid gap-2 ${slots.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-              {slots.map(({ sublabel, opt }) => (
-                <OddButton key={opt.label} sublabel={sublabel} label={opt.label} odd={opt.odd}
-                  selected={isSel(group.market, opt.label)} locked={locked}
-                  onClick={() => pick(group.market, opt.label, opt.odd)} />
+          <CollapsibleMarket key={gi} title={group.market.replace(/_/g, ' ') || panelTitle} defaultOpen={gi === 0}>
+            <div className="space-y-2">
+              {rows.map(({ sublabel, opt }) => (
+                <OddsRow
+                  key={opt.label}
+                  sublabel={sublabel}
+                  label={opt.label}
+                  odd={opt.odd}
+                  selected={isSel(group.market, opt.label)}
+                  locked={locked}
+                  onClick={() => pick(group.market, opt.label, opt.odd)}
+                />
               ))}
             </div>
-          </div>
+          </CollapsibleMarket>
         );
       })}
     </div>
@@ -835,7 +939,6 @@ function CorrectScorePanel({ groups, matchId, matchName, homeTeam, awayTeam, loc
 
   return (
     <div className="space-y-3">
-      {locked && <LockedBanner />}
       <Section title={`${homeTeam} Win`} bg="bg-primary"  items={homeWins} />
       <Section title="Draw"              bg="bg-slate-500" items={draws}    />
       <Section title={`${awayTeam} Win`} bg="bg-blue-500" items={awayWins} />
@@ -869,7 +972,6 @@ function HandicapPanel({ groups, matchId, matchName, locked, sport }: {
 
   return (
     <div className="space-y-2">
-      {locked && <LockedBanner />}
       <div
         className="flex items-center justify-between px-4 py-2 rounded-xl"
         style={{ background: 'var(--card-alt)' }}
@@ -967,6 +1069,240 @@ function HandicapPanel({ groups, matchId, matchName, locked, sport }: {
 }
 
 // ---------------------------------------------------------------------------
+// All-markets page — reference layout with collapsible sections
+// ---------------------------------------------------------------------------
+function AllMarketsView({
+  odds1x2, oddsHalfTime, oddsCorrectScore, oddsHandicap,
+  matchId, matchName, homeTeam, awayTeam, locked, sport,
+}: {
+  odds1x2: OddsGroup[]; oddsHalfTime: OddsGroup[];
+  oddsCorrectScore: OddsGroup[]; oddsHandicap: OddsGroup[];
+  matchId: string; matchName: string;
+  homeTeam: string; awayTeam: string;
+  locked: boolean; sport: SportKind;
+}) {
+  const { betSlip, addToBetSlip, showToast } = useAppStore();
+  const isSel = (market: string, sel: string) =>
+    betSlip.some((s) => s.matchId === matchId && s.market === market && s.selection === sel);
+  const pick = (market: string, sel: string, odd: number) => {
+    if (locked) return;
+    addToBetSlip({ matchId, matchName, market, selection: sel, odd });
+    showToast('Added to bet slip', 'success');
+  };
+
+  const hasDraw = sport === 'football' || sport === 'admin';
+
+  // ── Main 1X2 card (always visible, not collapsible) ─────────────────────
+  const main1x2 = odds1x2.find((g) => {
+    const m = norm(g.market);
+    return m.includes('1x2') || m.includes('matchresult') || m.includes('matchodds')
+      || m === 'fulltime' || m.includes('moneyline') || m.includes('winner') || m === 'matchresult';
+  }) ?? odds1x2.find((g) => g.options.length === (hasDraw ? 3 : 2)) ?? odds1x2[0];
+
+  const rest1x2 = odds1x2.filter((g) => g !== main1x2);
+
+  let homeOpt: OddsOption | undefined;
+  let drawOpt: OddsOption | undefined;
+  let awayOpt: OddsOption | undefined;
+
+  if (main1x2) {
+    const findBy = (kw: string) => main1x2.options.find((o) => { const s = norm(o.label); return s === kw || s.includes(kw); });
+    homeOpt = findBy('1') ?? findBy(norm(homeTeam));
+    drawOpt = hasDraw ? (findBy('draw') ?? findBy('x')) : undefined;
+    awayOpt = findBy('2') ?? findBy(norm(awayTeam));
+    if (!homeOpt && !awayOpt) {
+      if (hasDraw && main1x2.options.length >= 3) [homeOpt, drawOpt, awayOpt] = main1x2.options;
+      else [homeOpt, awayOpt] = main1x2.options;
+    }
+    const assigned = new Set([homeOpt, drawOpt, awayOpt]);
+    const rem = main1x2.options.filter((o) => !assigned.has(o));
+    homeOpt ??= rem.shift() ?? { label: '—', odd: 0 };
+    if (hasDraw) drawOpt ??= rem.shift() ?? { label: '—', odd: 0 };
+    awayOpt ??= rem.shift() ?? { label: '—', odd: 0 };
+  }
+
+  const mainRows = main1x2
+    ? (hasDraw
+        ? [
+            { sublabel: '1', label: homeTeam, opt: homeOpt! },
+            { sublabel: 'X', label: 'Draw',   opt: drawOpt! },
+            { sublabel: '2', label: awayTeam, opt: awayOpt! },
+          ]
+        : [
+            { sublabel: '1', label: homeTeam, opt: homeOpt! },
+            { sublabel: '2', label: awayTeam, opt: awayOpt! },
+          ])
+    : [];
+
+  const panelTitle = sport === 'basketball' || sport === 'nfl' ? 'MONEYLINE' : 'MATCH RESULT';
+
+  // ── Build additional collapsible markets ────────────────────────────────
+  // Determine Over/Under markets from half-time (they often contain over/under labels)
+  const ouGroups = oddsHalfTime.filter((g) => {
+    const m = norm(g.market);
+    return m.includes('over') || m.includes('under') || m.includes('total') || m.includes('ou');
+  });
+  const htGroups = oddsHalfTime.filter((g) => !ouGroups.includes(g));
+
+  // Double Chance derived from 1X2 main options
+  const doubleChanceMarket = odds1x2.find((g) => norm(g.market).includes('doublechance'));
+
+  // Both Teams to Score
+  const bttsMarket = odds1x2.find((g) => {
+    const m = norm(g.market);
+    return m.includes('bothteams') || m.includes('btts') || m.includes('goalgoal') || m.includes('gg');
+  });
+
+  // Remaining 1X2 markets that aren't double chance / btts
+  const extraMarkets = rest1x2.filter((g) => g !== doubleChanceMarket && g !== bttsMarket);
+
+  return (
+    <div className="space-y-2.5">
+      {/* ── Main 1X2 card ── */}
+      {main1x2 && (
+        <div className="card p-4">
+          <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+            {panelTitle}
+          </p>
+          <div className="space-y-2">
+            {mainRows.map(({ sublabel, label, opt }) => (
+              <OddsRow
+                key={sublabel}
+                sublabel={sublabel}
+                label={label}
+                odd={opt.odd}
+                selected={isSel(main1x2.market, opt.label)}
+                locked={locked}
+                onClick={() => opt.odd > 0 && pick(main1x2.market, opt.label, opt.odd)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Double Chance ── */}
+      {doubleChanceMarket && (
+        <CollapsibleMarket title="Double Chance">
+          <div className="space-y-2">
+            {doubleChanceMarket.options.map((opt, oi) => (
+              <OddsRow
+                key={oi}
+                sublabel={['1X', 'X2', '12'][oi] ?? String(oi + 1)}
+                label={opt.label}
+                odd={opt.odd}
+                selected={isSel(doubleChanceMarket.market, opt.label)}
+                locked={locked}
+                onClick={() => pick(doubleChanceMarket.market, opt.label, opt.odd)}
+              />
+            ))}
+          </div>
+        </CollapsibleMarket>
+      )}
+
+      {/* ── Over / Under ── */}
+      {ouGroups.length > 0 && (
+        <CollapsibleMarket title="Over / Under">
+          <div className="space-y-2">
+            {ouGroups.map((g, gi) => (
+              <div key={gi}>
+                {ouGroups.length > 1 && (
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>
+                    {g.market.replace(/_/g, ' ')}
+                  </p>
+                )}
+                {g.options.map((opt, oi) => (
+                  <OddsRow
+                    key={oi}
+                    sublabel={oi === 0 ? 'O' : 'U'}
+                    label={opt.label}
+                    odd={opt.odd}
+                    selected={isSel(g.market, opt.label)}
+                    locked={locked}
+                    onClick={() => pick(g.market, opt.label, opt.odd)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </CollapsibleMarket>
+      )}
+
+      {/* ── BTTS ── */}
+      {bttsMarket && (
+        <CollapsibleMarket title="Both Teams to Score">
+          <div className="space-y-2">
+            {bttsMarket.options.map((opt, oi) => (
+              <OddsRow
+                key={oi}
+                sublabel={oi === 0 ? 'Y' : 'N'}
+                label={opt.label}
+                odd={opt.odd}
+                selected={isSel(bttsMarket.market, opt.label)}
+                locked={locked}
+                onClick={() => pick(bttsMarket.market, opt.label, opt.odd)}
+              />
+            ))}
+          </div>
+        </CollapsibleMarket>
+      )}
+
+      {/* ── Correct Score ── */}
+      {oddsCorrectScore.length > 0 && (
+        <CollapsibleMarket title="Correct Score">
+          <CorrectScorePanel
+            groups={oddsCorrectScore} matchId={matchId} matchName={matchName}
+            homeTeam={homeTeam} awayTeam={awayTeam} locked={locked}
+          />
+        </CollapsibleMarket>
+      )}
+
+      {/* ── Half Time ── */}
+      {htGroups.length > 0 && (
+        <CollapsibleMarket title="Half Time / Full Time">
+          <HalfTimePanel
+            groups={htGroups} matchId={matchId} matchName={matchName}
+            locked={locked} sport={sport}
+          />
+        </CollapsibleMarket>
+      )}
+
+      {/* ── Asian Handicap ── */}
+      {oddsHandicap.length > 0 && (
+        <CollapsibleMarket title={sport === 'basketball' || sport === 'nfl' ? 'Point Spread' : 'Asian Handicap'}>
+          <HandicapPanel
+            groups={oddsHandicap} matchId={matchId} matchName={matchName}
+            locked={locked} sport={sport}
+          />
+        </CollapsibleMarket>
+      )}
+
+      {/* ── Extra 1X2-bucket markets ── */}
+      {extraMarkets.map((g, gi) => (
+        <CollapsibleMarket key={gi} title={g.market.replace(/_/g, ' ')}>
+          <div className="space-y-2">
+            {g.options.map((opt, oi) => (
+              <OddsRow
+                key={oi}
+                sublabel={String(oi + 1)}
+                label={opt.label}
+                odd={opt.odd}
+                selected={isSel(g.market, opt.label)}
+                locked={locked}
+                onClick={() => pick(g.market, opt.label, opt.odd)}
+              />
+            ))}
+          </div>
+        </CollapsibleMarket>
+      ))}
+
+      {!main1x2 && odds1x2.length === 0 && oddsHalfTime.length === 0 && oddsCorrectScore.length === 0 && oddsHandicap.length === 0 && (
+        <p className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>No odds available yet.</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export default function MatchDetailsPage() {
@@ -983,8 +1319,6 @@ export default function MatchDetailsPage() {
   const [oddsCorrectScore, setOddsCorrectScore] = useState<OddsGroup[]>([]);
   const [oddsHandicap, setOddsHandicap]         = useState<OddsGroup[]>([]);
   const [loadingOdds, setLoadingOdds]           = useState(false);
-
-  const [activeTab, setActiveTab] = useState<TabKey>('1x2');
 
   const timerStr = useLiveTimer(match);
 
@@ -1047,8 +1381,7 @@ export default function MatchDetailsPage() {
         </div>
         <SkeletonBlock className="h-4 w-48 mx-auto" />
       </div>
-      <div className="flex gap-1">{[0,1,2,3].map((i) => <SkeletonBlock key={i} className="h-10 flex-1" />)}</div>
-      <div className="space-y-3">{[0,1,2].map((i) => <SkeletonBlock key={i} className="h-24" />)}</div>
+      <div className="space-y-3">{[0,1,2,3].map((i) => <SkeletonBlock key={i} className="h-14" />)}</div>
     </div>
   );
 
@@ -1063,19 +1396,18 @@ export default function MatchDetailsPage() {
 
   const isLive     = LIVE_STATUSES.has(match.status ?? '');
   const isFinished = FINISHED_STATUSES.has(match.status ?? '');
-  const oddsLocked = isFinished;
-  const matchName  = `${match.homeTeam} vs ${match.awayTeam}`;
 
-  // Build tabs — for admin, only show tabs that actually have data (after odds load)
-  const tabs = getTabsForSport(
-    sport,
-    oddsHalfTime.length > 0,
-    oddsCorrectScore.length > 0,
-    oddsHandicap.length > 0,
-  );
-  const validTabKeys = tabs.map((t) => t.key);
-  const currentTab   = validTabKeys.includes(activeTab) ? activeTab : validTabKeys[0];
-  const oddsTabKeys: TabKey[] = ['1x2', 'halfTime', 'correctScore', 'handicap'];
+  // ── KEY CHANGE: admin live games lock ALL odds ───────────────────────────
+  // For admin matches: lock when finished OR when live
+  // For regular matches: lock only when finished
+  const oddsLocked = isFinished || (sport === 'admin' && isLive);
+
+  const matchName = `${match.homeTeam} vs ${match.awayTeam}`;
+
+  // League label with fallback
+  const leagueLabel = (match.league && match.league.trim() && match.league.toLowerCase() !== 'n/a')
+    ? match.league
+    : getFallbackLeague(match.id ?? id ?? 'default');
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -1090,164 +1422,161 @@ export default function MatchDetailsPage() {
           <ArrowBackIcon fontSize="small" /> Back
         </button>
 
-        {/* Match Header */}
-        <div className="card p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
+        {/* ── Match Header — reference style ── */}
+        <div className="card p-5 mb-4">
+
+          {/* League row + live badge */}
+          <div className="flex items-center gap-2 mb-5">
             {match.leagueLogo && (
-              <img src={match.leagueLogo} alt={match.league ?? ''} className="w-5 h-5 object-contain"
-                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              <img
+                src={match.leagueLogo} alt={leagueLabel}
+                className="w-4 h-4 object-contain shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
             )}
-            <span className="text-sm font-medium truncate" style={{ color: 'var(--text-muted)' }}>
-              {match.league ?? '—'}
+            <span
+              className="text-xs font-bold uppercase tracking-widest truncate flex-1"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {leagueLabel}
             </span>
 
+            {/* Refresh */}
+            <button
+              onClick={() => { fetchMatch(); fetchOdds(sport); }}
+              className="shrink-0 transition-colors hover:opacity-80"
+              style={{ color: 'var(--text-muted)' }}
+              title="Refresh"
+            >
+              <RefreshIcon sx={{ fontSize: 16 }} />
+            </button>
+
+            {/* Live badge — reference style with wifi icon */}
             {isLive && (
-              <span className="flex items-center gap-1 text-xs text-green-500 font-semibold ml-auto shrink-0">
-                <FiberManualRecordIcon sx={{ fontSize: 8 }} className="live-dot" />
-                {timerStr || 'LIVE'}
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide shrink-0"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+              >
+                <WifiIcon sx={{ fontSize: 11 }} />
+                LIVE {timerStr}
               </span>
             )}
             {isFinished && (
-              <span className="ml-auto text-xs font-bold uppercase tracking-wide shrink-0" style={{ color: 'var(--text-muted)' }}>
+              <span
+                className="text-xs font-bold uppercase tracking-wide shrink-0 px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--card-alt)', color: 'var(--text-muted)' }}
+              >
                 {finishedLabel(match.status)}
               </span>
             )}
             {!isLive && !isFinished && match.kickoffAt && (
-              <span className="flex items-center gap-1 ml-auto text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
+              <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
                 <ScheduleIcon sx={{ fontSize: 12 }} />
                 {formatKickoff(match.kickoffAt)}
               </span>
             )}
-
-            <button
-              onClick={() => { fetchMatch(); fetchOdds(sport); }}
-              className="ml-2 shrink-0 transition-colors hover:opacity-80"
-              style={{ color: 'var(--text-muted)' }}
-              title="Refresh"
-            >
-              <RefreshIcon fontSize="small" />
-            </button>
           </div>
 
-          {/* Teams & score */}
-          <div className="flex items-center justify-center gap-4 mb-5">
-            <div className="text-center flex-1 min-w-0">
-              {match.homeLogo && (
-                <img src={match.homeLogo} alt={match.homeTeam} className="w-12 h-12 object-contain mx-auto mb-2"
-                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          {/* Teams + score row — reference layout */}
+          <div className="flex items-center justify-between gap-2 mb-4">
+            {/* Home team */}
+            <div className="flex flex-col items-center flex-1 min-w-0 gap-2">
+              {match.homeLogo ? (
+                <img
+                  src={match.homeLogo} alt={match.homeTeam}
+                  className="w-14 h-14 object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-black"
+                  style={{ background: 'var(--card-alt)', color: 'var(--primary)' }}
+                >
+                  {match.homeTeam?.charAt(0)}
+                </div>
               )}
-              <h2 className="font-heading text-base md:text-xl font-bold leading-tight" style={{ color: 'var(--text-main)' }}>
+              <h2 className="font-heading text-sm font-bold text-center leading-tight" style={{ color: 'var(--text-main)' }}>
                 {match.homeTeam}
               </h2>
             </div>
 
-            <div className="text-center shrink-0 px-2">
+            {/* Score / kickoff */}
+            <div className="flex flex-col items-center shrink-0 px-2">
               {(isLive || isFinished) ? (
-                <div className="font-heading text-4xl md:text-5xl font-bold tabular-nums" style={{ color: 'var(--primary)' }}>
+                <div
+                  className="font-heading text-5xl font-black tabular-nums tracking-tight"
+                  style={{ color: 'var(--text-main)' }}
+                >
                   {match.scoreHome ?? 0}
-                  <span style={{ color: 'var(--border-light)', margin: '0 4px' }}>–</span>
+                  <span style={{ color: 'var(--border-light)', margin: '0 6px' }}>:</span>
                   {match.scoreAway ?? 0}
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <span className="font-heading text-2xl font-bold" style={{ color: 'var(--text-main)' }}>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="font-heading text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
                     {formatKickoff(match.kickoffAt)}
                   </span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Kick-off</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    Kick-off
+                  </span>
                 </div>
               )}
-              {isLive && (
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  <FiberManualRecordIcon sx={{ fontSize: 8 }} className="text-green-500 live-dot" />
-                  <span className="text-xs text-green-500 font-semibold">{timerStr}</span>
+              {match.kickoffAt && (
+                <div className="flex items-center gap-1 mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  <CalendarTodayIcon sx={{ fontSize: 11 }} />
+                  {formatDate(match.kickoffAt)}
                 </div>
               )}
             </div>
 
-            <div className="text-center flex-1 min-w-0">
-              {match.awayLogo && (
-                <img src={match.awayLogo} alt={match.awayTeam} className="w-12 h-12 object-contain mx-auto mb-2"
-                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            {/* Away team */}
+            <div className="flex flex-col items-center flex-1 min-w-0 gap-2">
+              {match.awayLogo ? (
+                <img
+                  src={match.awayLogo} alt={match.awayTeam}
+                  className="w-14 h-14 object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-black"
+                  style={{ background: 'var(--card-alt)', color: 'var(--primary)' }}
+                >
+                  {match.awayTeam?.charAt(0)}
+                </div>
               )}
-              <h2 className="font-heading text-base md:text-xl font-bold leading-tight" style={{ color: 'var(--text-main)' }}>
+              <h2 className="font-heading text-sm font-bold text-center leading-tight" style={{ color: 'var(--text-main)' }}>
                 {match.awayTeam}
               </h2>
             </div>
           </div>
 
-          {/* Meta */}
-          <div className="flex flex-wrap justify-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-            {match.kickoffAt && (
-              <span className="flex items-center gap-1">
-                <CalendarTodayIcon sx={{ fontSize: 13 }} />{formatDate(match.kickoffAt)}
-              </span>
-            )}
-            {match.sport && (
-              <span className="flex items-center gap-1">
-                <SportsIcon sx={{ fontSize: 13 }} />{match.sport}
-              </span>
-            )}
-            {oddsLocked && (
-              <span className="flex items-center gap-1 text-amber-500">
-                <LockIcon sx={{ fontSize: 13 }} /> Odds locked
-              </span>
-            )}
-          </div>
+          {/* Betting closed banner — shown inside header card */}
+          {oddsLocked && (
+            <BettingClosedBanner reason={isFinished ? 'finished' : 'live'} />
+          )}
         </div>
 
-        {/* Tabs */}
-        <div
-          className="flex border-b mb-4 overflow-x-auto no-scrollbar"
-          style={{ borderColor: 'var(--border-light)' }}
-        >
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-1 px-3 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors shrink-0"
-              style={{
-                color: currentTab === tab.key ? 'var(--primary)' : 'var(--text-muted)',
-                borderBottomColor: currentTab === tab.key ? 'var(--primary)' : 'transparent',
-              }}
-            >
-              {tab.icon}
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Odds loading spinner */}
-        {loadingOdds && oddsTabKeys.includes(currentTab) && (
+        {/* ── Odds: reference-style all-markets view ── */}
+        {loadingOdds ? (
           <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+            <div
+              className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+              style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }}
+            />
           </div>
-        )}
-
-        {/* Tab Panels */}
-        {!loadingOdds && currentTab === '1x2' && (
-          <Match1x2Panel
-            groups={odds1x2} matchId={match.id} matchName={matchName}
-            homeTeam={match.homeTeam} awayTeam={match.awayTeam}
-            locked={oddsLocked} sport={sport}
-          />
-        )}
-        {!loadingOdds && currentTab === 'halfTime' && (
-          <HalfTimePanel
-            groups={oddsHalfTime} matchId={match.id} matchName={matchName}
-            locked={oddsLocked} sport={sport}
-          />
-        )}
-        {!loadingOdds && currentTab === 'correctScore' && (
-          <CorrectScorePanel
-            groups={oddsCorrectScore} matchId={match.id} matchName={matchName}
-            homeTeam={match.homeTeam} awayTeam={match.awayTeam} locked={oddsLocked}
-          />
-        )}
-        {!loadingOdds && currentTab === 'handicap' && (
-          <HandicapPanel
-            groups={oddsHandicap} matchId={match.id} matchName={matchName}
-            locked={oddsLocked} sport={sport}
+        ) : (
+          <AllMarketsView
+            odds1x2={odds1x2}
+            oddsHalfTime={oddsHalfTime}
+            oddsCorrectScore={oddsCorrectScore}
+            oddsHandicap={oddsHandicap}
+            matchId={match.id}
+            matchName={matchName}
+            homeTeam={match.homeTeam}
+            awayTeam={match.awayTeam}
+            locked={oddsLocked}
+            sport={sport}
           />
         )}
 
