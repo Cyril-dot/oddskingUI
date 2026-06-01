@@ -145,7 +145,7 @@ function buildMatchLabel(s: Record<string, unknown>): string {
   if (s.match)       return String(s.match);
   const home = (s.homeTeam ?? s.home_team) as string | undefined;
   const away = (s.awayTeam ?? s.away_team) as string | undefined;
-  if (home && away) return `${home} vs ${away}`;
+  if (home && away) return `${home} v ${away}`;
   const id = (s.matchId ?? s.match_id ?? '') as string;
   return id ? `Match …${id.slice(-6)}` : 'Unknown match';
 }
@@ -180,48 +180,10 @@ function normaliseBet(bet: Bet): Bet {
   };
 }
 
-// ─── ZynoBet Z-bolt SVG (inline, reusable) ────────────────────────────────────
+// ─── Ticket ID formatter ──────────────────────────────────────────────────────
 
-function ZynoBetLogoSvg({ size = 20 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 56 56"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      style={{ flexShrink: 0 }}
-    >
-      <defs>
-        <linearGradient id="zb-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#2563eb" />
-        </linearGradient>
-      </defs>
-      <rect width="56" height="56" rx="12" fill="url(#zb-logo-grad)" />
-      {/* Bold Z letter */}
-      <text x="10" y="42" fontSize="38" fontWeight="900" fill="#ffffff" fontFamily="Georgia, serif" letterSpacing="-2">Z</text>
-    </svg>
-  );
-}
-
-/** Inline wordmark for dark backgrounds (used in modals/slips) */
-function ZynoBetWordmarkDark({ size = 14 }: { size?: number }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', lineHeight: 1 }}>
-      <span style={{
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontWeight: 900, fontStyle: 'italic',
-        fontSize: size, letterSpacing: '-0.02em', color: '#60a5fa',
-      }}>Zyno</span>
-      <span style={{
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontWeight: 900, fontStyle: 'italic',
-        fontSize: size, letterSpacing: '-0.02em', color: '#ffffff',
-      }}>Bet</span>
-    </span>
-  );
+function formatTicketId(id: string): string {
+  return id.slice(-6).toUpperCase();
 }
 
 // ─── Shared UI atoms ──────────────────────────────────────────────────────────
@@ -295,104 +257,153 @@ function GuestPrompt({ message }: { message: string }) {
 
 async function generateSlipImage(bet: Bet, isWin: boolean, currency: CurrencyInfo): Promise<string> {
   const container = document.createElement('div');
-  // Make container wide enough for all content, no clipping
   container.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:420px;background:#0f172a;border-radius:24px;overflow:hidden;font-family:'Inter',sans-serif;`;
 
   const payoutGhs = bet.potentialReturn;
   const headlineAmount = isWin ? formatLocal(payoutGhs, currency) : formatLocal(bet.stake, currency);
   const headlineSubGhs = currency.code !== 'GHS' ? (isWin ? `(GH₵${payoutGhs.toFixed(2)})` : `(GH₵${bet.stake.toFixed(2)})`) : '';
 
-  // ZynoBet logo SVG as data URI
   const logoSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 56 56'><defs><linearGradient id='zg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2360a5fa'/><stop offset='100%25' stop-color='%232563eb'/></linearGradient></defs><rect width='56' height='56' rx='12' fill='url(%23zg)'/><text x='10' y='42' font-size='38' font-weight='900' fill='%23ffffff' font-family='Georgia,serif' letter-spacing='-2'>Z</text></svg>`;
   const logoDataUri = `data:image/svg+xml,${logoSvg}`;
-
   const placedDate = bet.placedAt ? new Date(bet.placedAt).toLocaleString() : '';
+  const ticketId = formatTicketId(bet.id);
 
-  // Build all selections rows — no limit
   const selectionRows = bet.selections.map((sel, i) => `
     <div style="display:grid;grid-template-columns:22px 1fr 54px 60px;gap:0;padding:10px 14px;border-top:1px solid rgba(255,255,255,0.06);background:${i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'};">
-      <span style="font-size:12px;font-weight:800;color:#60a5fa;padding-top:2px;">${i + 1}</span>
+      <span style="font-size:12px;font-weight:800;color:#22c55e;padding-top:2px;">${i + 1}</span>
       <div style="padding-right:6px;">
         <div style="font-size:12px;font-weight:700;color:#fff;line-height:1.3;">${sel.selection}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;line-height:1.3;">${sel.homeTeam && sel.awayTeam ? `${sel.homeTeam} vs ${sel.awayTeam}` : sel.matchId}</div>
-        <div style="font-size:9px;color:rgba(96,165,250,0.6);margin-top:1px;">${sel.market}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;line-height:1.3;">${sel.homeTeam && sel.awayTeam ? `${sel.homeTeam} v ${sel.awayTeam}` : sel.matchId}</div>
+        <div style="font-size:9px;color:rgba(34,197,94,0.6);margin-top:1px;">${sel.market}</div>
       </div>
-      <span style="font-size:12px;font-weight:800;color:#fff;padding-top:2px;text-align:center;">${sel.oddsLocked.toFixed(2)}</span>
+      <span style="font-size:12px;font-weight:800;color:#22c55e;padding-top:2px;text-align:center;">${sel.oddsLocked.toFixed(2)}</span>
       <span style="font-size:11px;font-weight:800;color:${sel.result === 'WON' ? '#22c55e' : sel.result === 'LOST' ? '#ef4444' : '#94a3b8'};padding-top:2px;text-align:right;">${sel.result === 'WON' ? 'WON ✓' : sel.result === 'LOST' ? 'LOST ✗' : 'PENDING'}</span>
     </div>
   `).join('');
 
   container.innerHTML = `
     <style>* { box-sizing: border-box; margin: 0; padding: 0; }</style>
-    <div style="background: linear-gradient(135deg, #0a0f1a 0%, #0f1a2e 50%, #0a0f1a 100%);">
-
+    <div style="background:#111827;">
       <!-- HEADER -->
-      <div style="background: linear-gradient(90deg, #1e3a5f, #1e40af, #1e3a5f); padding:8px 20px; display:flex; align-items:center; justify-content:space-between;">
-        <span style="display:flex;align-items:center;gap:8px;">
-          <img src="${logoDataUri}" width="20" height="20" style="display:inline-block;vertical-align:middle;border-radius:5px;" />
-          <span style="font-size:14px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#60a5fa;">Zyno<span style="color:#ffffff;">Bet</span></span>
-        </span>
-        <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:1px;text-transform:uppercase;">Bet Slip</span>
-      </div>
-
-      <!-- HEADLINE -->
-      <div style="padding:22px 24px 18px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">
-        <div style="font-size:13px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:${isWin ? '#22c55e' : '#ef4444'};margin-bottom:8px;">${isWin ? '🏆 YOU WON!' : '😭 BETTER LUCK NEXT TIME'}</div>
-        <div style="font-size:36px;font-weight:900;color:${isWin ? '#22c55e' : '#fff'};line-height:1.1;">${headlineAmount}</div>
-        ${headlineSubGhs ? `<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:4px;">${headlineSubGhs}</div>` : ''}
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Placed on ZynoBet · ${placedDate}</div>
-      </div>
-
-      <!-- BET SUMMARY ROW -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 16px;gap:0;border-bottom:1px solid rgba(255,255,255,0.08);">
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:rgba(96,165,250,0.7);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">TOTAL ODDS</div>
-          <div style="font-size:16px;font-weight:900;color:#60a5fa;">${bet.totalOdds.toFixed(2)}x</div>
+      <div style="background:#111827;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:2px;">Ticket ID: ${ticketId}</div>
+          <div style="font-size:14px;font-weight:900;color:#fff;">${bet.selections.length > 1 ? 'Multiple' : 'Single'}</div>
         </div>
-        <div style="text-align:center;border-left:1px solid rgba(255,255,255,0.08);border-right:1px solid rgba(255,255,255,0.08);">
-          <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">STAKE</div>
-          <div style="font-size:16px;font-weight:900;color:#fff;">${formatLocal(bet.stake, currency)}</div>
-          ${currency.code !== 'GHS' ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">GH₵${bet.stake.toFixed(2)}</div>` : ''}
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">POTENTIAL WIN</div>
-          <div style="font-size:16px;font-weight:900;color:#22c55e;">${formatLocal(bet.potentialReturn, currency)}</div>
-          ${currency.code !== 'GHS' ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">GH₵${bet.potentialReturn.toFixed(2)}</div>` : ''}
+        <div style="text-align:right;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;">${placedDate}</div>
+          <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+            <img src="${logoDataUri}" width="16" height="16" style="border-radius:4px;" />
+            <span style="font-size:12px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#22c55e;">Won</span>
+          </div>
         </div>
       </div>
 
-      <!-- TICKET META -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">
+      <!-- TOTAL RETURN HERO -->
+      <div style="padding:18px 18px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);">
         <div>
-          <span style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:6px;">TICKET</span>
-          <span style="font-size:11px;color:#fff;font-weight:800;font-family:monospace;letter-spacing:1px;">ZB${bet.id.slice(-8).toUpperCase()}</span>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Total Return</div>
+          <div style="font-size:32px;font-weight:900;color:#22c55e;line-height:1;">${formatLocal(payoutGhs, currency)}</div>
+          ${currency.code !== 'GHS' ? `<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:3px;">GH₵${payoutGhs.toFixed(2)}</div>` : ''}
         </div>
-        <div>
-          <span style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:6px;">TYPE</span>
-          <span style="font-size:11px;color:#60a5fa;font-weight:800;">${bet.selections.length > 1 ? 'MULTIPLE' : 'SINGLE'} · ${bet.selections.length} LEG${bet.selections.length !== 1 ? 'S' : ''}</span>
+        <!-- Trophy -->
+        <svg width="70" height="70" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity:0.85;">
+          <defs>
+            <linearGradient id="tg2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#fbbf24"/>
+              <stop offset="50%" stop-color="#f59e0b"/>
+              <stop offset="100%" stop-color="#d97706"/>
+            </linearGradient>
+          </defs>
+          <rect x="52" y="138" width="56" height="8" rx="4" fill="url(#tg2)"/>
+          <rect x="44" y="134" width="72" height="8" rx="4" fill="url(#tg2)"/>
+          <rect x="68" y="112" width="24" height="24" rx="3" fill="url(#tg2)"/>
+          <path d="M36 28 L124 28 L116 92 Q110 116 80 116 Q50 116 44 92 Z" fill="url(#tg2)"/>
+          <path d="M36 38 Q16 38 16 58 Q16 76 36 76" stroke="url(#tg2)" stroke-width="12" fill="none" stroke-linecap="round"/>
+          <path d="M124 38 Q144 38 144 58 Q144 76 124 76" stroke="url(#tg2)" stroke-width="12" fill="none" stroke-linecap="round"/>
+          <text x="80" y="82" text-anchor="middle" font-size="28" fill="#fff" opacity="0.9">★</text>
+          <rect x="48" y="120" width="64" height="16" rx="3" fill="#92400e"/>
+          <text x="80" y="131" text-anchor="middle" font-size="8" font-weight="900" fill="#fbbf24" letter-spacing="2">WINNER</text>
+        </svg>
+      </div>
+
+      <!-- BET SUMMARY -->
+      <div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">
+        ${[
+          ['Total Stake', formatLocal(bet.stake, currency)],
+          ['Total Odds', bet.totalOdds.toFixed(2)],
+          ['Potential Win', formatLocal(bet.potentialReturn, currency)],
+        ].map(([label, value]) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;">
+            <span style="font-size:12px;color:rgba(255,255,255,0.5);">${label}</span>
+            <span style="font-size:13px;font-weight:700;color:#fff;">${value}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- VERIFICATION CODE -->
+      <div style="margin:12px 18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,0.4);text-transform:uppercase;">Verification Code</span>
+        <span style="font-size:12px;font-weight:800;color:#22c55e;font-family:monospace;letter-spacing:1px;">${ticketId}${bet.id.slice(-10).toUpperCase()}</span>
+      </div>
+
+      <!-- CONGRATULATIONS BANNER -->
+      <div style="margin:0 18px 16px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;">⭐</span>
+          <div>
+            <div style="font-size:13px;font-weight:900;color:#22c55e;">Congratulations!</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;">You are amazing!</div>
+          </div>
         </div>
-        <div>
-          <span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;background:${bet.status === 'WON' ? 'rgba(34,197,94,0.2)' : bet.status === 'LOST' ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'};color:${bet.status === 'WON' ? '#22c55e' : bet.status === 'LOST' ? '#ef4444' : '#fbbf24'};">${bet.status}</span>
+        <div style="background:#f59e0b;color:#1a1a1a;font-size:11px;font-weight:900;padding:7px 14px;border-radius:7px;display:flex;align-items:center;gap:5px;">
+          ↗ Show Off
         </div>
       </div>
 
       <!-- SELECTIONS TABLE HEADER -->
-      <div style="display:grid;grid-template-columns:22px 1fr 54px 60px;gap:0;padding:8px 14px;background:rgba(30,64,175,0.4);">
-        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">#</span>
-        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">SELECTION</span>
-        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;text-align:center;">ODDS</span>
-        <span style="font-size:9px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;text-align:right;">RESULT</span>
+      <div style="padding:6px 18px;background:rgba(255,255,255,0.04);">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.4);text-transform:uppercase;">Selections · ${bet.selections.length} leg${bet.selections.length !== 1 ? 's' : ''}</div>
       </div>
 
-      <!-- ALL SELECTION ROWS -->
-      ${selectionRows}
+      <!-- SELECTIONS -->
+      ${bet.selections.map((sel, i) => {
+        const matchLabel = sel.homeTeam && sel.awayTeam ? `${sel.homeTeam} v ${sel.awayTeam}` : `Match …${sel.matchId?.slice(-6) ?? ''}`;
+        const isWonSel = sel.result === 'WON';
+        const isLostSel = sel.result === 'LOST';
+        return `
+          <div style="margin:8px 18px;background:${isWonSel ? 'rgba(34,197,94,0.05)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isWonSel ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'};border-radius:10px;overflow:hidden;">
+            <div style="padding:8px 12px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:18px;height:18px;background:${isWonSel ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.1)'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:${isWonSel ? '#22c55e' : '#94a3b8'};">${isWonSel ? '✓' : isLostSel ? '✗' : '–'}</div>
+                <span style="font-size:12px;font-weight:700;color:#fff;">${matchLabel}</span>
+              </div>
+              <span style="font-size:10px;color:rgba(255,255,255,0.3);font-family:monospace;">${`id:${sel.matchId?.slice(-5) ?? ''}`}</span>
+            </div>
+            <div style="padding:8px 12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+              <div>
+                <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Pick</div>
+                <div style="font-size:11px;font-weight:700;color:#22c55e;">${sel.selection}@${sel.oddsLocked.toFixed(2)} ${isWonSel ? '✓' : ''}</div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Market</div>
+                <div style="font-size:11px;font-weight:600;color:#fff;">${sel.market}</div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;">Outcome</div>
+                <div style="font-size:11px;font-weight:600;color:${isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : '#94a3b8'};">${sel.result ?? 'Pending'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
 
       <!-- FOOTER -->
-      <div style="background:rgba(0,0,0,0.5);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.25);">zynob.et · Bet Responsibly 18+</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <img src="${logoDataUri}" width="14" height="14" style="display:inline-block;vertical-align:middle;border-radius:3px;" />
-          <span style="font-size:12px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#60a5fa;">Zyno<span style="color:#ffffff;">Bet</span></span>
+      <div style="background:rgba(0,0,0,0.4);padding:10px 18px;display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.2);">Bet Responsibly 18+</div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <img src="${logoDataUri}" width="13" height="13" style="border-radius:3px;" />
+          <span style="font-size:11px;font-weight:900;font-family:Georgia,serif;font-style:italic;color:#22c55e;">Zyno<span style="color:#ffffff;">Bet</span></span>
         </div>
       </div>
     </div>
@@ -444,7 +455,7 @@ function ShareImageModal({ imageUrl, onClose }: { imageUrl: string; onClose: () 
   );
 }
 
-// ─── WIN MODAL ────────────────────────────────────────────────────────────────
+// ─── WIN MODAL (redesigned to match primebet.dev reference) ──────────────────
 
 function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo; onClose: () => void }) {
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -456,20 +467,20 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
       delay: Math.random() * 2,
       duration: 2 + Math.random() * 2,
       size: 4 + Math.random() * 8,
-      color: ['#60a5fa','#93c5fd','#3b82f6','#ffffff','#bfdbfe','#22c55e'][Math.floor(Math.random() * 6)],
+      color: ['#22c55e','#86efac','#f59e0b','#fbbf24','#ffffff','#6ee7b7'][Math.floor(Math.random() * 6)],
       shape: Math.random() > 0.5 ? '50%' : '2px',
     }))
   );
 
   const payoutGhs = bet.potentialReturn;
-  const stakeLocal = ghsToLocal(bet.stake, currency);
-  const payoutLocal = ghsToLocal(payoutGhs, currency);
-  const bonusGhs = payoutGhs - (bet.stake * bet.totalOdds);
-  const hasBonus = bonusGhs > 0.5;
-
+  const ticketId = formatTicketId(bet.id);
+  const betType = bet.selections.length > 1 ? 'Multiple' : 'Single';
   const placedDate = bet.placedAt
-    ? new Date(bet.placedAt).toLocaleString('en-GH', { hour: '2-digit', minute: '2-digit', hour12: false, month: '2-digit', day: '2-digit', year: 'numeric' }).replace(',', '')
+    ? new Date(bet.placedAt).toLocaleString('en-GH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
     : '';
+
+  // Verification code = ticket id prefix + partial bet id
+  const verificationCode = `${ticketId}${bet.id.slice(-10).toUpperCase()}`;
 
   const handleShowOff = async () => {
     setGeneratingImage(true);
@@ -490,49 +501,17 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           from { opacity: 0; transform: translateY(40px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes trophyGlow {
-          0%, 100% { filter: drop-shadow(0 0 10px rgba(96,165,250,0.6)) drop-shadow(0 0 20px rgba(59,130,246,0.4)); }
-          50%       { filter: drop-shadow(0 0 16px rgba(96,165,250,0.8)) drop-shadow(0 0 30px rgba(59,130,246,0.5)); }
-        }
         @keyframes trophyBounce {
           0%, 100% { transform: translateY(0) scale(1); }
-          50%       { transform: translateY(-6px) scale(1.03); }
-        }
-        @keyframes rayRotate {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
-        @keyframes pulseBlue {
-          0%, 100% { opacity: 0.4; }
-          50%       { opacity: 0.7; }
-        }
-        @keyframes countUp {
-          from { opacity: 0; transform: scale(0.8); }
-          to   { opacity: 1; transform: scale(1); }
+          50%       { transform: translateY(-5px) scale(1.04); }
         }
         .win-modal-enter { animation: winSlideUp 0.4s cubic-bezier(0.16,1,0.3,1) both; }
-        .trophy-anim {
-          animation: trophyBounce 2.5s ease-in-out infinite, trophyGlow 2s ease-in-out infinite;
-        }
-        .rays-anim { animation: rayRotate 12s linear infinite; }
-        .shimmer-text {
-          background: linear-gradient(90deg, #60a5fa 0%, #bfdbfe 40%, #60a5fa 60%, #3b82f6 100%);
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: shimmer 2s linear infinite;
-        }
-        .win-amount-anim { animation: countUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
+        .trophy-bounce { animation: trophyBounce 2.5s ease-in-out infinite; }
       `}</style>
 
       <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center overflow-hidden">
         {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/90" onClick={onClose} />
+        <div className="absolute inset-0 bg-black/85" onClick={onClose} />
 
         {/* Confetti */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
@@ -546,271 +525,233 @@ function WinModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInfo
           ))}
         </div>
 
-        {/* Modal card */}
+        {/* Modal card — styled like reference */}
         <div
           className="relative z-20 w-full sm:max-w-md overflow-hidden win-modal-enter"
           style={{
-            background: 'linear-gradient(180deg, #0a0f1a 0%, #0d1829 40%, #0a0f1a 100%)',
-            borderTop: '1px solid rgba(96,165,250,0.3)',
-            borderLeft: '1px solid rgba(96,165,250,0.15)',
-            borderRight: '1px solid rgba(96,165,250,0.15)',
-            borderRadius: '24px 24px 0 0',
+            background: '#111827',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            borderLeft: '1px solid rgba(255,255,255,0.06)',
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: '20px 20px 0 0',
             paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
             maxHeight: '95vh',
           }}
         >
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-            style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}
-          >
-            <CloseIcon sx={{ fontSize: 18 }} />
-          </button>
-
-          {/* ── HERO SECTION ── */}
-          <div className="relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0d1829 0%, #0a0f1a 100%)', paddingTop: '32px', paddingBottom: '24px' }}>
-            {/* Radial glow — softer blue */}
-            <div className="absolute inset-0 pointer-events-none" style={{
-              background: 'radial-gradient(ellipse 70% 60% at 50% 60%, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.08) 40%, transparent 70%)',
-            }} />
-
-            {/* Rotating rays */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: '10%' }}>
-              <div className="rays-anim" style={{ width: '280px', height: '280px', opacity: 0.08 }}>
-                <svg viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {Array.from({ length: 16 }, (_, i) => {
-                    const angle = (i * 360) / 16;
-                    const rad = (angle * Math.PI) / 180;
-                    const x1 = 140 + 50 * Math.cos(rad); const y1 = 140 + 50 * Math.sin(rad);
-                    const x2 = 140 + 140 * Math.cos(rad); const y2 = 140 + 140 * Math.sin(rad);
-                    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#60a5fa" strokeWidth="2" />;
-                  })}
-                </svg>
+          {/* ── TOP HEADER ROW (Ticket ID / date / close) ── */}
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '3px' }}>
+                Ticket ID: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>{ticketId}</span>
+              </p>
+              <div className="flex items-center gap-2.5">
+                <span style={{ fontSize: '18px', fontWeight: 900, color: '#fff' }}>{betType}</span>
+                <span style={{
+                  fontSize: '12px', fontWeight: 800, color: '#22c55e',
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                }}>
+                  🏆 Won
+                </span>
               </div>
             </div>
-
-            {/* ZynoBet branding */}
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <ZynoBetLogoSvg size={22} />
-              <ZynoBetWordmarkDark size={16} />
-            </div>
-
-            {/* YOU WON */}
-            <div className="text-center mb-3">
-              <h1 className="shimmer-text font-black" style={{ fontSize: '42px', letterSpacing: '0.05em', lineHeight: 1 }}>
-                YOU WON!
-              </h1>
-            </div>
-
-            {/* Trophy SVG — reduced brightness/saturation */}
-            <div className="flex justify-center mb-3">
-              <div className="trophy-anim relative">
-                <div style={{
-                  position: 'absolute', inset: '-20px', borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(37,99,235,0.1) 50%, transparent 70%)',
-                  animation: 'pulseBlue 2s ease-in-out infinite',
-                }} />
-                <svg width="130" height="130" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    {/* Muted silver-blue trophy — much less bright than original gold */}
-                    <linearGradient id="trophyGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#93c5fd"/>
-                      <stop offset="25%" stopColor="#60a5fa"/>
-                      <stop offset="55%" stopColor="#3b82f6"/>
-                      <stop offset="75%" stopColor="#60a5fa"/>
-                      <stop offset="100%" stopColor="#1d4ed8"/>
-                    </linearGradient>
-                    <linearGradient id="trophyShine" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#bfdbfe" stopOpacity="0.6"/>
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1"/>
-                    </linearGradient>
-                    <radialGradient id="cupGlow" cx="50%" cy="30%" r="60%">
-                      <stop offset="0%" stopColor="#dbeafe" stopOpacity="0.4"/>
-                      <stop offset="100%" stopColor="#60a5fa" stopOpacity="0"/>
-                    </radialGradient>
-                    <filter id="glow2">
-                      <feGaussianBlur stdDeviation="2" result="blur"/>
-                      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
-                  </defs>
-                  <rect x="52" y="138" width="56" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow2)"/>
-                  <rect x="44" y="134" width="72" height="8" rx="4" fill="url(#trophyGrad)" filter="url(#glow2)"/>
-                  <rect x="68" y="112" width="24" height="24" rx="3" fill="url(#trophyGrad)" filter="url(#glow2)"/>
-                  <rect x="72" y="112" width="16" height="24" rx="2" fill="url(#trophyShine)" opacity="0.4"/>
-                  <path d="M36 28 L124 28 L116 92 Q110 116 80 116 Q50 116 44 92 Z" fill="url(#trophyGrad)" filter="url(#glow2)"/>
-                  <path d="M46 28 L90 28 L84 85 Q78 108 60 112 Q44 100 44 92 Z" fill="url(#cupGlow)" opacity="0.5"/>
-                  <path d="M36 38 Q16 38 16 58 Q16 76 36 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow2)"/>
-                  <path d="M36 44 Q22 44 22 58 Q22 72 36 70" stroke="url(#trophyShine)" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.5"/>
-                  <path d="M124 38 Q144 38 144 58 Q144 76 124 76" stroke="url(#trophyGrad)" strokeWidth="12" fill="none" strokeLinecap="round" filter="url(#glow2)"/>
-                  <path d="M124 44 Q138 44 138 58 Q138 72 124 70" stroke="url(#trophyShine)" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.5"/>
-                  <text x="80" y="82" textAnchor="middle" fontSize="28" fill="#bfdbfe" opacity="0.7">★</text>
-                  <text x="80" y="58" textAnchor="middle" fontSize="8" fontWeight="900" fill="#1e3a5f" letterSpacing="1" opacity="0.7">ZYNO</text>
-                  <text x="80" y="70" textAnchor="middle" fontSize="8" fontWeight="900" fill="#1e3a5f" letterSpacing="1" opacity="0.7">BET</text>
-                  <rect x="48" y="120" width="64" height="16" rx="3" fill="#1e40af"/>
-                  <text x="80" y="131" textAnchor="middle" fontSize="8" fontWeight="900" fill="#bfdbfe" letterSpacing="2">WINNER</text>
-                </svg>
-              </div>
-            </div>
-
-            {/* Payout amount */}
-            <div className="text-center win-amount-anim">
-              <div className="font-black" style={{ fontSize: '32px', color: '#60a5fa', letterSpacing: '-0.5px' }}>
-                {formatLocal(payoutGhs, currency)}
-              </div>
-              {currency.code !== 'GHS' && (
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
-                  GH₵{payoutGhs.toFixed(2)}
-                </div>
-              )}
-              <div style={{ fontSize: '12px', color: 'rgba(96,165,250,0.7)', marginTop: '4px', fontWeight: 600 }}>
-                Congrats! Your bet was successful.
-              </div>
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{placedDate}</span>
+              <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </button>
             </div>
           </div>
 
-          {/* ── TICKET DETAILS SECTION ── */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(95vh - 380px)' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(95vh - 72px)' }}>
+            {/* ── TOTAL RETURN HERO ── */}
+            <div className="flex items-center justify-between px-5 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px' }}>Total Return</p>
+                <p style={{ fontSize: '36px', fontWeight: 900, color: '#22c55e', lineHeight: 1, letterSpacing: '-1px' }}>
+                  {formatLocal(payoutGhs, currency)}
+                </p>
+                {currency.code !== 'GHS' && (
+                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>GH₵{payoutGhs.toFixed(2)}</p>
+                )}
+              </div>
+              {/* Trophy */}
+              <div className="trophy-bounce">
+                <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="wt" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24"/>
+                      <stop offset="50%" stopColor="#f59e0b"/>
+                      <stop offset="100%" stopColor="#d97706"/>
+                    </linearGradient>
+                  </defs>
+                  <rect x="52" y="138" width="56" height="8" rx="4" fill="url(#wt)"/>
+                  <rect x="44" y="134" width="72" height="8" rx="4" fill="url(#wt)"/>
+                  <rect x="68" y="112" width="24" height="24" rx="3" fill="url(#wt)"/>
+                  <path d="M36 28 L124 28 L116 92 Q110 116 80 116 Q50 116 44 92 Z" fill="url(#wt)"/>
+                  <path d="M36 38 Q16 38 16 58 Q16 76 36 76" stroke="url(#wt)" strokeWidth="12" fill="none" strokeLinecap="round"/>
+                  <path d="M124 38 Q144 38 144 58 Q144 76 124 76" stroke="url(#wt)" strokeWidth="12" fill="none" strokeLinecap="round"/>
+                  <text x="80" y="82" textAnchor="middle" fontSize="28" fill="#fff" opacity="0.9">★</text>
+                  <rect x="48" y="120" width="64" height="16" rx="3" fill="#92400e"/>
+                  <text x="80" y="131" textAnchor="middle" fontSize="8" fontWeight="900" fill="#fbbf24" letterSpacing="2">WINNER</text>
+                </svg>
+              </div>
+            </div>
 
-            {/* Ticket meta row */}
-            <div className="grid grid-cols-3 gap-0 mx-4 mt-4 rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(96,165,250,0.2)' }}>
+            {/* ── BET STATS ── */}
+            <div className="px-5 py-4 space-y-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               {[
-                { icon: '🎫', label: 'TICKET ID', value: `ZB${bet.id.slice(-8).toUpperCase()}` },
-                { icon: '📅', label: 'DATE', value: placedDate },
-                { icon: '🏆', label: 'BET TYPE', value: bet.selections.length > 1 ? 'MULTIPLE' : 'SINGLE' },
-              ].map((item, i) => (
-                <div key={i} className="flex flex-col items-center justify-center py-3 px-2 text-center" style={{ background: 'rgba(255,255,255,0.03)', borderRight: i < 2 ? '1px solid rgba(96,165,250,0.1)' : 'none' }}>
-                  <span style={{ fontSize: '14px', marginBottom: '3px' }}>{item.icon}</span>
-                  <span style={{ fontSize: '9px', color: 'rgba(96,165,250,0.7)', fontWeight: 700, letterSpacing: '0.8px', marginBottom: '2px' }}>{item.label}</span>
-                  <span style={{ fontSize: '10px', color: '#fff', fontWeight: 700 }}>{item.value}</span>
+                { label: 'Total Stake', value: formatLocal(bet.stake, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.stake.toFixed(2)}` : undefined },
+                { label: 'Total Odds', value: bet.totalOdds.toFixed(2) },
+                { label: 'Potential Win', value: formatLocal(bet.potentialReturn, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.potentialReturn.toFixed(2)}` : undefined },
+              ].map(row => (
+                <div key={row.label} className="flex items-start justify-between">
+                  <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>{row.label}</span>
+                  <div className="text-right">
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>{row.value}</span>
+                    {row.sub && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '1px' }}>{row.sub}</p>}
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* STATUS badge */}
-            <div className="flex justify-center mt-3 mx-4">
-              <div className="flex items-center gap-2 px-5 py-2 rounded-xl border" style={{ background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)' }}>
-                <CheckCircleIcon sx={{ fontSize: 18, color: '#22c55e' }} />
-                <span style={{ fontSize: '16px', fontWeight: 900, color: '#22c55e', letterSpacing: '2px' }}>WON</span>
-              </div>
+            {/* ── VERIFICATION CODE ── */}
+            <div className="mx-4 my-4 flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Verification Code</span>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#22c55e', fontFamily: 'monospace', letterSpacing: '1px' }}>{verificationCode}</span>
             </div>
 
-            {/* Selections table */}
-            <div className="mx-4 mt-4 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(96,165,250,0.2)' }}>
-              <div className="grid gap-0 px-3 py-2" style={{ gridTemplateColumns: '20px 1fr 50px 56px', background: 'rgba(30,64,175,0.4)' }}>
-                {['#', 'SELECTION', 'ODDS', 'RESULT'].map(h => (
-                  <span key={h} style={{ fontSize: '9px', fontWeight: 800, color: '#60a5fa', letterSpacing: '1px', textTransform: 'uppercase' }}>{h}</span>
-                ))}
+            {/* ── CONGRATULATIONS BANNER + SHOW OFF ── */}
+            <div className="mx-4 mb-4 flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+              <div className="flex items-center gap-3">
+                <span style={{ fontSize: '20px' }}>⭐</span>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: 900, color: '#22c55e' }}>Congratulations!</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '1px' }}>You are amazing!</p>
+                </div>
               </div>
+              <button
+                onClick={handleShowOff}
+                disabled={generatingImage}
+                style={{
+                  background: '#f59e0b',
+                  color: '#1a1a1a',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  flexShrink: 0,
+                  opacity: generatingImage ? 0.6 : 1,
+                }}
+              >
+                {generatingImage
+                  ? <CircularProgress sx={{ fontSize: 14 }} className="animate-spin" />
+                  : <><ShareIcon sx={{ fontSize: 14 }} /> Show Off</>}
+              </button>
+            </div>
 
+            {/* ── SELECTIONS (card style matching reference) ── */}
+            <div className="px-4 space-y-3 pb-4">
               {bet.selections.map((sel, i) => {
-                const isWon = sel.result === 'WON';
-                const isLost = sel.result === 'LOST';
+                const isWonSel = sel.result === 'WON';
+                const isLostSel = sel.result === 'LOST';
                 const matchLabel = buildMatchLabel(sel as unknown as Record<string, unknown>);
+                const gameId = ((sel as any).matchId ?? '').slice(-6).toLowerCase();
+
                 return (
                   <div
                     key={sel.id ?? i}
-                    className="grid gap-0 px-3 py-3"
-                    style={{
-                      gridTemplateColumns: '20px 1fr 50px 56px',
-                      borderTop: '1px solid rgba(96,165,250,0.08)',
-                      background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    }}
+                    className="rounded-xl overflow-hidden"
+                    style={{ border: `1px solid ${isWonSel ? 'rgba(34,197,94,0.25)' : isLostSel ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)'}` }}
                   >
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#60a5fa', paddingTop: '2px' }}>{i + 1}</span>
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>
-                        {sel.selection || sel.market}
+                    {/* Match header */}
+                    <div
+                      className="flex items-center gap-2 px-3 py-2"
+                      style={{ background: isWonSel ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                    >
+                      {/* status circle */}
+                      <div style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : 'rgba(255,255,255,0.1)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <span style={{ fontSize: 11, color: '#fff', fontWeight: 900 }}>
+                          {isWonSel ? '✓' : isLostSel ? '✗' : '–'}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '1px', lineHeight: 1.3 }}>
-                        {matchLabel}
-                      </div>
-                      <div style={{ fontSize: '9px', color: 'rgba(96,165,250,0.5)', marginTop: '1px' }}>
-                        {sel.market}
+                      <div className="flex-1 min-w-0">
+                        {/* league label */}
+                        <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', marginBottom: '1px' }}>
+                          {(sel as any).league ?? 'Football'} · Game ID: {gameId}
+                        </p>
+                        {/* match teams */}
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{matchLabel}</p>
                       </div>
                     </div>
-                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff', paddingTop: '2px' }}>
-                      {sel.oddsLocked.toFixed(2)}
-                    </span>
-                    <div style={{ paddingTop: '2px' }}>
-                      {sel.result ? (
-                        <span style={{
-                          fontSize: '10px', fontWeight: 800,
-                          color: isWon ? '#22c55e' : isLost ? '#ef4444' : '#94a3b8',
-                          display: 'flex', alignItems: 'center', gap: '3px',
-                        }}>
-                          {isWon ? '✓' : isLost ? '✗' : '—'} {sel.result}
-                        </span>
-                      ) : <span style={{ fontSize: '10px', color: '#94a3b8' }}>—</span>}
+                    {/* Pick / Market / Outcome rows */}
+                    <div style={{ background: isWonSel ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.02)' }}>
+                      {[
+                        {
+                          label: 'Pick',
+                          value: `${sel.selection}@${sel.oddsLocked.toFixed(2)}`,
+                          valueColor: '#22c55e',
+                          extra: isWonSel ? ' ✓' : isLostSel ? ' ✗' : '',
+                        },
+                        { label: 'Market', value: sel.market, valueColor: '#fff' },
+                        {
+                          label: 'Outcome',
+                          value: sel.result
+                            ? sel.result.charAt(0) + sel.result.slice(1).toLowerCase()
+                            : 'Pending',
+                          valueColor: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : '#94a3b8',
+                        },
+                      ].map(row => (
+                        <div
+                          key={row.label}
+                          className="flex items-center justify-between px-3 py-2"
+                          style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+                        >
+                          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)' }}>{row.label}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: row.valueColor }}>
+                            {row.value}{row.extra}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Dashed separator */}
-            <div className="mx-4 my-3 relative flex items-center">
-              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(96,165,250,0.2)' }} />
-              <div className="mx-2"><ZynoBetLogoSvg size={14} /></div>
-              <div style={{ flex: 1, borderTop: '1.5px dashed rgba(96,165,250,0.2)' }} />
-            </div>
-
-            {/* Summary rows */}
-            <div className="mx-4 space-y-2.5 pb-3">
-              {[
-                { label: 'TOTAL ODDS:', value: bet.totalOdds.toFixed(2), valueColor: '#60a5fa' },
-                { label: 'STAKE:', value: formatLocal(bet.stake, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.stake.toFixed(2)}` : undefined, valueColor: '#fff' },
-                ...(hasBonus ? [{ label: 'BONUS:', value: formatLocal(bonusGhs, currency), sub: currency.code !== 'GHS' ? `GH₵${bonusGhs.toFixed(2)}` : undefined, valueColor: '#22c55e' }] : []),
-              ].map(row => (
-                <div key={row.label} className="flex items-start justify-between">
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.5px' }}>{row.label}</span>
-                  <div className="text-right">
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: row.valueColor }}>{row.value}</span>
-                    {(row as any).sub && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '1px' }}>{(row as any).sub}</p>}
-                  </div>
-                </div>
-              ))}
-
-              {/* Total winnings — highlighted */}
-              <div className="flex items-start justify-between pt-2 mt-1" style={{ borderTop: '1.5px solid rgba(96,165,250,0.3)' }}>
-                <span style={{ fontSize: '13px', fontWeight: 900, color: '#60a5fa', letterSpacing: '0.5px' }}>TOTAL WINNINGS:</span>
-                <div className="text-right">
-                  <span style={{ fontSize: '20px', fontWeight: 900, color: '#60a5fa' }}>
-                    {formatLocal(payoutGhs, currency)}
-                  </span>
-                  {currency.code !== 'GHS' && (
-                    <p style={{ fontSize: '11px', color: 'rgba(96,165,250,0.5)', marginTop: '2px' }}>GH₵{payoutGhs.toFixed(2)}</p>
-                  )}
-                </div>
+            {/* currency note */}
+            {currency.code !== 'GHS' && (
+              <div className="flex items-start gap-2 mx-4 mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <InfoOutlinedIcon sx={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', flexShrink: 0, marginTop: '1px' }} />
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
+                  GH₵{payoutGhs.toFixed(2)} credited · shown as{' '}
+                  <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatLocal(payoutGhs, currency)}</span> in {currency.code}
+                </p>
               </div>
+            )}
 
-              {/* Non-GHS note */}
-              {currency.code !== 'GHS' && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(96,165,250,0.1)' }}>
-                  <InfoOutlinedIcon sx={{ fontSize: 13, color: 'rgba(96,165,250,0.6)', flexShrink: 0, marginTop: '1px' }} />
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
-                    GH₵{payoutGhs.toFixed(2)} credited to your wallet · displayed as{' '}
-                    <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatLocal(payoutGhs, currency)}</span> in {currency.code}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Action buttons */}
-            <div className="px-4 pt-2 pb-2 flex gap-3">
+            {/* Action row */}
+            <div className="px-4 pt-1 pb-3 flex gap-3">
               <button
                 onClick={handleShowOff}
                 disabled={generatingImage}
                 className="flex-1 py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#fff', boxShadow: '0 4px 20px rgba(34,197,94,0.3)' }}
+                style={{ background: '#f59e0b', color: '#1a1a1a' }}
               >
-                {generatingImage ? <><CircularProgress fontSize="small" className="animate-spin" /> Generating…</> : <><ShareIcon fontSize="small" /> Share Slip</>}
+                {generatingImage ? <><CircularProgress sx={{ fontSize: 16 }} className="animate-spin" /> Generating…</> : <><ShareIcon fontSize="small" /> Share Slip</>}
               </button>
               <Link
                 to="/wallet"
                 onClick={onClose}
                 className="flex-1 py-3.5 rounded-xl font-black text-sm flex items-center justify-center transition-all active:scale-[0.97]"
-                style={{ background: 'linear-gradient(135deg, rgba(96,165,250,0.2), rgba(59,130,246,0.15))', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
+                style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
               >
                 Withdraw
               </Link>
@@ -841,14 +782,17 @@ function LossModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInf
     finally { setGeneratingImage(false); }
   };
 
+  const ticketId = formatTicketId(bet.id);
+  const betType = bet.selections.length > 1 ? 'Multiple' : 'Single';
   const placedDate = bet.placedAt
-    ? new Date(bet.placedAt).toLocaleString('en-GH', { hour: '2-digit', minute: '2-digit', hour12: true, month: 'numeric', day: 'numeric', year: 'numeric' })
+    ? new Date(bet.placedAt).toLocaleString('en-GH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
     : '';
+  const verificationCode = `${ticketId}${bet.id.slice(-10).toUpperCase()}`;
 
   return (
     <>
       <style>{`
-        @keyframes stakeSlideUp {
+        @keyframes lossSlideUp {
           from { opacity: 0; transform: translateY(32px) scale(0.98); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
@@ -857,73 +801,109 @@ function LossModal({ bet, currency, onClose }: { bet: Bet; currency: CurrencyInf
       <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
         <div
-          className="relative z-20 w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-hidden"
-          style={{ background: '#1a2332', border: '1px solid rgba(255,255,255,0.08)', animation: 'stakeSlideUp 0.35s cubic-bezier(0.16,1,0.3,1) both', paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}
+          className="relative z-20 w-full sm:max-w-md overflow-hidden"
+          style={{
+            background: '#111827',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '20px 20px 0 0',
+            animation: 'lossSlideUp 0.35s cubic-bezier(0.16,1,0.3,1) both',
+            paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)',
+          }}
         >
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-black px-2.5 py-1 rounded-md" style={{ background: '#ef4444', color: '#fff', letterSpacing: '0.05em' }}>Lost</span>
-              <span className="text-sm text-slate-400">{placedDate}</span>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '3px' }}>
+                Ticket ID: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{ticketId}</span>
+              </p>
+              <div className="flex items-center gap-2.5">
+                <span style={{ fontSize: '18px', fontWeight: 900, color: '#fff' }}>{betType}</span>
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#ef4444' }}>Lost</span>
+              </div>
             </div>
-            <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
-              <CloseIcon sx={{ fontSize: 17 }} />
-            </button>
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{placedDate}</span>
+              <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(85vh - 80px)' }}>
-            {bet.selections.map((sel, i) => {
-              const matchLabel = buildMatchLabel(sel as unknown as Record<string, unknown>);
-              const settledAt = bet.settledAt ? new Date(bet.settledAt).toLocaleString('en-GH', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '';
-              const isWonSel = sel.result === 'WON';
-              return (
-                <div key={sel.id ?? i} className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                      <SportsSoccerIcon sx={{ fontSize: 15 }} className="text-slate-300" />
-                    </div>
-                    <p className="text-sm font-bold text-white truncate">{matchLabel}</p>
-                  </div>
-                  {settledAt && <p className="text-xs text-slate-400 mb-3">{settledAt}</p>}
-                  <div className="inline-flex items-center px-3 py-1.5 rounded-lg mb-2 text-sm font-bold text-white" style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)' }}>
-                    {sel.selection}
-                  </div>
-                  <p className="text-xs text-slate-400 mb-3">{sel.market}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span style={{ color: isWonSel ? '#22c55e' : '#ef4444', fontSize: 16 }}>{isWonSel ? '✓' : '✗'}</span>
-                      <span className="text-sm font-bold text-white">{sel.selection}</span>
-                    </div>
-                    <span className="text-sm font-bold text-white">{(sel.oddsLocked ?? bet.totalOdds).toFixed(2)}</span>
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(85vh - 72px)' }}>
+            {/* Stats */}
+            <div className="px-5 py-4 space-y-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              {[
+                { label: 'Total Stake', value: formatLocal(bet.stake, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.stake.toFixed(2)}` : undefined },
+                { label: 'Total Odds', value: bet.totalOdds.toFixed(2) },
+                { label: 'Payout', value: '—', valueColor: '#ef4444' },
+              ].map(row => (
+                <div key={row.label} className="flex items-start justify-between">
+                  <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>{row.label}</span>
+                  <div className="text-right">
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: (row as any).valueColor ?? '#fff' }}>{row.value}</span>
+                    {(row as any).sub && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '1px' }}>{(row as any).sub}</p>}
                   </div>
                 </div>
-              );
-            })}
-
-            {/* ZynoBet divider */}
-            <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
-              <div className="flex items-center gap-1.5">
-                <ZynoBetLogoSvg size={14} />
-                <ZynoBetWordmarkDark size={13} />
-              </div>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              ))}
             </div>
 
-            <div className="px-4 py-3 space-y-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between"><span className="text-sm text-slate-400">Odds</span><span className="text-sm font-bold" style={{ color: '#3b82f6' }}>{bet.totalOdds.toFixed(2)}</span></div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Stake</span>
-                <div className="text-right">
-                  <span className="text-sm font-bold text-white">{formatLocal(bet.stake, currency)}</span>
-                  {currency.code !== 'GHS' && <p className="text-xs text-slate-500 mt-0.5">GH₵{bet.stake.toFixed(2)}</p>}
-                </div>
-              </div>
-              <div className="flex items-center justify-between"><span className="text-sm text-slate-400">Payout</span><span className="text-base font-black" style={{ color: '#ef4444' }}>{formatLocal(0, currency)}</span></div>
+            {/* Verification code */}
+            <div className="mx-4 my-4 flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Verification Code</span>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace', letterSpacing: '1px' }}>{verificationCode}</span>
             </div>
-            <div className="px-4 py-4 flex gap-3">
-              <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.97]" style={{ background: '#b91c1c', color: '#fff' }}>Try Again</button>
+
+            {/* Selections */}
+            <div className="px-4 space-y-3 pb-4">
+              {bet.selections.map((sel, i) => {
+                const isWonSel = sel.result === 'WON';
+                const isLostSel = sel.result === 'LOST';
+                const matchLabel = buildMatchLabel(sel as unknown as Record<string, unknown>);
+                const gameId = ((sel as any).matchId ?? '').slice(-6).toLowerCase();
+
+                return (
+                  <div key={sel.id ?? i} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${isLostSel ? 'rgba(239,68,68,0.25)' : isWonSel ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.1)'}` }}>
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ background: isLostSel ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : 'rgba(255,255,255,0.1)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <span style={{ fontSize: 11, color: '#fff', fontWeight: 900 }}>
+                          {isWonSel ? '✓' : isLostSel ? '✗' : '–'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', marginBottom: '1px' }}>
+                          {(sel as any).league ?? 'Football'} · Game ID: {gameId}
+                        </p>
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{matchLabel}</p>
+                      </div>
+                    </div>
+                    <div>
+                      {[
+                        { label: 'Pick', value: `${sel.selection}@${sel.oddsLocked.toFixed(2)}`, valueColor: isWonSel ? '#22c55e' : '#ef4444', extra: isWonSel ? ' ✓' : isLostSel ? ' ✗' : '' },
+                        { label: 'Market', value: sel.market, valueColor: '#fff' },
+                        { label: 'Outcome', value: sel.result ? sel.result.charAt(0) + sel.result.slice(1).toLowerCase() : 'Pending', valueColor: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : '#94a3b8' },
+                      ].map(row => (
+                        <div key={row.label} className="flex items-center justify-between px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)' }}>{row.label}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: row.valueColor }}>{row.value}{row.extra}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="px-4 pb-3 flex gap-3">
+              <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.97]" style={{ background: '#ef4444', color: '#fff' }}>
+                Try Again
+              </button>
               <button onClick={handleShowOff} disabled={generatingImage} className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.97] disabled:opacity-60" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)' }}>
-                {generatingImage ? <CircularProgress fontSize="small" className="animate-spin" /> : <><ShareIcon fontSize="small" /> Share</>}
+                {generatingImage ? <CircularProgress sx={{ fontSize: 16 }} className="animate-spin" /> : <><ShareIcon fontSize="small" /> Share</>}
               </button>
             </div>
             <button onClick={onClose} className="w-full pb-5 text-xs font-semibold text-slate-500 hover:text-slate-300 transition-colors">Back to Bets</button>
@@ -943,70 +923,130 @@ function BetDetailSheet({ bet, currency, onClose }: { bet: Bet; currency: Curren
   const [showWin, setShowWin] = useState(false);
   const [showLoss, setShowLoss] = useState(false);
 
+  const ticketId = formatTicketId(bet.id);
+  const betType = bet.selections.length > 1 ? 'Multiple' : 'Single';
+  const placedDate = bet.placedAt
+    ? new Date(bet.placedAt).toLocaleString('en-GH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
         <div
-          className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md overflow-y-auto"
-          style={{ maxHeight: 'calc(100vh - 80px - env(safe-area-inset-bottom))', paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+          className="overflow-y-auto w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl"
+          style={{
+            background: '#111827',
+            maxHeight: 'calc(100vh - 80px - env(safe-area-inset-bottom))',
+            paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+          }}
           onClick={e => e.stopPropagation()}
         >
-          <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-3 mb-1 sm:hidden" />
-          <div className="sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 z-10">
+          {/* drag handle */}
+          <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-1 sm:hidden" style={{ background: 'rgba(255,255,255,0.15)' }} />
+
+          {/* Header: "Bet Slip" title + Ticket ID + date */}
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4" style={{ background: '#111827', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
             <div>
-              <h3 className="font-bold text-base text-slate-900 dark:text-white">Bet Details</h3>
-              <p className="text-xs text-slate-400 mt-0.5">#{bet.id.slice(-8).toUpperCase()}</p>
+              <h3 className="font-bold text-base" style={{ color: '#fff' }}>Bet Slip</h3>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '1px' }}>
+                Ticket ID: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.6)' }}>{ticketId}</span>
+                <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.3)' }}>{placedDate}</span>
+              </p>
             </div>
             <div className="flex items-center gap-2">
+              {/* bet type + status */}
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>{betType}</span>
               <StatusBadge status={bet.status} />
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"><CloseIcon fontSize="small" /></button>
+              <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.08)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </button>
             </div>
           </div>
-          <div className="px-5 py-4 space-y-2">
-            {bet.selections.map((sel, i) => (
-              <div key={sel.id ?? i} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                <div className="min-w-0 flex-1 mr-3">
-                  <p className="text-xs text-slate-400 truncate">{buildMatchLabel(sel as unknown as Record<string, unknown>)}</p>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{sel.market}: {sel.selection}<SelectionResult result={sel.result} /></p>
-                </div>
-                <span className="font-bold text-primary text-sm shrink-0">{sel.oddsLocked.toFixed(2)}</span>
-              </div>
-            ))}
+
+          {/* Total Return hero */}
+          <div className="px-5 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>Total Return</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: bet.status === 'WON' ? '#22c55e' : '#fff', lineHeight: 1 }}>
+                {formatLocal(bet.potentialReturn, currency)}
+              </p>
+              {currency.code !== 'GHS' && (
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '3px' }}>GH₵{bet.potentialReturn.toFixed(2)}</p>
+              )}
+            </div>
+            <div style={{
+              textAlign: 'right',
+              display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end',
+            }}>
+              <div><span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Total Stake </span><span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{formatLocal(bet.stake, currency)}</span></div>
+              <div><span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Total Odds </span><span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{bet.totalOdds.toFixed(2)}</span></div>
+              <div><span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Potential Win </span><span style={{ fontSize: '13px', fontWeight: 700, color: '#22c55e' }}>{formatLocal(bet.potentialReturn, currency)}</span></div>
+            </div>
           </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 mx-5" />
-          <div className="px-5 py-4 space-y-2.5">
-            {[
-              { label: `Stake (${currency.code})`, value: formatLocal(bet.stake, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.stake.toFixed(2)}` : undefined },
-              { label: 'Total Odds', value: bet.totalOdds.toFixed(2) },
-              { label: `Potential Return (${currency.code})`, value: formatLocal(bet.potentialReturn, currency), sub: currency.code !== 'GHS' ? `GH₵${bet.potentialReturn.toFixed(2)}` : undefined, highlight: true },
-              { label: 'Placed At', value: new Date(bet.placedAt).toLocaleString() },
-              ...(bet.settledAt ? [{ label: 'Settled At', value: new Date(bet.settledAt).toLocaleString() }] : []),
-            ].map(({ label, value, sub, highlight }) => (
-              <div key={label} className="flex justify-between items-start text-sm">
-                <span className="text-slate-400 shrink-0">{label}</span>
-                <div className="text-right ml-3">
-                  <span className={`font-semibold ${highlight ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-100'}`}>{value}</span>
-                  {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-                </div>
-              </div>
-            ))}
+
+          {/* Verification code */}
+          <div className="mx-4 my-4 flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Verification Code</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#22c55e', fontFamily: 'monospace', letterSpacing: '1px' }}>
+              {ticketId}{bet.id.slice(-10).toUpperCase()}
+            </span>
           </div>
+
+          {/* Selections */}
+          <div className="px-4 space-y-3 pb-4">
+            {bet.selections.map((sel: BetSelection, i: number) => {
+              const isWonSel = sel.result === 'WON';
+              const isLostSel = sel.result === 'LOST';
+              const matchLabel = buildMatchLabel(sel as unknown as Record<string, unknown>);
+              const gameId = ((sel as any).matchId ?? '').slice(-6).toLowerCase();
+
+              return (
+                <div key={sel.id ?? i} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${isWonSel ? 'rgba(34,197,94,0.25)' : isLostSel ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)'}` }}>
+                  <div className="flex items-center gap-2 px-3 py-2" style={{ background: isWonSel ? 'rgba(34,197,94,0.07)' : isLostSel ? 'rgba(239,68,68,0.05)' : 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: '#fff', fontWeight: 900 }}>{isWonSel ? '✓' : isLostSel ? '✗' : '–'}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', marginBottom: '1px' }}>{(sel as any).league ?? 'Football'} · Game ID: {gameId}</p>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{matchLabel}</p>
+                    </div>
+                  </div>
+                  {[
+                    { label: 'Pick', value: `${sel.selection}@${sel.oddsLocked.toFixed(2)}`, valueColor: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : '#fff', extra: isWonSel ? ' ✓' : isLostSel ? ' ✗' : '' },
+                    { label: 'Market', value: sel.market, valueColor: '#fff' },
+                    { label: 'Outcome', value: sel.result ? sel.result.charAt(0) + sel.result.slice(1).toLowerCase() : 'Pending', valueColor: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : '#94a3b8' },
+                  ].map(row => (
+                    <div key={row.label} className="flex items-center justify-between px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)' }}>{row.label}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: row.valueColor }}>{row.value}{row.extra}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+
           {(bet.status === 'WON' || bet.status === 'LOST') && (
-            <div className="px-5 pt-1 pb-2">
+            <div className="px-4 pt-1 pb-2">
               <button
                 onClick={() => {
                   if (bet.status === 'WON') { setShowWin(true); setModalOpen(true); }
                   else { setShowLoss(true); setModalOpen(true); }
                 }}
-                className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${bet.status === 'WON' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-colors"
+                style={bet.status === 'WON'
+                  ? { background: '#22c55e', color: '#111827' }
+                  : { background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)' }}
               >
                 {bet.status === 'WON' ? '🏆 View Winnings' : '😭 View Result'}
               </button>
             </div>
           )}
           {bet.status === 'VOID' && (
-            <div className="px-5 pt-1 pb-2">
-              <div className="w-full py-3 px-4 rounded-xl text-sm font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-center">↩ Stake refunded to your wallet</div>
+            <div className="px-4 pt-1 pb-2">
+              <div className="w-full py-3 px-4 rounded-xl text-sm font-medium text-center" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }}>
+                ↩ Stake refunded to your wallet
+              </div>
             </div>
           )}
         </div>
@@ -1552,48 +1592,86 @@ function MyBetsTab() {
         </div>
       )}
 
+      {/* Bet cards — updated to show "Ticket ID: xxx · Multiple · date" style header */}
       {filtered.map(bet => {
         const isWon = bet.status === 'WON';
         const isLost = bet.status === 'LOST';
         const isVoid = bet.status === 'VOID';
+        const ticketId = formatTicketId(bet.id);
+        const betType = bet.selections.length > 1 ? 'Multiple' : 'Single';
         return (
           <button
             key={bet.id}
             onClick={() => { setDetailBet(bet); setModalOpen(true); }}
-            className={`w-full text-left bg-white dark:bg-slate-900 rounded-2xl border transition-all active:scale-[0.98] p-4 ${isWon ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-900/10' : isLost ? 'border-slate-100 dark:border-slate-800 opacity-70' : isVoid ? 'border-blue-100 dark:border-blue-900/40 opacity-70' : 'border-slate-100 dark:border-slate-800 hover:border-primary/20'}`}
+            className={`w-full text-left rounded-2xl border transition-all active:scale-[0.98] overflow-hidden ${isWon ? 'border-emerald-800/50 bg-emerald-950/30' : isLost ? 'border-slate-700/50 bg-slate-900/50 opacity-75' : isVoid ? 'border-blue-800/40 bg-blue-950/20 opacity-75' : 'border-slate-700/50 bg-slate-900 hover:border-slate-600'}`}
+            style={{ background: isWon ? 'rgba(6,78,59,0.2)' : '#111827' }}
           >
-            <div className="flex justify-between items-start mb-2.5">
+            {/* Card header */}
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
               <div>
-                <p className="text-xs text-slate-400">{new Date(bet.placedAt).toLocaleDateString('en-GH', { day: '2-digit', month: 'short' })}</p>
-                <p className="text-xs font-semibold text-slate-500 mt-0.5">{bet.selections.length} selection{bet.selections.length !== 1 ? 's' : ''}</p>
-              </div>
-              <StatusBadge status={bet.status} />
-            </div>
-            <div className="space-y-1 mb-3">
-              {bet.selections.slice(0, 2).map((sel: BetSelection, i: number) => (
-                <p key={sel.id ?? i} className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                  {buildMatchLabel(sel as unknown as Record<string, unknown>)} · <span className="font-medium text-slate-700 dark:text-slate-300">{sel.market}</span>{' · '}<span className="font-bold text-primary">{(sel.oddsLocked ?? 0).toFixed(2)}</span><SelectionResult result={sel.result} />
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginBottom: '2px' }}>
+                  Ticket ID: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.55)' }}>{ticketId}</span>
+                  <span style={{ marginLeft: 8, color: 'rgba(255,255,255,0.25)' }}>
+                    {new Date(bet.placedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}
+                    {', '}
+                    {new Date(bet.placedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </span>
                 </p>
-              ))}
-              {bet.selections.length > 2 && <p className="text-xs text-slate-400">+{bet.selections.length - 2} more</p>}
-            </div>
-            <div className="flex justify-between items-center pt-2.5 border-t border-slate-100 dark:border-slate-800">
-              <div>
-                <p className="text-xs text-slate-400">Stake</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{formatLocal(bet.stake, currency)}</p>
-                {currency.code !== 'GHS' && !currencyLoading && <p className="text-[10px] text-slate-400">GH₵{bet.stake.toFixed(2)}</p>}
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>{betType}</span>
+                  <span style={{
+                    fontSize: '11px', fontWeight: 700,
+                    color: isWon ? '#22c55e' : isLost ? '#ef4444' : isVoid ? '#60a5fa' : '#fbbf24',
+                    display: 'flex', alignItems: 'center', gap: 3,
+                  }}>
+                    {isWon ? '🏆 Won' : isLost ? 'Lost' : isVoid ? 'Void' : '⏳ Open'}
+                  </span>
+                </div>
               </div>
+              {/* Total return amount */}
               <div className="text-right">
-                <p className="text-xs text-slate-400">Return</p>
-                <p className={`text-sm font-bold ${isWon ? 'text-emerald-600' : isVoid ? 'text-blue-500' : 'text-slate-500'}`}>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginBottom: '2px' }}>Total Return</p>
+                <p style={{ fontSize: '18px', fontWeight: 900, color: isWon ? '#22c55e' : isVoid ? '#60a5fa' : '#fff', lineHeight: 1 }}>
                   {isVoid ? formatLocal(bet.stake, currency) : formatLocal(bet.potentialReturn, currency)}
                 </p>
-                {currency.code !== 'GHS' && !currencyLoading && <p className="text-[10px] text-slate-400">GH₵{(isVoid ? bet.stake : bet.potentialReturn).toFixed(2)}</p>}
               </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400">Odds</p>
-                <p className="text-sm font-bold text-primary">{bet.totalOdds.toFixed(2)}x</p>
-              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-3 divide-x px-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', divideColor: 'rgba(255,255,255,0.07)' }}>
+              {[
+                { label: 'Total Stake', value: formatLocal(bet.stake, currency) },
+                { label: 'Total Odds', value: `${bet.totalOdds.toFixed(2)}` },
+                { label: 'Potential Win', value: formatLocal(bet.potentialReturn, currency) },
+              ].map((item, i) => (
+                <div key={item.label} className="px-3 py-2.5 text-center" style={{ borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                  <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', marginBottom: '2px' }}>{item.label}</p>
+                  <p style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Selections preview */}
+            <div className="px-4 pt-2.5 pb-3 space-y-1">
+              {bet.selections.slice(0, 2).map((sel: BetSelection, i: number) => {
+                const isWonSel = sel.result === 'WON';
+                const isLostSel = sel.result === 'LOST';
+                return (
+                  <div key={sel.id ?? i} className="flex items-center gap-2 text-xs">
+                    <span style={{ color: isWonSel ? '#22c55e' : isLostSel ? '#ef4444' : 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                      {isWonSel ? '✓' : isLostSel ? '✗' : '•'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', flex: 1 }} className="truncate">
+                      {buildMatchLabel(sel as unknown as Record<string, unknown>)}
+                    </span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>{sel.market}</span>
+                    <span style={{ color: isWonSel ? '#22c55e' : 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{(sel.oddsLocked ?? 0).toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              {bet.selections.length > 2 && (
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>+{bet.selections.length - 2} more selection{bet.selections.length - 2 !== 1 ? 's' : ''}</p>
+              )}
             </div>
           </button>
         );
