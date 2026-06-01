@@ -11,6 +11,7 @@ import SportsFootballIcon from '@mui/icons-material/SportsFootball';
 import SportsBaseballIcon from '@mui/icons-material/SportsBaseball';
 import SportsMmaIcon from '@mui/icons-material/SportsMma';
 import SportsTennisIcon from '@mui/icons-material/SportsTennis';
+import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -21,7 +22,10 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 type SportTab = 'football' | 'basketball' | 'tennis' | 'baseball' | 'nfl' | 'mma';
 
 interface OddsMap { home: number; draw: number; away: number; }
-interface EnrichedMatch extends Match { oddsMap?: OddsMap; }
+interface EnrichedMatch extends Match {
+  oddsMap?: OddsMap;
+  isAdmin?: boolean; // admin-created / operator game — odds locked when live
+}
 interface BetSlipEntry {
   matchId: string; matchName: string; market: string; selection: string; odd: number;
 }
@@ -41,7 +45,45 @@ const SPORT_TABS: { key: SportTab; label: string; icon: React.ReactNode }[] = [
 const TWO_WAY_ODDS_SPORTS = new Set<SportTab>(['baseball', 'basketball', 'nfl', 'mma']);
 
 // ---------------------------------------------------------------------------
-// Status sets — copied verbatim from MatchList
+// Underground / lower-league fallback names per sport
+// Used when no league name can be resolved — replaces the ugly "(no league)" label
+// ---------------------------------------------------------------------------
+const UNDERGROUND_LEAGUES: Record<SportTab, string[]> = {
+  football: [
+    'Non-League Division', 'Regional League', 'Amateur Cup', 'Sunday League Elite',
+    'District Premier Division', 'County Cup', 'Grassroots Super League',
+  ],
+  basketball: [
+    'Regional Basketball League', 'Community Hoops Division', 'Amateur Basketball Cup',
+    'Local Pro-Am League', 'District Basketball Series',
+  ],
+  tennis: [
+    'ITF Futures Circuit', 'Regional Tennis Tour', 'Amateur Open Series',
+    'Club Championship', 'Local Pro Circuit',
+  ],
+  baseball: [
+    'Independent Baseball League', 'Regional Diamond Series', 'Amateur Baseball Cup',
+    'Community Diamond League', 'District Baseball Circuit',
+  ],
+  nfl: [
+    'Regional Gridiron League', 'Semi-Pro Football Division', 'Amateur Gridiron Cup',
+    'Community Football League', 'District Football Series',
+  ],
+  mma: [
+    'Regional MMA Promotions', 'Amateur Combat Series', 'Underground Fight League',
+    'Local MMA Circuit', 'Community Combat League',
+  ],
+};
+
+/** Returns a consistent fallback league name for a match (deterministic from match id) */
+function getFallbackLeagueName(sport: SportTab, matchId: string): string {
+  const options = UNDERGROUND_LEAGUES[sport] ?? UNDERGROUND_LEAGUES.football;
+  const idx = Math.abs([...matchId].reduce((acc, c) => acc + c.charCodeAt(0), 0)) % options.length;
+  return options[idx];
+}
+
+// ---------------------------------------------------------------------------
+// Status sets
 // ---------------------------------------------------------------------------
 const LIVE_STATUSES = new Set([
   'LIVE','live','IN_PLAY','in_play','inplay',
@@ -74,7 +116,7 @@ const EXTRA_TIME_STATUSES = new Set(['EXTRA_TIME','extra_time','ET','et','ET1','
 const PENALTY_STATUSES   = new Set(['PENALTIES','penalties','PEN','pen','SHOOTOUT','shootout']);
 
 // ---------------------------------------------------------------------------
-// Team logo — copied from MatchList
+// Team logo
 // ---------------------------------------------------------------------------
 function getTeamInitials(name: string): string {
   if (!name) return '?';
@@ -111,7 +153,7 @@ function TeamLogo({ name, logo, size = 28 }: { name: string; logo?: string; size
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — copied from MatchList
+// Helpers
 // ---------------------------------------------------------------------------
 function inferLeagueFromTeams(homeTeam: string, awayTeam: string): string {
   const LEAGUE_TEAMS: Record<string, { leagueNames: string[]; teams: string[] }> = {
@@ -131,7 +173,7 @@ function inferLeagueFromTeams(homeTeam: string, awayTeam: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// normalizeMatch — copied verbatim from MatchList
+// normalizeMatch
 // ---------------------------------------------------------------------------
 function looksLikeFixtureName(s: string): boolean {
   return / at /i.test(s) || / vs\.? /i.test(s) || / @ /i.test(s);
@@ -261,18 +303,23 @@ function normalizeMatch(raw: unknown): Match | null {
     if (clock) { const mins = parseInt(String(clock), 10); if (!isNaN(mins)) minutePlayed = mins; }
   }
 
+  // Detect admin/operator-created game — flagged via `isAdmin`, `source === 'ADMIN'`, or `adminCreated`
+  const isAdmin = Boolean(
+    r.isAdmin ?? r.is_admin ?? r.adminCreated ?? r.admin_created ?? (r.source === 'ADMIN')
+  );
+
   return {
     id, source: (r.source as Match['source']) ?? 'ESPN',
     homeTeam, awayTeam, league: leagueName, status, kickoffAt,
     scoreHome, scoreAway, homeLogo, awayLogo, leagueLogo, minutePlayed,
     sport: String(r.sport ?? 'FOOTBALL'),
     createdAt: String(r.createdAt ?? r.created_at ?? ''),
-  } as Match;
+    isAdmin,
+  } as Match & { isAdmin: boolean };
 }
 
 // ---------------------------------------------------------------------------
 // safeUnwrapList / unwrapWithAllOdds / safeUnwrapOddsArray
-// — copied verbatim from MatchList
 // ---------------------------------------------------------------------------
 function safeUnwrapList(raw: unknown): Match[] {
   if (!raw) return [];
@@ -331,7 +378,7 @@ function safeUnwrapOddsArray(raw: unknown): unknown[] {
 }
 
 // ---------------------------------------------------------------------------
-// extractOddsMap — copied verbatim from MatchList
+// extractOddsMap
 // ---------------------------------------------------------------------------
 function extractOddsMap(oddsArray: unknown[], homeTeam: string, awayTeam: string): OddsMap | undefined {
   if (!Array.isArray(oddsArray) || oddsArray.length === 0) return undefined;
@@ -382,7 +429,7 @@ function mergeOddsById(oddsById: Map<string, unknown[]>, entries: Array<{ match:
 }
 
 // ---------------------------------------------------------------------------
-// fetchAllFootballMatches — copied verbatim from MatchList
+// fetchAllFootballMatches
 // ---------------------------------------------------------------------------
 async function fetchAllFootballMatches(): Promise<EnrichedMatch[]> {
   const [
@@ -490,7 +537,6 @@ async function fetchAllFootballMatches(): Promise<EnrichedMatch[]> {
 
 // ---------------------------------------------------------------------------
 // fetchBasketballMatches / Tennis / Baseball / NFL / MMA
-// — copied verbatim from MatchList
 // ---------------------------------------------------------------------------
 async function fetchBasketballMatches(): Promise<EnrichedMatch[]> {
   const [live, upcoming, results] = await Promise.allSettled([
@@ -571,9 +617,6 @@ async function fetchMmaMatches(): Promise<EnrichedMatch[]> {
   ]);
 }
 
-// ---------------------------------------------------------------------------
-// fetchAllForSport — same full fetch as MatchList; caller filters to live
-// ---------------------------------------------------------------------------
 async function fetchAllForSport(sport: SportTab): Promise<EnrichedMatch[]> {
   switch (sport) {
     case 'football':   return fetchAllFootballMatches();
@@ -587,7 +630,7 @@ async function fetchAllForSport(sport: SportTab): Promise<EnrichedMatch[]> {
 }
 
 // ---------------------------------------------------------------------------
-// useLiveTimer — copied verbatim from MatchList
+// useLiveTimer
 // ---------------------------------------------------------------------------
 function useLiveTimer(match: EnrichedMatch): string {
   const status = match.status ?? '';
@@ -624,7 +667,7 @@ function useLiveTimer(match: EnrichedMatch): string {
 }
 
 // ---------------------------------------------------------------------------
-// LiveTimerBadge — copied from MatchList
+// LiveTimerBadge
 // ---------------------------------------------------------------------------
 function LiveTimerBadge({ match }: { match: EnrichedMatch }) {
   const timerStr = useLiveTimer(match);
@@ -637,7 +680,30 @@ function LiveTimerBadge({ match }: { match: EnrichedMatch }) {
 }
 
 // ---------------------------------------------------------------------------
-// OddsButton + OddsRow — copied from MatchList
+// AdminLockedBadge — shown on admin game odds buttons
+// ---------------------------------------------------------------------------
+function AdminLockedBadge() {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+        padding: '6px 10px', borderRadius: 8,
+        border: '1px solid rgba(255,170,0,0.3)',
+        background: 'rgba(255,170,0,0.08)',
+        color: 'rgba(255,170,0,0.85)',
+        fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
+        width: '100%',
+      }}
+    >
+      <LockIcon sx={{ fontSize: 11 }} />
+      Odds locked
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OddsButton + OddsRow
+// — Odds are only locked when match.isAdmin === true AND match is live
 // ---------------------------------------------------------------------------
 function OddsButton({ subLabel, value, selected, locked, onClick }: {
   subLabel: string; value: number; selected: boolean; locked: boolean; onClick: () => void;
@@ -654,18 +720,29 @@ function OddsButton({ subLabel, value, selected, locked, onClick }: {
   );
 }
 
-function OddsRow({ odds, selections, oddsValues, matchId, matchName, betSlip, addToBetSlip, showToast }: {
+function OddsRow({ odds, selections, oddsValues, matchId, matchName, isAdminLive, betSlip, addToBetSlip, showToast }: {
   odds: OddsMap | undefined;
   selections: { key: string; sub: string }[];
   oddsValues: number[];
   matchId: string;
   matchName: string;
+  /** true only when isAdmin=true AND status is live — locks all buttons */
+  isAdminLive: boolean;
   betSlip: BetSlipEntry[];
   addToBetSlip: (entry: BetSlipEntry) => void;
   showToast: (message: string, type: string) => void;
 }) {
   const isSelected = (sel: string) =>
     betSlip.some((s) => s.matchId === matchId && s.market === '1X2' && s.selection === sel);
+
+  // Admin live games: show a single locked banner instead of individual buttons
+  if (isAdminLive) {
+    return (
+      <div className="match-odds-row" style={{ padding: '4px 0' }}>
+        <AdminLockedBadge />
+      </div>
+    );
+  }
 
   if (!odds) {
     return (
@@ -696,7 +773,7 @@ function OddsRow({ odds, selections, oddsValues, matchId, matchName, betSlip, ad
 }
 
 // ---------------------------------------------------------------------------
-// MatchCard — copied from MatchList (always live; scores always visible)
+// MatchCard
 // ---------------------------------------------------------------------------
 function MatchCard({ match, showDraw = true }: { match: EnrichedMatch; showDraw?: boolean }) {
   const navigate = useNavigate();
@@ -714,6 +791,9 @@ function MatchCard({ match, showDraw = true }: { match: EnrichedMatch; showDraw?
     ? [odds?.home ?? 0, odds?.draw ?? 0, odds?.away ?? 0]
     : [odds?.home ?? 0, odds?.away ?? 0];
 
+  // Lock odds only for admin games while they are live
+  const isAdminLive = Boolean(match.isAdmin) && LIVE_STATUSES.has(match.status ?? '');
+
   return (
     <div
       className="match-card live"
@@ -722,6 +802,17 @@ function MatchCard({ match, showDraw = true }: { match: EnrichedMatch; showDraw?
     >
       <div className="match-card-topbar">
         <LiveTimerBadge match={match} />
+        {/* Admin badge */}
+        {match.isAdmin && (
+          <span style={{
+            marginLeft: 6, fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
+            padding: '1px 5px', borderRadius: 4,
+            background: 'rgba(255,170,0,0.15)', color: 'rgba(255,170,0,0.9)',
+            textTransform: 'uppercase',
+          }}>
+            Admin
+          </span>
+        )}
         <ChevronRightIcon sx={{ fontSize: 14, ml: 'auto', color: 'var(--text-muted)', opacity: 0.5 }} />
       </div>
 
@@ -741,6 +832,7 @@ function MatchCard({ match, showDraw = true }: { match: EnrichedMatch; showDraw?
       <OddsRow
         odds={odds} selections={selections} oddsValues={oddsValues}
         matchId={match.id} matchName={`${match.homeTeam} vs ${match.awayTeam}`}
+        isAdminLive={isAdminLive}
         betSlip={betSlip} addToBetSlip={addToBetSlip} showToast={showToast}
       />
     </div>
@@ -748,7 +840,7 @@ function MatchCard({ match, showDraw = true }: { match: EnrichedMatch; showDraw?
 }
 
 // ---------------------------------------------------------------------------
-// SkeletonCard — copied from MatchList
+// SkeletonCard
 // ---------------------------------------------------------------------------
 function SkeletonCard() {
   return (
@@ -778,7 +870,8 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
-// League sort + grouping — same as MatchList
+// League sort + grouping
+// — "(no league)" replaced with deterministic underground league name
 // ---------------------------------------------------------------------------
 const TOP_6 = ['Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1'];
 const CUPS  = new Set(['FA Cup','EFL Cup / Carabao Cup','Copa del Rey','DFB Pokal','Coppa Italia','Coupe de France','UEFA Champions League','UEFA Europa League','UEFA Conference League','UEFA Nations League']);
@@ -791,10 +884,21 @@ function leagueSortKey(league: string): string {
   return `02_${league.toLowerCase()}`;
 }
 
-function groupByLeague(matches: EnrichedMatch[]): Map<string, EnrichedMatch[]> {
+/**
+ * Groups matches by league name.
+ * Matches with no resolved league get a deterministic underground league name
+ * instead of the ugly "(no league)" placeholder.
+ */
+function groupByLeague(
+  matches: EnrichedMatch[],
+  sport: SportTab,
+): Map<string, EnrichedMatch[]> {
   const map = new Map<string, EnrichedMatch[]>();
   for (const m of matches) {
-    const key = m.league || '(no league)';
+    // Use real league name if present; otherwise derive a fallback from sport + match id
+    const key = m.league?.trim()
+      ? m.league.trim()
+      : getFallbackLeagueName(sport, m.id);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(m);
   }
@@ -815,7 +919,6 @@ export default function LiveMatchesPage() {
   const [sportCounts, setSportCounts] = useState<Partial<Record<SportTab, number>>>({});
   const sportGenRefs = useRef<Record<SportTab, number>>({ football: 0, basketball: 0, tennis: 0, baseball: 0, nfl: 0, mma: 0 });
 
-  // ── Fetch: same full fetch as MatchList, then keep only LIVE_STATUSES ─────
   const fetchLive = useCallback(async (sport: SportTab, silent = false) => {
     const gen = ++sportGenRefs.current[sport];
     const alive = () => sportGenRefs.current[sport] === gen;
@@ -826,7 +929,6 @@ export default function LiveMatchesPage() {
     try {
       const all  = await fetchAllForSport(sport);
       if (!alive()) return;
-      // Filter exactly the same way MatchList populates its "Live Now" section
       const live = all.filter((m) => LIVE_STATUSES.has(m.status ?? ''));
       setLiveMatches(live);
       setLastUpdated(new Date());
@@ -851,7 +953,6 @@ export default function LiveMatchesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Background refresh every 30s — same as MatchList
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === 'visible') fetchLive(activeSport, true); };
     const interval = setInterval(refresh, 30_000);
@@ -859,7 +960,6 @@ export default function LiveMatchesPage() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, [activeSport, fetchLive]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (!teamFilter.trim()) return liveMatches;
     const lower = teamFilter.toLowerCase();
@@ -868,14 +968,14 @@ export default function LiveMatchesPage() {
     );
   }, [liveMatches, teamFilter]);
 
-  const grouped  = useMemo(() => groupByLeague(filtered), [filtered]);
+  // Pass activeSport so groupByLeague can resolve fallback league names per sport
+  const grouped  = useMemo(() => groupByLeague(filtered, activeSport), [filtered, activeSport]);
   const showDraw = !TWO_WAY_ODDS_SPORTS.has(activeSport);
 
   const sportEmoji: Record<SportTab, string> = {
     football: '⚽', basketball: '🏀', tennis: '🎾', baseball: '⚾', nfl: '🏈', mma: '🥊',
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="px-4 mt-4">
 
@@ -907,7 +1007,7 @@ export default function LiveMatchesPage() {
         </div>
       </div>
 
-      {/* Sport tabs — identical markup to MatchList */}
+      {/* Sport tabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 no-scrollbar">
         {SPORT_TABS.map((tab) => {
           const count = sportCounts[tab.key];
@@ -978,7 +1078,7 @@ export default function LiveMatchesPage() {
         </div>
       )}
 
-      {/* Live matches — same section + league-group markup as MatchList */}
+      {/* Live matches */}
       {!loading && !error && grouped.size > 0 && (
         <section className="mb-6">
           <div className="section-header">
