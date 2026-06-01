@@ -863,7 +863,8 @@ function HalfTimePanel({ groups, matchId, matchName, locked, sport }: {
 }
 
 // ---------------------------------------------------------------------------
-// Correct Score Panel
+// Correct Score Panel — reference style: 3-col grid (Home | Draw | Away)
+// Each cell: score label left, odd value right, light-green tint bg
 // ---------------------------------------------------------------------------
 function CorrectScorePanel({ groups, matchId, matchName, homeTeam, awayTeam, locked }: {
   groups: OddsGroup[]; matchId: string; matchName: string;
@@ -880,69 +881,134 @@ function CorrectScorePanel({ groups, matchId, matchName, homeTeam, awayTeam, loc
 
   const scores = parseCorrectScoreGroups(groups);
   const market = groups[0]?.market ?? 'correct_score';
+
   if (!scores.length) return (
     <p className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>No correct score odds available.</p>
   );
 
-  const parseScore = (s: string) => { const m = s.match(/(\d+)[:\-](\d+)/); return m ? { h: parseInt(m[1]), a: parseInt(m[2]) } : null; };
-  const homeWins: typeof scores = [], draws: typeof scores = [], awayWins: typeof scores = [], other: typeof scores = [];
+  const parseScore = (s: string) => {
+    const m = s.match(/(\d+)[:\-](\d+)/);
+    return m ? { h: parseInt(m[1]), a: parseInt(m[2]) } : null;
+  };
+
+  const homeWins: typeof scores = [];
+  const draws:    typeof scores = [];
+  const awayWins: typeof scores = [];
+  const other:    typeof scores = [];
+
   for (const s of scores) {
     const p = parseScore(s.label);
     if (!p) { other.push(s); continue; }
-    if (p.h > p.a) homeWins.push(s);
+    if (p.h > p.a)      homeWins.push(s);
     else if (p.h === p.a) draws.push(s);
-    else awayWins.push(s);
+    else                  awayWins.push(s);
   }
 
-  const Section = ({ title, bg, items }: { title: string; bg: string; items: typeof scores }) => {
-    if (!items.length) return null;
+  // Normalise label to always use colon separator e.g. "1:0"
+  const normLabel = (l: string) => l.replace('-', ':');
+
+  // Max rows across the three columns — used to render a unified row grid
+  const maxRows = Math.max(homeWins.length, draws.length, awayWins.length);
+
+  // Colour helpers — selected = primary, normal = soft green tint
+  const cellBg    = 'rgba(134,239,172,0.13)'; // light green tint matching reference
+  const cellBgSel = 'var(--primary)';
+
+  const ScoreCell = ({
+    item, colMarket,
+  }: {
+    item: (typeof scores)[number] | undefined;
+    colMarket: string;
+  }) => {
+    if (!item) return <div style={{ background: 'transparent' }} className="rounded-lg" />;
+    const sel = isSel(colMarket, item.label);
     return (
-      <div className="card overflow-hidden">
-        <div className={`px-4 py-2.5 ${bg}`}>
-          <span className="text-xs font-black uppercase tracking-widest text-white">{title}</span>
-        </div>
-        <div className="p-3 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-          {items.map((s) => {
-            const sel = isSel(market, s.label);
+      <button
+        onClick={() => !locked && pick(colMarket, item.label, item.odd)}
+        disabled={locked || item.odd <= 0}
+        className={`flex items-center justify-between px-2 py-2.5 rounded-lg w-full transition-all
+          ${locked
+            ? 'opacity-60 cursor-not-allowed'
+            : sel
+              ? 'shadow-md scale-[1.02]'
+              : 'cursor-pointer active:scale-[0.97]'
+          }`}
+        style={{
+          background: sel ? cellBgSel : cellBg,
+          border: sel ? '1.5px solid var(--primary)' : '1.5px solid transparent',
+        }}
+      >
+        {/* Score */}
+        <span
+          className="text-sm font-semibold tabular-nums shrink-0"
+          style={{ color: sel ? '#fff' : 'var(--text-muted)' }}
+        >
+          {normLabel(item.label)}
+        </span>
+        {/* Odd or lock */}
+        <span
+          className="text-sm font-black tabular-nums ml-1"
+          style={{ color: sel ? '#fff' : 'var(--text-main)' }}
+        >
+          {locked
+            ? <LockIcon sx={{ fontSize: 12 }} style={{ color: 'var(--text-muted)' }} />
+            : item.odd.toFixed(2)
+          }
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <div>
+      {/* Column headers */}
+      <div className="grid grid-cols-3 gap-1 mb-1 px-0.5">
+        {[homeTeam, 'Draw', awayTeam].map((h) => (
+          <div key={h} className="text-center text-xs font-bold truncate px-1" style={{ color: 'var(--text-muted)' }}>
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {/* Score grid rows */}
+      <div className="space-y-1">
+        {Array.from({ length: maxRows }).map((_, i) => (
+          <div key={i} className="grid grid-cols-3 gap-1">
+            <ScoreCell item={homeWins[i]} colMarket={market} />
+            <ScoreCell item={draws[i]}    colMarket={market} />
+            <ScoreCell item={awayWins[i]} colMarket={market} />
+          </div>
+        ))}
+      </div>
+
+      {/* "Other" row — reference shows a full-width Other cell at the bottom */}
+      {other.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {other.map((item) => {
+            const sel = isSel(market, item.label);
             return (
               <button
-                key={s.label}
-                onClick={() => !locked && pick(market, s.label, s.odd)}
+                key={item.label}
+                onClick={() => !locked && pick(market, item.label, item.odd)}
                 disabled={locked}
-                className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all
-                  ${locked
-                    ? 'opacity-50 cursor-not-allowed border-dashed'
-                    : sel
-                      ? 'bg-primary text-white border-primary shadow-md scale-[1.05]'
-                      : 'cursor-pointer hover:border-primary active:scale-95'
-                  }`}
-                style={!sel && !locked ? { background: 'var(--card-alt)', borderColor: 'var(--border-light)' }
-                     : locked           ? { borderColor: 'var(--border-light)' }
-                     : undefined}
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg transition-all
+                  ${locked ? 'opacity-60 cursor-not-allowed' : sel ? 'shadow-md' : 'cursor-pointer active:scale-[0.98]'}`}
+                style={{
+                  background: sel ? cellBgSel : cellBg,
+                  border: sel ? '1.5px solid var(--primary)' : '1.5px solid transparent',
+                }}
               >
-                <span className="text-sm font-black tabular-nums leading-none" style={{ color: sel ? '#fff' : 'var(--text-main)' }}>
-                  {s.label}
+                <span className="text-sm font-semibold" style={{ color: sel ? '#fff' : 'var(--text-muted)' }}>
+                  Other
                 </span>
-                <span
-                  className="text-[11px] font-bold tabular-nums mt-0.5"
-                  style={{ color: locked ? 'var(--text-muted)' : sel ? 'rgba(255,255,255,0.8)' : 'var(--primary)' }}
-                >
-                  {locked ? <LockIcon sx={{ fontSize: 10 }} /> : s.odd.toFixed(2)}
+                <span className="text-sm font-black tabular-nums" style={{ color: sel ? '#fff' : 'var(--text-main)' }}>
+                  {locked ? <LockIcon sx={{ fontSize: 12 }} /> : item.odd.toFixed(2)}
                 </span>
               </button>
             );
           })}
         </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-3">
-      <Section title={`${homeTeam} Win`} bg="bg-primary"  items={homeWins} />
-      <Section title="Draw"              bg="bg-slate-500" items={draws}    />
-      <Section title={`${awayTeam} Win`} bg="bg-blue-500" items={awayWins} />
-      {other.length > 0 && <Section title="Other" bg="bg-slate-400" items={other} />}
+      )}
     </div>
   );
 }
