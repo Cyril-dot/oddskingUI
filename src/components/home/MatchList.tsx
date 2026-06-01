@@ -21,6 +21,10 @@
 //     immediately with a pool URL (never empty src), cycles through the entire
 //     pool on error, and only falls back to initials avatar if every pool URL
 //     fails. No admin game ever shows a broken placeholder image.
+//   • ADMIN LIVE LOCK: Admin games that are live show odds as locked (greyed,
+//     lock icon) — betting is disabled while the admin match is in progress.
+//   • LEAGUE FALLBACK: When no league name is set, a deterministic lower-
+//     division / underground league name is shown instead of blank / "Special Game".
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -37,51 +41,105 @@ import SportsFootballIcon from '@mui/icons-material/SportsFootball';
 import SportsMmaIcon from '@mui/icons-material/SportsMma';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import LockIcon from '@mui/icons-material/Lock';
+
+// ---------------------------------------------------------------------------
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  UNDERGROUND / LOWER-DIVISION FALLBACK LEAGUE NAMES                     ║
+// ║  Shown when a match has no league name set.                              ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+const FALLBACK_LEAGUE_NAMES: string[] = [
+  'Northern Premier League Division One East',
+  'Isthmian League South East Division',
+  'Midland Football League Premier Division',
+  'Southern Counties East Football League',
+  'Combined Counties League Division One',
+  'North West Counties Football League',
+  'Eastern Counties League Premier Division',
+  'Spartan South Midlands Football League',
+  'Hellenic Football League Premier Division',
+  'Western League Premier Division',
+  'United Counties League Premier Division',
+  'Wessex Football League Premier Division',
+  'Metropolitan Police League Division Two',
+  'Essex Senior Football League',
+  'Kent County Football League Premier Division',
+  'Merseyside Amateur Football Combination',
+  'Lancashire Amateur League Division Three',
+  'Sheffield & Hallamshire County Senior League',
+  'East Riding County Football League',
+  'Devon & Exeter Football League',
+  'Wearside Football League',
+  'Teesside Amateur Football League',
+  'West Yorkshire Association Football League',
+  'Gloucestershire County Football League',
+  'Somerset County Football League Premier Division',
+  'Dorset Premier Football League',
+  'Suffolk & Ipswich Football League',
+  'Cambridgeshire County Football League',
+  'Nottinghamshire Football Alliance',
+  'Leicestershire & Rutland County Football League',
+];
+
+/**
+ * Returns a deterministic fallback league name based on matchId.
+ * Stable across renders — same match always gets the same league name.
+ */
+function getFallbackLeagueName(matchId: string): string {
+  let hash = 0;
+  for (let i = 0; i < matchId.length; i++) {
+    hash = (Math.imul(31, hash) + matchId.charCodeAt(i)) | 0;
+  }
+  return FALLBACK_LEAGUE_NAMES[Math.abs(hash) % FALLBACK_LEAGUE_NAMES.length];
+}
+
+/**
+ * Returns the display league name for a match.
+ * Falls back to a deterministic underground league name if none is set.
+ */
+function resolveLeagueName(match: Match): string {
+  const raw = (match.league ?? '').trim();
+  if (raw && raw.toLowerCase() !== 'n/a' && raw !== '—') return raw;
+  return getFallbackLeagueName(match.id ?? 'default');
+}
 
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  FALLBACK LOGO POOL — 30 unique team badge images                        ║
-// ║  Served from media.api-sports.io (reliable, no hotlink block).           ║
-// ║  Two teams in the same match NEVER share the same image.                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LOGO_POOL: string[] = [
-  'https://media.api-sports.io/football/teams/2284.png',  // Hapoel Tel Aviv
-  'https://media.api-sports.io/football/teams/2285.png',  // Maccabi Tel Aviv
-  'https://media.api-sports.io/football/teams/2290.png',  // Bnei Sakhnin
-  'https://media.api-sports.io/football/teams/2291.png',  // Beitar Jerusalem
-  'https://media.api-sports.io/football/teams/2292.png',  // Maccabi Haifa
-  'https://media.api-sports.io/football/teams/2537.png',  // Vissel Kobe
-  'https://media.api-sports.io/football/teams/2538.png',  // Gamba Osaka
-  'https://media.api-sports.io/football/teams/2539.png',  // Urawa Reds
-  'https://media.api-sports.io/football/teams/2540.png',  // Kashima Antlers
-  'https://media.api-sports.io/football/teams/2541.png',  // Yokohama F Marinos
-  'https://media.api-sports.io/football/teams/2542.png',  // Nagoya Grampus
-  'https://media.api-sports.io/football/teams/2543.png',  // FC Tokyo
-  'https://media.api-sports.io/football/teams/2553.png',  // Cerezo Osaka
-  'https://media.api-sports.io/football/teams/2563.png',  // Sanfrecce Hiroshima
-  'https://media.api-sports.io/football/teams/2670.png',  // Al Ahly
-  'https://media.api-sports.io/football/teams/2671.png',  // Zamalek
-  'https://media.api-sports.io/football/teams/2672.png',  // Pyramids FC
-  'https://media.api-sports.io/football/teams/2699.png',  // Raja Casablanca
-  'https://media.api-sports.io/football/teams/2700.png',  // Wydad Casablanca
-  'https://media.api-sports.io/football/teams/2701.png',  // FAR Rabat
-  'https://media.api-sports.io/football/teams/3005.png',  // Buriram United
-  'https://media.api-sports.io/football/teams/3006.png',  // Chiang Rai United
-  'https://media.api-sports.io/football/teams/3007.png',  // Muangthong United
-  'https://media.api-sports.io/football/teams/3008.png',  // BG Pathum United
-  'https://media.api-sports.io/football/teams/3009.png',  // Port FC
-  'https://media.api-sports.io/football/teams/3754.png',  // Mamelodi Sundowns
-  'https://media.api-sports.io/football/teams/3755.png',  // Kaizer Chiefs
-  'https://media.api-sports.io/football/teams/3756.png',  // Orlando Pirates
-  'https://media.api-sports.io/football/teams/3757.png',  // SuperSport United
-  'https://media.api-sports.io/football/teams/3758.png',  // Cape Town City
+  'https://media.api-sports.io/football/teams/2284.png',
+  'https://media.api-sports.io/football/teams/2285.png',
+  'https://media.api-sports.io/football/teams/2290.png',
+  'https://media.api-sports.io/football/teams/2291.png',
+  'https://media.api-sports.io/football/teams/2292.png',
+  'https://media.api-sports.io/football/teams/2537.png',
+  'https://media.api-sports.io/football/teams/2538.png',
+  'https://media.api-sports.io/football/teams/2539.png',
+  'https://media.api-sports.io/football/teams/2540.png',
+  'https://media.api-sports.io/football/teams/2541.png',
+  'https://media.api-sports.io/football/teams/2542.png',
+  'https://media.api-sports.io/football/teams/2543.png',
+  'https://media.api-sports.io/football/teams/2553.png',
+  'https://media.api-sports.io/football/teams/2563.png',
+  'https://media.api-sports.io/football/teams/2670.png',
+  'https://media.api-sports.io/football/teams/2671.png',
+  'https://media.api-sports.io/football/teams/2672.png',
+  'https://media.api-sports.io/football/teams/2699.png',
+  'https://media.api-sports.io/football/teams/2700.png',
+  'https://media.api-sports.io/football/teams/2701.png',
+  'https://media.api-sports.io/football/teams/3005.png',
+  'https://media.api-sports.io/football/teams/3006.png',
+  'https://media.api-sports.io/football/teams/3007.png',
+  'https://media.api-sports.io/football/teams/3008.png',
+  'https://media.api-sports.io/football/teams/3009.png',
+  'https://media.api-sports.io/football/teams/3754.png',
+  'https://media.api-sports.io/football/teams/3755.png',
+  'https://media.api-sports.io/football/teams/3756.png',
+  'https://media.api-sports.io/football/teams/3757.png',
+  'https://media.api-sports.io/football/teams/3758.png',
 ];
 
-
-/**
- * Deterministic but "randomised-looking" shuffle of the pool using a
- * seed derived from the match id.  Returns a NEW array — original is untouched.
- */
 function seededShuffle(pool: string[], seed: string): string[] {
   const arr = [...pool];
   let h = 0;
@@ -94,24 +152,13 @@ function seededShuffle(pool: string[], seed: string): string[] {
   return arr;
 }
 
-/**
- * For a list of admin matches, assign unique fallback logo pairs so that:
- *   - Home and Away in the SAME match never share the same image.
- *   - Different matches each start from a different position in the pool.
- * Already-set logos (non-blob, non-empty) are respected and the pool slot
- * is NOT wasted on them.
- */
 function assignAdminLogos(matches: EnrichedMatch[]): EnrichedMatch[] {
   return matches.map((m, matchIdx) => {
     const shuffled = seededShuffle(FALLBACK_LOGO_POOL, `${m.id}-${matchIdx}`);
-
     const cleanHome = sanitizeLogo(m.homeLogo);
     const cleanAway = sanitizeLogo(m.awayLogo);
-
-    // Slots 0 and 1 are always different in a pool of 30
     const adminHomeLogo = cleanHome || shuffled[0];
     const adminAwayLogo = cleanAway || shuffled[1];
-
     return { ...m, adminHomeLogo, adminAwayLogo };
   });
 }
@@ -656,16 +703,7 @@ function TeamLogo({ logo, name, size = 32 }: { logo?: string; name?: string; siz
 }
 
 // ---------------------------------------------------------------------------
-// TeamLogoAdmin — FIXED
-//
-// Strategy:
-//   1. Build a deduplicated candidate list: [actualUrl, poolUrl, ...rest of pool]
-//      where every entry is a non-empty, non-blob string.
-//   2. Start rendering the FIRST candidate immediately — never an empty src.
-//   3. On each onError, advance to the next candidate.
-//   4. Only render the initials avatar when the entire candidate list is exhausted.
-//
-// This guarantees no admin team ever shows a broken placeholder image.
+// TeamLogoAdmin — FIXED: always shows a logo, cycles pool on error
 // ---------------------------------------------------------------------------
 function TeamLogoAdmin({
   poolUrl,
@@ -678,7 +716,6 @@ function TeamLogoAdmin({
   name?: string;
   size?: number;
 }) {
-  // Build the full ordered candidate list once per prop change.
   const candidates = useMemo<string[]>(() => {
     const seen = new Set<string>();
     const list: string[] = [];
@@ -688,15 +725,12 @@ function TeamLogoAdmin({
     };
     tryAdd(actualUrl);
     tryAdd(poolUrl);
-    // Also seed the full pool in shuffled order so we have 30 fallbacks.
     const shuffled = seededShuffle(FALLBACK_LOGO_POOL, (name ?? 'team') + (poolUrl ?? ''));
     shuffled.forEach(tryAdd);
     return list;
   }, [actualUrl, poolUrl, name]);
 
   const [idx, setIdx] = useState(0);
-
-  // Reset when candidates change (different match).
   useEffect(() => { setIdx(0); }, [candidates]);
 
   const teamName = name ?? '';
@@ -704,22 +738,12 @@ function TeamLogoAdmin({
 
   if (src) {
     return (
-      <img
-        src={src}
-        alt={teamName}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: '50%',
-          objectFit: 'contain',
-          flexShrink: 0,
-        }}
-        onError={() => setIdx((prev) => prev + 1)}
-      />
+      <img src={src} alt={teamName}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'contain', flexShrink: 0 }}
+        onError={() => setIdx((prev) => prev + 1)} />
     );
   }
 
-  // Every candidate exhausted — render initials avatar as last resort.
   const initials = getTeamInitials(teamName);
   const bg = teamColour(teamName);
   return (
@@ -1341,6 +1365,9 @@ function useLiveTimer(match: EnrichedMatch): string {
 
 const ADMIN_FINISHED_LINGER_MS = 10_000;
 
+// ---------------------------------------------------------------------------
+// MatchCard
+// ---------------------------------------------------------------------------
 function MatchCard({
   match, hasDraw = true, onClick, isAdmin = false,
 }: {
@@ -1361,14 +1388,25 @@ function MatchCard({
   const homeWon   = isFinished && homeScore > awayScore;
   const awayWon   = isFinished && awayScore > homeScore;
   const odds = match.oddsMap;
+
+  // ── KEY CHANGE: lock odds for admin games that are live ──────────────────
+  const adminOddsLocked = isAdmin && isLive;
+
   const isSel = (sel: string) =>
     (betSlip as BetSlipEntry[]).some((s) => s.matchId === match.id && s.market === '1X2' && s.selection === sel);
+
   const pick = (sel: string, odd: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isFinished || !odd || odd <= 0) return;
+    if (isFinished || adminOddsLocked || !odd || odd <= 0) return;
     addToBetSlip({ matchId: match.id, matchName: `${match.homeTeam} vs ${match.awayTeam}`, market: '1X2', selection: sel, odd });
     showToast('Added to bet slip', 'success');
   };
+
+  // ── League display: use resolveLeagueName for admin matches ──────────────
+  const leagueDisplay = isAdmin
+    ? resolveLeagueName(match)
+    : (match.league || '');
+
   const stateClass = isLive ? 'live' : isFinished ? 'finished' : 'upcoming';
   const oddsSlots = hasDraw
     ? [
@@ -1381,8 +1419,6 @@ function MatchCard({
         { key: '2', label: 'Away', val: odds?.away ?? 0 },
       ];
 
-  // For admin matches: use the pre-assigned unique pool logos as fallbacks.
-  // For regular matches: use the standard TeamLogo component.
   const renderHomeLogo = (size: number) =>
     isAdmin
       ? <TeamLogoAdmin poolUrl={match.adminHomeLogo} actualUrl={match.homeLogo} name={match.homeTeam} size={size} />
@@ -1402,7 +1438,7 @@ function MatchCard({
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         )}
         <span className="match-card-league">
-          {match.league || (match.source === 'ADMIN_CREATED' ? 'Special Game' : '')}
+          {leagueDisplay}
         </span>
         {isLive && (
           <span className="match-status-badge live">
@@ -1464,24 +1500,60 @@ function MatchCard({
       )}
       {(isLive || isUpcoming) && (
         <>
-          <div className="match-odds-row">
-            {oddsSlots.map(({ key, label, val }) => (
-              <button key={key}
-                className={`match-odds-btn${val <= 0 ? ' empty' : isSel(key) ? ' selected' : ''}`}
-                onClick={(e) => val > 0 && pick(key, val, e)}
-                disabled={val <= 0}>
-                <span className="match-odds-label" style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 1, color: 'var(--text-main, #ffffff)' }}>
-                  {label}
-                </span>
-                <span className="match-odds-value" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--primary, #f5a623)' }}>
-                  {val > 0 ? val.toFixed(2) : '—'}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="match-more-odds" onClick={onClick}>
-            More markets <ChevronRightIcon sx={{ fontSize: 12 }} />
-          </div>
+          {/* ── Admin live: locked odds row ── */}
+          {adminOddsLocked ? (
+            <div className="match-odds-row">
+              {oddsSlots.map(({ key, label, val }) => (
+                <div key={key}
+                  className="match-odds-btn empty"
+                  style={{ opacity: 0.55, cursor: 'not-allowed', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+                >
+                  <span className="match-odds-label" style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted, #64748b)' }}>
+                    {label}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted, #64748b)' }}>
+                    <LockIcon sx={{ fontSize: 13 }} />
+                    <span className="match-odds-value" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted, #64748b)' }}>
+                      {val > 0 ? val.toFixed(2) : '—'}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="match-odds-row">
+              {oddsSlots.map(({ key, label, val }) => (
+                <button key={key}
+                  className={`match-odds-btn${val <= 0 ? ' empty' : isSel(key) ? ' selected' : ''}`}
+                  onClick={(e) => val > 0 && pick(key, val, e)}
+                  disabled={val <= 0}>
+                  <span className="match-odds-label" style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 1, color: 'var(--text-main, #ffffff)' }}>
+                    {label}
+                  </span>
+                  <span className="match-odds-value" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--primary, #f5a623)' }}>
+                    {val > 0 ? val.toFixed(2) : '—'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Admin live: betting closed notice ── */}
+          {adminOddsLocked ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px 8px',
+              fontSize: 11, fontWeight: 600,
+              color: '#ef4444',
+            }}>
+              <LockIcon sx={{ fontSize: 12 }} />
+              Betting closed — match has started
+            </div>
+          ) : (
+            <div className="match-more-odds" onClick={onClick}>
+              More markets <ChevronRightIcon sx={{ fontSize: 12 }} />
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1547,7 +1619,6 @@ function SpecialGamesSection({
           return { ...match, oddsMap };
         });
         const withOdds  = enriched.filter(hasValidOdds);
-        // Assign unique fallback logos — different per match, home ≠ away
         const withLogos = assignAdminLogos(withOdds);
 
         const now = Date.now();
