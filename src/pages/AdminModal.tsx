@@ -22,6 +22,7 @@ import type {
   WithdrawalRequest,
   PayoutRequest,
   AffiliateStatsDTO,
+  AdminAffiliateStatsDTO,
   CreateBookingRequest,
   PageResponse,
   ReferralLink,
@@ -1155,10 +1156,12 @@ function DashboardSection({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
 // ─── Section: Affiliate ───────────────────────────────────────────────────────
 
+// ─── Section: Affiliate ───────────────────────────────────────────────────────
+
 function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const { showToast } = useAppStore();
   const { currency } = useCurrency();
-  const [stats, setStats] = useState<AffiliateStatsDTO | null>(null);
+  const [stats, setStats] = useState<AdminAffiliateStatsDTO | null>(null);
   const [payoutHistory, setPayoutHistory] = useState<PayoutRequest[]>([]);
   const [links, setLinks] = useState<ReferralLink[]>([]);
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
@@ -1179,7 +1182,7 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
         adminAffiliate.getLinks(),
         adminAffiliate.getReferredUsers(),
       ]);
-      const statsRes = normalise<AffiliateStatsDTO>(statsRaw);
+      const statsRes = normalise<AdminAffiliateStatsDTO>(statsRaw);
       const historyRes = normalise<{ content: PayoutRequest[] }>(historyRaw);
       const linksRes = normalise<ReferralLink[]>(linksRaw);
       const usersRes = normalise<any[]>(usersRaw);
@@ -1192,8 +1195,7 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Payout is always available — no day-of-week restriction
-  const payoutEnabled = (stats?.availableBalance ?? 0) > 0;
+  const payoutEnabled = (stats?.commissionBalance ?? 0) > 0;
 
   const requestPayout = async () => {
     setRequesting(true);
@@ -1205,128 +1207,219 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
     finally { setRequesting(false); }
   };
 
-  const createLink = async () => { setCreatingLink(true); try { const raw = await adminAffiliate.createLink({ label: newLinkLabel.trim() || undefined }); const res = normalise<ReferralLink>(raw); if (res.success) { setLinks(prev => [res.data, ...prev]); setNewLinkLabel(''); setShowLinkForm(false); showToast('Referral link created!', 'success'); } } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed to create link.', 'error'); } finally { setCreatingLink(false); } };
+  const createLink = async () => {
+    setCreatingLink(true);
+    try {
+      const raw = await adminAffiliate.createLink({ label: newLinkLabel.trim() || undefined });
+      const res = normalise<ReferralLink>(raw);
+      if (res.success) { setLinks(prev => [res.data, ...prev]); setNewLinkLabel(''); setShowLinkForm(false); showToast('Referral link created!', 'success'); }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed to create link.', 'error'); }
+    finally { setCreatingLink(false); }
+  };
+
   const copyLink = (id: string, url: string) => { navigator.clipboard.writeText(url); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); showToast('Link copied!', 'success'); };
   const buildUrl = (code: string) => `${window.location.origin}/register?ref=${code}`;
   const primaryLink = links[0];
   const primaryUrl = primaryLink ? buildUrl(primaryLink.code) : null;
   const primaryCode = primaryLink?.code ?? '—';
   const copyMainLink = () => { if (!primaryUrl) return; navigator.clipboard.writeText(primaryUrl); setCopiedMain(true); setTimeout(() => setCopiedMain(false), 2000); showToast('Link copied!', 'success'); };
+
   const totalPaid = payoutHistory.reduce((s, p) => s + (p.status === 'PAID' ? +p.amount : 0), 0);
-  const owed = stats ? Math.max(0, stats.lifetimeCommission - totalPaid) : 0;
+
   const statCards = [
-    { label: 'TOTAL EARNED', value: stats ? fmt(stats.lifetimeCommission, currency) : `${currency.symbol}0.00`, icon: '↗' },
-    { label: 'PAID OUT', value: fmt(totalPaid, currency), icon: '📋' },
-    { label: 'OWED TO YOU', value: fmt(owed, currency), icon: '%' },
-    { label: 'USERS BROUGHT', value: stats ? String(stats.totalReferrals) : '0', icon: '👤' },
+    { label: 'LIFETIME EARNED',  value: stats ? fmt(stats.totalEarnedLifetime, currency)  : `${currency.symbol}0.00`, icon: '↗' },
+    { label: 'TOTAL PAID OUT',   value: stats ? fmt(stats.totalPaidOutLifetime, currency)  : `${currency.symbol}0.00`, icon: '📋' },
+    { label: 'COMMISSION OWED',  value: stats ? fmt(stats.commissionBalance, currency)     : `${currency.symbol}0.00`, icon: '%' },
+    { label: 'USERS BROUGHT',    value: stats ? String(stats.totalReferrals)               : '0',                      icon: '👤' },
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div><h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>DASHBOARD</h2>{userEmail && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Signed in as <span style={{ color: '#63d2ff', fontWeight: 600 }}>{userEmail}</span></p>}</div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>DASHBOARD</h2>
+          {userEmail && <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Signed in as <span style={{ color: '#63d2ff', fontWeight: 600 }}>{userEmail}</span></p>}
+        </div>
         <button onClick={load} style={{ padding: '8px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><RefreshIcon fontSize="small" /></button>
       </div>
+
+      {/* ── Referral link card ── */}
       <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}><span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#374151' }}>YOUR REFERRAL LINK</span><span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', letterSpacing: '0.06em' }}>CODE: {loading ? '…' : primaryCode}</span></div>
-        <button onClick={copyMainLink} disabled={!primaryUrl} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, background: copiedMain ? '#f0fdf4' : '#f9fafb', border: `1.5px solid ${copiedMain ? '#86efac' : '#e5e7eb'}`, cursor: primaryUrl ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}><span style={{ fontSize: 16 }}>{copiedMain ? '✓' : '📋'}</span><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: copiedMain ? '#16a34a' : '#6b7280', flexShrink: 0 }}>{copiedMain ? 'COPIED!' : 'COPY'}</span><span style={{ flex: 1, fontSize: 12, color: '#dc2626', fontWeight: 500, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loading ? 'Loading…' : (primaryUrl ?? 'No referral link yet — create one below')}</span></button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#374151' }}>YOUR REFERRAL LINK</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', letterSpacing: '0.06em' }}>CODE: {loading ? '…' : primaryCode}</span>
+        </div>
+        <button onClick={copyMainLink} disabled={!primaryUrl} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, background: copiedMain ? '#f0fdf4' : '#f9fafb', border: `1.5px solid ${copiedMain ? '#86efac' : '#e5e7eb'}`, cursor: primaryUrl ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+          <span style={{ fontSize: 16 }}>{copiedMain ? '✓' : '📋'}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: copiedMain ? '#16a34a' : '#6b7280', flexShrink: 0 }}>{copiedMain ? 'COPIED!' : 'COPY'}</span>
+          <span style={{ flex: 1, fontSize: 12, color: '#dc2626', fontWeight: 500, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loading ? 'Loading…' : (primaryUrl ?? 'No referral link yet — create one below')}</span>
+        </button>
       </div>
+
+      {/* ── Stat cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {statCards.map((card) => <div key={card.label} style={{ background: '#fff', borderRadius: 14, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><span style={{ fontSize: 13 }}>{card.icon}</span><span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>{card.label}</span></div>{loading ? <div style={{ height: 28, background: '#f3f4f6', borderRadius: 6 }} /> : <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: card.label === 'TOTAL EARNED' ? '#16a34a' : '#111827', lineHeight: 1.1 }}>{card.value}</p>}</div>)}
+        {statCards.map((card) => (
+          <div key={card.label} style={{ background: '#fff', borderRadius: 14, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 13 }}>{card.icon}</span>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>{card.label}</span>
+            </div>
+            {loading
+              ? <div style={{ height: 28, background: '#f3f4f6', borderRadius: 6 }} />
+              : <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: card.label === 'LIFETIME EARNED' ? '#16a34a' : '#111827', lineHeight: 1.1 }}>{card.value}</p>}
+          </div>
+        ))}
       </div>
+
+      {/* ── Commission balance + payout ── */}
       <div style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
-        <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>AVAILABLE TO WITHDRAW</p>
-        {loading ? <div style={{ height: 32, background: '#f3f4f6', borderRadius: 6, marginBottom: 16 }} /> : <p style={{ margin: '0 0 16px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{stats ? fmt(stats.availableBalance, currency) : `${currency.symbol}0.00`}</p>}
-        {/* ── PAYOUT BUTTON — always open, no Friday restriction ── */}
+        <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>COMMISSION BALANCE (AVAILABLE TO WITHDRAW)</p>
+        {loading
+          ? <div style={{ height: 32, background: '#f3f4f6', borderRadius: 6, marginBottom: 16 }} />
+          : <p style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{stats ? fmt(stats.commissionBalance, currency) : `${currency.symbol}0.00`}</p>}
+        {stats?.lastPayoutAt && (
+          <p style={{ margin: '0 0 14px', fontSize: 11, color: '#9ca3af' }}>
+            Last payout: {stats.lastPayoutAt ? fmtDate(stats.lastPayoutAt) : '—'}
+          </p>
+        )}
+        {!stats?.lastPayoutAt && !loading && (
+          <p style={{ margin: '0 0 14px', fontSize: 11, color: '#9ca3af' }}>No payouts yet</p>
+        )}
         <button
           onClick={requestPayout}
           disabled={requesting || !payoutEnabled}
           style={{
-            width: '100%',
-            padding: '14px',
-            borderRadius: 10,
-            border: 'none',
+            width: '100%', padding: '14px', borderRadius: 10, border: 'none',
             background: payoutEnabled ? 'linear-gradient(135deg, #f87171, #dc2626)' : '#d1d5db',
-            color: '#fff',
-            fontSize: 13,
-            fontWeight: 800,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            cursor: payoutEnabled ? 'pointer' : 'not-allowed',
+            color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em',
+            textTransform: 'uppercase', cursor: payoutEnabled ? 'pointer' : 'not-allowed',
             boxShadow: payoutEnabled ? '0 4px 16px rgba(220,38,38,0.35)' : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           }}
         >
           {requesting ? <Spinner /> : null}
           {requesting ? 'Requesting…' : 'REQUEST PAYOUT'}
         </button>
         {!payoutEnabled && !loading && (
-          <p style={{ margin: '8px 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-            No balance available to withdraw
-          </p>
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>No commission balance available to withdraw</p>
         )}
       </div>
-      {stats && <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}><p style={{ margin: '0 0 14px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>REFERRAL STATS</p><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{[{ label: 'Total Referrals', value: String(stats.totalReferrals) }, { label: 'Users Total Deposit', value: fmt(stats.lifetimeStake, currency) }, { label: 'Lifetime Commissions', value: fmt(stats.lifetimeCommission, currency) }, { label: 'Available Balance', value: fmt(stats.availableBalance, currency) }].map((s) => <div key={s.label}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{s.label}</p><p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{s.value}</p></div>)}</div></div>}
-      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}><p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Referral Links <span style={{ color: '#63d2ff' }}>({links.length})</span></p><button onClick={() => setShowLinkForm(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#63d2ff', background: 'transparent', border: 'none', cursor: 'pointer' }}><AddIcon fontSize="small" /> New Link</button></div>
-        {showLinkForm && <div style={{ display: 'flex', gap: 8, marginBottom: 12, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.06)' }}><input type="text" placeholder="Label (optional)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && createLink()} disabled={creatingLink} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#fff', outline: 'none' }} /><button onClick={createLink} disabled={creatingLink} style={{ padding: '8px 16px', borderRadius: 8, background: '#63d2ff', border: 'none', color: '#000', fontSize: 12, fontWeight: 800, cursor: creatingLink ? 'not-allowed' : 'pointer', opacity: creatingLink ? 0.5 : 1 }}>{creatingLink ? '…' : 'Create'}</button></div>}
-        {loading ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2].map(i => <div key={i} style={{ height: 52, background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} />)}</div>
-          : links.length === 0 ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referral links yet. Create one above.</p>
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{links.map(link => {
-              const url = buildUrl(link.code);
-              const isCopied = copiedId === link.id;
-              const commissionDisplay = link.commissionPercent != null
-                ? `${link.commissionPercent}% commission`
-                : null;
-              return (
-                <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {link.label && <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{link.label}</p>}
-                    <p style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</p>
-                    {commissionDisplay && <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{commissionDisplay}</span>}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                    <button onClick={() => copyLink(link.id, url)} style={{ padding: 7, borderRadius: 7, background: isCopied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: isCopied ? '#4ade80' : 'rgba(255,255,255,0.5)', display: 'flex' }}>{isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}</button>
-                    <a href={url} target="_blank" rel="noreferrer" style={{ padding: 7, borderRadius: 7, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', display: 'flex', textDecoration: 'none' }}><OpenInNewIcon fontSize="small" /></a>
-                  </div>
-                </div>
-              );
-            })}</div>}
-      </div>
-      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Referred Players <span style={{ color: '#63d2ff' }}>({referredUsers.length})</span></p>
-        {loading ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2,3].map(i => <div key={i} style={{ height: 44, background: 'rgba(255,255,255,0.04)', borderRadius: 8 }} />)}</div>
-          : referredUsers.length === 0 ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referred players yet.</p>
-          : <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}>
-                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>{referredUsers.length}</p></div>
-                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Active Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{referredUsers.filter(u => referralDeposit(u.lifetimeStake ?? 0) > 0).length}</p></div>
-                <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Deposits</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#63d2ff' }}>{fmt(referredUsers.reduce((s, u) => s + referralDeposit(u.lifetimeStake ?? 0), 0), currency)}</p></div>
+
+      {/* ── Full stats breakdown ── */}
+      {stats && (
+        <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+          <p style={{ margin: '0 0 14px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>REFERRAL STATS</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              { label: 'Total Referrals',     value: String(stats.totalReferrals) },
+              { label: 'Users Total Stake',   value: fmt(stats.lifetimeStake, currency) },
+              { label: 'Lifetime Commission', value: fmt(stats.lifetimeCommission, currency) },
+              { label: 'Commission Balance',  value: fmt(stats.commissionBalance, currency) },
+              { label: 'Total Earned',        value: fmt(stats.totalEarnedLifetime, currency) },
+              { label: 'Total Paid Out',      value: fmt(stats.totalPaidOutLifetime, currency) },
+            ].map((s) => (
+              <div key={s.label}>
+                <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{s.label}</p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{s.value}</p>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {referredUsers.map((player) => {
-                  const name = [player.firstName, player.lastName].filter(Boolean).join(' ') || player.email || player.userId;
-                  const isActive = referralDeposit(player.lifetimeStake ?? 0) > 0;
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Referral links ── */}
+      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Referral Links <span style={{ color: '#63d2ff' }}>({links.length})</span></p>
+          <button onClick={() => setShowLinkForm(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#63d2ff', background: 'transparent', border: 'none', cursor: 'pointer' }}><AddIcon fontSize="small" /> New Link</button>
+        </div>
+        {showLinkForm && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.06)' }}>
+            <input type="text" placeholder="Label (optional)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && createLink()} disabled={creatingLink} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#fff', outline: 'none' }} />
+            <button onClick={createLink} disabled={creatingLink} style={{ padding: '8px 16px', borderRadius: 8, background: '#63d2ff', border: 'none', color: '#000', fontSize: 12, fontWeight: 800, cursor: creatingLink ? 'not-allowed' : 'pointer', opacity: creatingLink ? 0.5 : 1 }}>{creatingLink ? '…' : 'Create'}</button>
+          </div>
+        )}
+        {loading
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2].map(i => <div key={i} style={{ height: 52, background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} />)}</div>
+          : links.length === 0
+            ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referral links yet. Create one above.</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {links.map(link => {
+                  const url = buildUrl(link.code);
+                  const isCopied = copiedId === link.id;
+                  const commissionDisplay = link.commissionPercent != null ? `${link.commissionPercent}% commission` : null;
                   return (
-                    <div key={player.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <p style={{ margin: '0 0 1px', fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
-                        <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Joined {fmtDate(player.joinedAt)} · Deposit: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{fmt(referralDeposit(player.lifetimeStake ?? 0), currency)}</span></p>
+                    <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {link.label && <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{link.label}</p>}
+                        <p style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</p>
+                        {commissionDisplay && <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{commissionDisplay}</span>}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
-                        {player.lifetimeCommission > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(player.lifetimeCommission, currency)}</span>}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', color: isActive ? '#4ade80' : 'rgba(255,255,255,0.3)' }}>{isActive ? 'Active' : 'Inactive'}</span>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button onClick={() => copyLink(link.id, url)} style={{ padding: 7, borderRadius: 7, background: isCopied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: isCopied ? '#4ade80' : 'rgba(255,255,255,0.5)', display: 'flex' }}>{isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}</button>
+                        <a href={url} target="_blank" rel="noreferrer" style={{ padding: 7, borderRadius: 7, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', display: 'flex', textDecoration: 'none' }}><OpenInNewIcon fontSize="small" /></a>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </>}
+            )}
       </div>
-      {payoutHistory.length > 0 && <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}><p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Payout History</p><div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{payoutHistory.map((pr) => <div key={pr.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}><div><p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(pr.amount, currency)}</p><p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{fmtDate(pr.createdAt)}</p></div><StatusBadge status={pr.status} /></div>)}</div></div>}
+
+      {/* ── Referred players ── */}
+      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Referred Players <span style={{ color: '#63d2ff' }}>({referredUsers.length})</span></p>
+        {loading
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{[1,2,3].map(i => <div key={i} style={{ height: 44, background: 'rgba(255,255,255,0.04)', borderRadius: 8 }} />)}</div>
+          : referredUsers.length === 0
+            ? <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '16px 0' }}>No referred players yet.</p>
+            : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}>
+                  <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>{referredUsers.length}</p></div>
+                  <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Active Players</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{referredUsers.filter(u => referralDeposit(u.lifetimeStake ?? 0) > 0).length}</p></div>
+                  <div><p style={{ margin: '0 0 2px', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Total Deposits</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#63d2ff' }}>{fmt(referredUsers.reduce((s, u) => s + referralDeposit(u.lifetimeStake ?? 0), 0), currency)}</p></div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {referredUsers.map((player) => {
+                    const name = [player.firstName, player.lastName].filter(Boolean).join(' ') || player.email || player.userId;
+                    const isActive = referralDeposit(player.lifetimeStake ?? 0) > 0;
+                    return (
+                      <div key={player.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <p style={{ margin: '0 0 1px', fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+                          <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Joined {fmtDate(player.joinedAt)} · Deposit: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{fmt(referralDeposit(player.lifetimeStake ?? 0), currency)}</span></p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
+                          {player.lifetimeCommission > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(player.lifetimeCommission, currency)}</span>}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', color: isActive ? '#4ade80' : 'rgba(255,255,255,0.3)' }}>{isActive ? 'Active' : 'Inactive'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+      </div>
+
+      {/* ── Payout history ── */}
+      {payoutHistory.length > 0 && (
+        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Payout History</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {payoutHistory.map((pr) => (
+              <div key={pr.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)' }}>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(pr.amount, currency)}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{fmtDate(pr.createdAt)}</p>
+                </div>
+                <StatusBadge status={pr.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
