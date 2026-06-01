@@ -49,6 +49,7 @@ import ContentCopyIcon         from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon           from '@mui/icons-material/OpenInNew';
 import DeleteIcon              from '@mui/icons-material/Delete';
 import DeleteSweepIcon         from '@mui/icons-material/DeleteSweep';
+import InfoOutlinedIcon        from '@mui/icons-material/InfoOutlined';
 
 // ─── PRIVILEGED EMAIL GATE ────────────────────────────────────────────────────
 const PRIVILEGED_EMAILS = [
@@ -58,6 +59,31 @@ const PRIVILEGED_EMAILS = [
 
 // ─── DEFAULT COMMISSION RATE ──────────────────────────────────────────────────
 const DEFAULT_COMMISSION_RATE = 70; // 70%
+
+/**
+ * Calculate the "expected" commission from total user deposits when the
+ * backend-stored rate differs from DEFAULT_COMMISSION_RATE.
+ *
+ * Formula:
+ *   expectedCommission = lifetimeStake * (commissionRate / 100)
+ *
+ * If the backend rate matches DEFAULT_COMMISSION_RATE exactly we just use
+ * the backend value.  Otherwise we recalculate and surface both numbers so
+ * the admin can see at a glance what the commission *should* be.
+ */
+function calcExpectedCommission(
+  lifetimeStake: number,
+  backendCommissionRate: number | null | undefined,
+): {
+  rate: number;
+  expected: number;
+  isRecalculated: boolean;
+} {
+  const rate = backendCommissionRate ?? DEFAULT_COMMISSION_RATE;
+  const expected = lifetimeStake * (rate / 100);
+  const isRecalculated = rate !== DEFAULT_COMMISSION_RATE;
+  return { rate, expected, isRecalculated };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1156,8 +1182,6 @@ function DashboardSection({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
 // ─── Section: Affiliate ───────────────────────────────────────────────────────
 
-// ─── Section: Affiliate ───────────────────────────────────────────────────────
-
 function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const { showToast } = useAppStore();
   const { currency } = useCurrency();
@@ -1195,6 +1219,18 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // ── Commission calculation ──────────────────────────────────────────────────
+  // The standard rate is 70%.  If the backend returns a different rate,
+  // we recalculate the expected commission from the total deposit volume
+  // and show it above the backend figure so the admin can see the discrepancy.
+  const commissionCalc = useMemo(() => {
+    if (!stats) return null;
+    return calcExpectedCommission(
+      stats.lifetimeStake,
+      (stats as any).commissionRate ?? null,
+    );
+  }, [stats]);
+
   const payoutEnabled = (stats?.commissionBalance ?? 0) > 0;
 
   const requestPayout = async () => {
@@ -1223,8 +1259,6 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const primaryUrl = primaryLink ? buildUrl(primaryLink.code) : null;
   const primaryCode = primaryLink?.code ?? '—';
   const copyMainLink = () => { if (!primaryUrl) return; navigator.clipboard.writeText(primaryUrl); setCopiedMain(true); setTimeout(() => setCopiedMain(false), 2000); showToast('Link copied!', 'success'); };
-
-  const totalPaid = payoutHistory.reduce((s, p) => s + (p.status === 'PAID' ? +p.amount : 0), 0);
 
   const statCards = [
     { label: 'LIFETIME EARNED',  value: stats ? fmt(stats.totalEarnedLifetime, currency)  : `${currency.symbol}0.00`, icon: '↗' },
@@ -1274,6 +1308,66 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
       {/* ── Commission balance + payout ── */}
       <div style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>COMMISSION BALANCE (AVAILABLE TO WITHDRAW)</p>
+
+        {/* ── Recalculated commission notice (shown when backend rate ≠ 70%) ── */}
+        {!loading && commissionCalc?.isRecalculated && (
+          <div style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: 'rgba(245,158,11,0.08)',
+            border: '1.5px solid rgba(245,158,11,0.35)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}>
+            {/* Top row: icon + label */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <InfoOutlinedIcon style={{ fontSize: 15, color: '#f59e0b', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Commission rate differs from standard ({DEFAULT_COMMISSION_RATE}%)
+              </span>
+            </div>
+            {/* Rate in use */}
+            <div style={{ fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
+              Backend rate: <strong>{commissionCalc.rate}%</strong> — recalculated from total user deposits:
+            </div>
+            {/* Recalculated value — large and prominent */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
+              <span style={{ fontSize: 24, fontWeight: 900, color: '#d97706', lineHeight: 1, fontFamily: 'monospace' }}>
+                {fmt(commissionCalc.expected, currency)}
+              </span>
+              <span style={{ fontSize: 10, color: '#92400e', fontWeight: 700 }}>
+                ({commissionCalc.rate}% of {fmt(stats?.lifetimeStake ?? 0, currency)} deposits)
+              </span>
+            </div>
+            <div style={{ fontSize: 10, color: '#78716c', marginTop: 2 }}>
+              ↳ Backend-stored commission balance (below) may differ from this figure.
+            </div>
+          </div>
+        )}
+
+        {/* ── Standard 70% rate note (shown when rate IS 70%) ── */}
+        {!loading && commissionCalc && !commissionCalc.isRecalculated && stats && (
+          <div style={{
+            marginBottom: 10,
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: 'rgba(22,163,74,0.07)',
+            border: '1px solid rgba(22,163,74,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <CheckIcon style={{ fontSize: 13, color: '#16a34a', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>
+              Standard {DEFAULT_COMMISSION_RATE}% rate applied — expected:{' '}
+              <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{fmt(commissionCalc.expected, currency)}</span>
+              {' '}({DEFAULT_COMMISSION_RATE}% of {fmt(stats.lifetimeStake, currency)})
+            </span>
+          </div>
+        )}
+
         {loading
           ? <div style={{ height: 32, background: '#f3f4f6', borderRadius: 6, marginBottom: 16 }} />
           : <p style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{stats ? fmt(stats.commissionBalance, currency) : `${currency.symbol}0.00`}</p>}
@@ -1324,6 +1418,31 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
               </div>
             ))}
           </div>
+          {/* ── Commission rate breakdown ── */}
+          {commissionCalc && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f3f4f6' }}>
+              <p style={{ margin: '0 0 8px', fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Commission Calculation</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Rate Applied</p>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: commissionCalc.isRecalculated ? '#d97706' : '#16a34a' }}>
+                    {commissionCalc.rate}%
+                    {commissionCalc.isRecalculated && <span style={{ fontSize: 9, marginLeft: 4, color: '#d97706', fontWeight: 700 }}>≠ {DEFAULT_COMMISSION_RATE}%</span>}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Total Deposits</p>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{fmt(stats.lifetimeStake, currency)}</p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Expected Commission</p>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: commissionCalc.isRecalculated ? '#d97706' : '#16a34a' }}>
+                    {fmt(commissionCalc.expected, currency)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
