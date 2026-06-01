@@ -437,6 +437,17 @@ export interface AffiliateStatsDTO {
   currency?: string;
 }
 
+export interface AdminAffiliateStatsDTO {
+  totalReferrals: number;
+  lifetimeStake: number;
+  lifetimeCommission: number;
+  commissionBalance: number;
+  totalEarnedLifetime: number;
+  totalPaidOutLifetime: number;
+  currency?: string;
+  lastPayoutAt?: string;
+}
+
 export interface ReferredUserDTO {
   userId: string;
   firstName?: string;
@@ -2754,39 +2765,31 @@ export const adminCrash = {
 // =============================================================================
 // ADMIN — AFFILIATE
 // =============================================================================
-
 export const adminAffiliate = {
   /** GET /api/admin/affiliate/stats */
   getStats: () =>
-    http.get<ApiResponse<AffiliateStatsDTO>>("/api/admin/affiliate/stats"),
-
+    http.get<ApiResponse<AdminAffiliateStatsDTO>>("/api/admin/affiliate/stats"),
   /** GET /api/admin/affiliate/referred-users */
   getReferredUsers: () =>
     http.get<ApiResponse<ReferredUserDTO[]>>("/api/admin/affiliate/referred-users"),
-
   /** GET /api/admin/affiliate/links */
   getLinks: () =>
     http.get<ApiResponse<ReferralLink[]>>("/api/admin/affiliate/links"),
-
   /** POST /api/admin/affiliate/links */
   createLink: (body: CreateLinkRequest) =>
     http.post<ApiResponse<ReferralLink>>("/api/admin/affiliate/links", body),
-
   /** GET /api/admin/affiliate/payout-window */
   getPayoutWindow: () =>
     http.get<ApiResponse<Record<string, boolean>>>("/api/admin/affiliate/payout-window"),
-
   /** POST /api/admin/affiliate/payout-request */
   requestPayout: () =>
     http.post<ApiResponse<PayoutRequest>>("/api/admin/affiliate/payout-request"),
-
   /** GET /api/admin/affiliate/payout-requests */
   getPayoutHistory: (page = 0, size = 20) =>
     http.get<ApiResponse<PageResponse<PayoutRequest>>>(
       `/api/admin/affiliate/payout-requests${qs({ page, size })}`
     ),
 };
-
 // =============================================================================
 // ADMIN — REFERRAL LINKS
 // =============================================================================
