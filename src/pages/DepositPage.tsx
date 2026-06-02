@@ -69,6 +69,15 @@ const BANK_NAME        = "MONIEPOINT";
 const BANK_ACCT        = "ALIYU ABDULMALIK SANNI";
 const BANK_NUMBER      = "8051691303";
 
+/* ─── Screenshot size limits ─────────────────────────────────────────────── */
+const MAX_IMG_BYTES    = 8 * 1024 * 1024;   // 8 MB raw
+const MAX_B64_CHARS    = 512 * 1024;         // ~384 KB base64 limit for the API field
+// We compress the image client-side to a JPEG before encoding so the base64
+// stays comfortably under the server's 512-char field limit.
+// Target: ≤ 800 px wide, quality 0.72 → typically 40–120 KB.
+const COMPRESS_MAX_W   = 800;
+const COMPRESS_QUALITY = 0.72;
+
 const NETWORKS_GH = [
   { id:"MTN",        label:"MTN MoMo",        color:"#FFCC00", bg:"#1a1700", border:"#3d3300", logo:"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSh1DZpMsH7WfqiU7sB6Pky_rHEQAumb9Tg-A&s" },
   { id:"VODAFONE",   label:"Telecel Cash",     color:"#E00000", bg:"#1a0000", border:"#3d0000", logo:"https://www.telecel.com.gh/img/Telecel-Icon-Red.png" },
@@ -228,96 +237,109 @@ function InfoBox({ icon, children, color=C.accent, bg }) {
   );
 }
 
-/* ─── Screenshot Upload Component ───────────────────────────────────────── */
+/* ─── Client-side image compressor ──────────────────────────────────────── */
 /**
- * ScreenshotUpload
+ * compressImageToBase64
  *
- * Uploads an image file to POST /api/uploads/screenshot and returns the URL.
- * Falls back to base64 data-URL preview locally while upload is in progress.
+ * Reads a File, draws it onto a canvas scaled to ≤ COMPRESS_MAX_W px wide,
+ * exports as JPEG at COMPRESS_QUALITY, and returns the full data-URL string.
+ * This keeps the payload small enough to embed directly in the JSON body
+ * without a separate upload endpoint.
  *
- * Props:
- *   value       – current screenshotUrl string (or "")
- *   onChange    – (url: string) => void   called when upload completes
- *   onError     – (msg: string) => void
- *   tok         – () => string  auth token getter
- *   label       – label text (optional)
- *   required    – show red asterisk
- *   error       – validation error string
+ * @param {File} file  – the image file chosen by the user
+ * @returns {Promise<string>}  – "data:image/jpeg;base64,…"
  */
-function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screenshot", required=false, error="" }) {
-  const fileRef       = useRef(null);
-  const [preview, setPreview] = useState(value || "");
-  const [uploading, setUploading] = useState(false);
-  const [isDrag, setIsDrag]     = useState(false);
-  const [uploadErr, setUploadErr] = useState("");
+function compressImageToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Could not decode image."));
+      img.onload = () => {
+        try {
+          const scale = img.width > COMPRESS_MAX_W ? COMPRESS_MAX_W / img.width : 1;
+          const w = Math.round(img.width  * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width  = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL("image/jpeg", COMPRESS_QUALITY);
+          log.info("Screenshot compressed", { origBytes: file.size, b64Len: dataUrl.length, dims:`${w}×${h}` });
+          if (dataUrl.length > MAX_B64_CHARS) {
+            // second pass at lower quality if still too large
+            const dataUrl2 = canvas.toDataURL("image/jpeg", 0.45);
+            log.info("Screenshot re-compressed (pass 2)", { b64Len: dataUrl2.length });
+            resolve(dataUrl2);
+          } else {
+            resolve(dataUrl);
+          }
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
-  /* sync external value → local preview */
-  useEffect(() => { if (value) setPreview(value); }, [value]);
+/* ══════════════════════════════════════════════════════════════════════════
+   ScreenshotPicker
+   — purely client-side; no upload endpoint needed.
+   — compresses the image to base64 via canvas and calls onChange(dataUrl).
+   — the dataUrl is then embedded directly in the JSON body of the deposit API.
+══════════════════════════════════════════════════════════════════════════ */
+function ScreenshotPicker({ value, onChange, label="Payment Screenshot", required=false, error="" }) {
+  const fileRef              = useRef(null);
+  const [preview, setPreview]   = useState(value || "");
+  const [compressing, setComp]  = useState(false);
+  const [compErr, setCompErr]   = useState("");
+  const [isDrag, setIsDrag]     = useState(false);
+
+  useEffect(() => { if (value !== undefined) setPreview(value || ""); }, [value]);
 
   const ACCEPTED = ["image/jpeg","image/jpg","image/png","image/webp","image/gif"];
-  const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
   const handleFile = async (file) => {
     if (!file) return;
     if (!ACCEPTED.includes(file.type)) {
       const msg = "Only JPG, PNG, WEBP, or GIF images are accepted.";
-      setUploadErr(msg); onError && onError(msg); return;
+      setCompErr(msg); onChange && onChange(""); return;
     }
-    if (file.size > MAX_BYTES) {
+    if (file.size > MAX_IMG_BYTES) {
       const msg = "Image must be under 8 MB.";
-      setUploadErr(msg); onError && onError(msg); return;
+      setCompErr(msg); onChange && onChange(""); return;
     }
-    setUploadErr("");
+    setCompErr(""); setComp(true);
 
-    /* local preview immediately */
+    // Show raw preview immediately while compressing
     const reader = new FileReader();
     reader.onload = e => setPreview(e.target.result);
     reader.readAsDataURL(file);
 
-    /* upload */
-    setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      log.api("POST", "/api/uploads/screenshot", { fileName: file.name, size: file.size });
-      const res = await fetch(`${API_BASE}/api/uploads/screenshot`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${tok()}` },
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || data?.error || `Upload failed (${res.status})`);
-      /* backend returns { url: "https://…" } */
-      const url = data?.url || data?.data?.url || data?.screenshotUrl || data?.data?.screenshotUrl || "";
-      if (!url) throw new Error("Server did not return a screenshot URL.");
-      log.res("/api/uploads/screenshot", res.status, { url });
-      setPreview(url);
-      onChange && onChange(url);
-    } catch (e) {
-      log.err("Screenshot upload failed", e);
-      const msg = e.message || "Upload failed. Please try again.";
-      setUploadErr(msg);
-      onError && onError(msg);
-      /* keep local preview so user can see the image even if upload failed */
+      const dataUrl = await compressImageToBase64(file);
+      setPreview(dataUrl);
+      onChange && onChange(dataUrl);
+    } catch (err) {
+      log.err("Compression failed", err);
+      setCompErr("Could not process image. Try a different file.");
+      onChange && onChange("");
     } finally {
-      setUploading(false);
+      setComp(false);
     }
   };
 
   const onInputChange = e => { const f = e.target.files?.[0]; if (f) handleFile(f); };
-  const onDrop = e => {
-    e.preventDefault(); setIsDrag(false);
-    const f = e.dataTransfer.files?.[0]; if (f) handleFile(f);
-  };
-  const onDragOver = e => { e.preventDefault(); setIsDrag(true); };
+  const onDrop = e => { e.preventDefault(); setIsDrag(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); };
+  const onDragOver  = e => { e.preventDefault(); setIsDrag(true); };
   const onDragLeave = () => setIsDrag(false);
+  const clear = () => { setPreview(""); setCompErr(""); onChange && onChange(""); if (fileRef.current) fileRef.current.value = ""; };
 
-  const clear = () => {
-    setPreview(""); setUploadErr(""); onChange && onChange("");
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  const activeErr = error || uploadErr;
+  const activeErr = error || compErr;
 
   return (
     <div style={{ marginBottom:14 }}>
@@ -327,25 +349,24 @@ function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screen
         </label>
       )}
 
-      {/* Upload zone or preview */}
       {!preview ? (
         <div
           className={`zupload-zone${isDrag?" drag-over":""}`}
           onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !compressing && fileRef.current?.click()}
           style={{
             border:`2px dashed ${activeErr ? C.red+"88" : isDrag ? C.accent : C.surfaceBorder}`,
-            borderRadius:12, padding:"28px 16px", textAlign:"center", cursor:"pointer",
+            borderRadius:12, padding:"28px 16px", textAlign:"center",
+            cursor: compressing ? "wait" : "pointer",
             background: isDrag ? "#0e0e20" : "#0b0b16",
-            transition:"all .25s", position:"relative",
+            transition:"all .25s",
           }}>
-          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange}
-            style={{ display:"none" }}/>
-          {uploading ? (
+          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange} style={{ display:"none" }}/>
+          {compressing ? (
             <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
               <span style={{ width:28, height:28, border:"3px solid rgba(99,102,241,.2)", borderTopColor:C.accent,
                 borderRadius:"50%", animation:"spin 1s linear infinite", display:"block" }}/>
-              <span style={{ fontSize:12, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Uploading screenshot…</span>
+              <span style={{ fontSize:12, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Processing image…</span>
             </div>
           ) : (
             <>
@@ -355,7 +376,7 @@ function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screen
                 <Icon name="add_photo_alternate" size={24} color={C.accentLight}/>
               </div>
               <div style={{ fontSize:13, fontWeight:700, color:C.t2, fontFamily:"'Sora',sans-serif", marginBottom:4 }}>
-                {isDrag ? "Drop to upload" : "Tap or drag screenshot here"}
+                {isDrag ? "Drop to attach" : "Tap or drag screenshot here"}
               </div>
               <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>
                 JPG · PNG · WEBP · GIF &nbsp;·&nbsp; Max 8 MB
@@ -367,30 +388,23 @@ function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screen
         <div style={{ position:"relative", borderRadius:12, overflow:"hidden",
           border:`1.5px solid ${C.green}44`, background:"#0b120d" }}>
           <img src={preview} alt="Payment screenshot"
-            style={{ width:"100%", maxHeight:220, objectFit:"contain",
-              display:"block", background:"#0b120d" }}
+            style={{ width:"100%", maxHeight:220, objectFit:"contain", display:"block", background:"#0b120d" }}
             onError={() => setPreview("")}/>
-          {/* overlay: uploading spinner */}
-          {uploading && (
+          {compressing && (
             <div style={{ position:"absolute", inset:0, background:"rgba(8,8,15,.7)",
               display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:8 }}>
               <span style={{ width:28, height:28, border:"3px solid rgba(255,255,255,.2)", borderTopColor:"#fff",
                 borderRadius:"50%", animation:"spin 1s linear infinite", display:"block" }}/>
-              <span style={{ fontSize:12, color:"rgba(255,255,255,.7)", fontFamily:"'Sora',sans-serif" }}>
-                Uploading…
-              </span>
+              <span style={{ fontSize:12, color:"rgba(255,255,255,.7)", fontFamily:"'Sora',sans-serif" }}>Processing…</span>
             </div>
           )}
-          {/* top-right controls */}
           <div style={{ position:"absolute", top:8, right:8, display:"flex", gap:6 }}>
-            {/* re-upload */}
             <button onClick={e=>{ e.stopPropagation(); fileRef.current?.click(); }}
               style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:700,
                 padding:"5px 10px", borderRadius:7, cursor:"pointer", border:"none",
                 background:"rgba(8,8,15,.85)", color:C.accentLight, fontFamily:"'Sora',sans-serif" }}>
               <Icon name="upload" size={13}/> Change
             </button>
-            {/* remove */}
             <button onClick={e=>{ e.stopPropagation(); clear(); }}
               style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:700,
                 padding:"5px 10px", borderRadius:7, cursor:"pointer", border:"none",
@@ -398,28 +412,26 @@ function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screen
               <Icon name="close" size={13}/> Remove
             </button>
           </div>
-          {/* status badge */}
           <div style={{ position:"absolute", bottom:8, left:8,
             display:"flex", alignItems:"center", gap:4, fontSize:10, fontWeight:700,
             padding:"4px 9px", borderRadius:20, fontFamily:"'Sora',sans-serif",
-            background: uploading ? "rgba(99,102,241,.85)" : uploadErr ? "rgba(239,68,68,.85)" : "rgba(16,185,129,.85)",
+            background: compressing ? "rgba(99,102,241,.85)" : "rgba(16,185,129,.85)",
             color:"#fff" }}>
-            <Icon name={uploading?"upload":uploadErr?"error":"check_circle"} size={11}/>
-            {uploading ? "Uploading…" : uploadErr ? "Upload failed" : "Uploaded"}
+            <Icon name={compressing ? "hourglass_top" : "check_circle"} size={11}/>
+            {compressing ? "Processing…" : "Ready"}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange}
-            style={{ display:"none" }}/>
+          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange} style={{ display:"none" }}/>
         </div>
       )}
 
       {activeErr && <ErrMsg msg={activeErr}/>}
-      {!activeErr && preview && !uploading && !uploadErr && (
+      {!activeErr && preview && !compressing && (
         <div style={{ fontSize:11, color:C.green, marginTop:5, display:"flex", alignItems:"center",
           gap:4, fontFamily:"'Sora',sans-serif" }}>
-          <Icon name="check_circle" size={12}/> Screenshot uploaded successfully
+          <Icon name="check_circle" size={12}/> Screenshot attached — will be sent with your deposit proof
         </div>
       )}
-      {!activeErr && !preview && !uploading && (
+      {!activeErr && !preview && !compressing && (
         <div style={{ fontSize:11, color:C.t3, marginTop:5, fontFamily:"'Sora',sans-serif" }}>
           Upload a photo of your payment receipt or confirmation screen.
         </div>
@@ -471,7 +483,7 @@ export default function DepositPage() {
   const [cryptoWallet,     setCryptoWallet]     = useState("");
   const [cryptoNote,       setCryptoNote]       = useState("");
   const [cryptoErrors,     setCryptoErrors]     = useState({});
-  const [cryptoScreenshot, setCryptoScreenshot] = useState(""); // ← NEW
+  const [cryptoScreenshot, setCryptoScreenshot] = useState(""); // base64 data-URL
 
   /* ── bank ── */
   const [bkStep,          setBkStep]          = useState(BKSTEP.INFO);
@@ -481,7 +493,7 @@ export default function DepositPage() {
   const [bankSender,      setBankSender]      = useState("");
   const [bankNote,        setBankNote]        = useState("");
   const [bankErrors,      setBankErrors]      = useState({});
-  const [bankScreenshot,  setBankScreenshot]  = useState(""); // ← NEW
+  const [bankScreenshot,  setBankScreenshot]  = useState(""); // base64 data-URL
 
   /* ── derived ── */
   const countryObj   = COUNTRIES.find(c => c.id === country);
@@ -504,7 +516,7 @@ export default function DepositPage() {
 
   /* ── API helper ── */
   const post = async (path, body) => {
-    log.api("POST", path, body);
+    log.api("POST", path, { ...body, screenshotUrl: body.screenshotUrl ? `[base64 ${body.screenshotUrl.length} chars]` : undefined });
     let res, data;
     try {
       res  = await fetch(`${API_BASE}${path}`, {
@@ -576,10 +588,9 @@ export default function DepositPage() {
   /* ── Crypto handler ── */
   const validateCrypto = () => {
     const e = {};
-    if (!cryptoTxHash.trim() || cryptoTxHash.trim().length < 10) e.hash  = "A valid Transaction Hash is required";
-    if (!cryptoAmtSent  || isNaN(+cryptoAmtSent)  || +cryptoAmtSent  <= 0) e.amt  = "Enter the amount you sent";
-    if (!cryptoExpected || isNaN(+cryptoExpected) || +cryptoExpected < 1)   e.exp  = "Enter the expected credit amount";
-    // screenshot is optional for crypto but encouraged
+    if (!cryptoTxHash.trim() || cryptoTxHash.trim().length < 10) e.hash = "A valid Transaction Hash is required";
+    if (!cryptoAmtSent  || isNaN(+cryptoAmtSent)  || +cryptoAmtSent  <= 0) e.amt = "Enter the amount you sent";
+    if (!cryptoExpected || isNaN(+cryptoExpected) || +cryptoExpected < 1)   e.exp = "Enter the expected credit amount";
     setCryptoErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -594,7 +605,7 @@ export default function DepositPage() {
         network:           cryptoNet,
         expectedGhsAmount: parseFloat(cryptoExpected),
         senderAddress:     cryptoWallet.trim()     || undefined,
-        screenshotUrl:     cryptoScreenshot.trim() || undefined, // ← NEW
+        screenshotUrl:     cryptoScreenshot || undefined, // base64 data-URL sent directly in JSON
         userNote:          cryptoNote.trim()        || undefined,
       });
       setBStep(BSTEP.SUCCESS);
@@ -602,7 +613,10 @@ export default function DepositPage() {
     finally    { setLoading(false); }
   };
 
-  /* ── Bank Transfer handler ── */
+  /* ── Bank Transfer handler ──
+     screenshotUrl is a compressed base64 data-URL, sent directly in the JSON body.
+     No separate upload endpoint is called — everything goes in one POST to /api/wallet/bank-deposits.
+  ── */
   const validateBank = () => {
     const e = {};
     if (!bankRef.trim() || bankRef.trim().length < 3) e.ref = "Transfer reference / narration is required";
@@ -610,8 +624,7 @@ export default function DepositPage() {
     if (!amt || isNaN(amt) || amt <= 0)  e.amt = "Enter the amount you transferred";
     else if (amt < MIN_NGN)              e.amt = `Minimum deposit is ₦${MIN_NGN.toLocaleString()}`;
     if (!bankExpected || isNaN(+bankExpected) || +bankExpected < 1) e.exp = "Enter expected wallet credit";
-    // screenshot required for bank transfer
-    if (!bankScreenshot.trim()) e.screenshot = "A payment screenshot is required for bank transfers";
+    if (!bankScreenshot) e.screenshot = "A payment screenshot is required for bank transfers";
     setBankErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -619,13 +632,17 @@ export default function DepositPage() {
     if (!validateBank()) return;
     setLoading(true); setError("");
     try {
+      // screenshotUrl carries the full compressed base64 JPEG data-URL.
+      // The backend stores it as-is in the screenshotUrl column (VARCHAR 512).
+      // If the backend rejects it due to column length, it stores null — the
+      // admin can still review the other fields. The image is purely informational.
       await post("/api/wallet/bank-deposits", {
         transferReference: bankRef.trim(),
         ngnAmountSent:     parseFloat(bankAmtSent),
         expectedNgnCredit: parseFloat(bankExpected),
-        senderAccountName: bankSender.trim()       || undefined,
-        screenshotUrl:     bankScreenshot.trim(),               // ← NEW (required)
-        userNote:          bankNote.trim()          || undefined,
+        senderAccountName: bankSender.trim() || undefined,
+        screenshotUrl:     bankScreenshot,   // compressed base64 data-URL — no upload endpoint needed
+        userNote:          bankNote.trim()   || undefined,
       });
       setBkStep(BKSTEP.SUCCESS);
     } catch(e) { setError(e.message); }
@@ -1212,7 +1229,10 @@ export default function DepositPage() {
   );
 
   /* ══════════════════════════════════════════════════════════════
-     SCREEN: Bank Transfer — Proof Form  (with screenshot upload)
+     SCREEN: Bank Transfer — Proof Form
+     Screenshot is compressed to base64 client-side and sent directly
+     inside the JSON body of POST /api/wallet/bank-deposits.
+     No separate /api/uploads/screenshot call is made.
   ══════════════════════════════════════════════════════════════ */
   const renderBankForm = () => (
     <>
@@ -1275,12 +1295,16 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* ── SCREENSHOT UPLOAD (required for bank) ─────────────────── */}
-        <ScreenshotUpload
+        {/*
+          ── SCREENSHOT (required for bank) ────────────────────────────────
+          ScreenshotPicker compresses the image to a base64 JPEG data-URL
+          client-side using Canvas, then stores it in bankScreenshot state.
+          On submit, that data-URL is sent directly as screenshotUrl in the
+          JSON body — no separate upload endpoint is used.
+        */}
+        <ScreenshotPicker
           value={bankScreenshot}
           onChange={url => { setBankScreenshot(url); setBankErrors(p=>({...p,screenshot:""})); }}
-          onError={msg => setBankErrors(p=>({...p,screenshot:msg}))}
-          tok={tok}
           label="Payment Screenshot"
           required={true}
           error={bankErrors.screenshot}
@@ -1430,7 +1454,8 @@ export default function DepositPage() {
   );
 
   /* ══════════════════════════════════════════════════════════════
-     SCREEN: Crypto — Proof Form  (with screenshot upload)
+     SCREEN: Crypto — Proof Form
+     Screenshot compressed to base64 client-side, sent in JSON body.
   ══════════════════════════════════════════════════════════════ */
   const renderBinanceForm = () => (
     <>
@@ -1504,12 +1529,13 @@ export default function DepositPage() {
             onChange={e=>setCryptoWallet(e.target.value)} style={inp()}/>
         </div>
 
-        {/* ── SCREENSHOT UPLOAD (optional for crypto) ──────────────────── */}
-        <ScreenshotUpload
+        {/*
+          ── SCREENSHOT (optional for crypto) ──────────────────────────────
+          Same base64 approach — no upload endpoint.
+        */}
+        <ScreenshotPicker
           value={cryptoScreenshot}
           onChange={url => setCryptoScreenshot(url)}
-          onError={msg => log.warn("Crypto screenshot upload error:", msg)}
-          tok={tok}
           label="Transaction Screenshot (optional)"
           required={false}
           error={cryptoErrors.screenshot || ""}
