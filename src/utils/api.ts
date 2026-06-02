@@ -336,30 +336,83 @@ export default function DepositPage() {
   };
 
   const handleBinanceSubmit = async () => {
-    if (!validateBinance()) return;
-    setLoading(true); setError("");
-    
-    const payload = { 
-      txid: txid.trim(), 
-      cryptoAmount: parseFloat(cryptoAmount), 
-      coin, 
-      network: cryptoNetwork, 
-      expectedGhsAmount: parseFloat(expectedLocal), 
-      senderAddress: senderAddress.trim()||undefined, 
-      userNote: userNote.trim()||undefined 
-    };
-    
-    logger.info("Submitting Binance deposit:", payload);
-    
-    try {
-      await post("/api/wallet/deposit/binance/submit", payload);
-      logger.success("Binance deposit submitted successfully");
-      setBStep(BSTEP.SUCCESS);
-    } catch(e) { 
-      logger.error("Binance submission failed:", e.message);
-      setError(e.message||"Submission failed."); 
+    logger.info("=== BINANCE DEPOSIT SUBMISSION STARTED ===");
+    if (!validateBinance()) {
+      logger.warn("Binance form validation failed, aborting");
+      return;
     }
-    finally { setLoading(false); }
+    setLoading(true); setError("");
+
+    const payload = {
+      txid: txid.trim(),
+      cryptoAmount: parseFloat(cryptoAmount),
+      coin,
+      network: cryptoNetwork,
+      expectedLocalAmount: parseFloat(expectedLocal),   // fixed: was expectedGhsAmount
+      currency: countryObj?.currency ?? "GHS",          // tells backend which currency
+      country: country ?? "GH",                         // e.g. "GH" or "NG"
+      depositType: "crypto",
+      senderAddress: senderAddress.trim() || undefined,
+      userNote: userNote.trim() || undefined,
+    };
+
+    logger.info("Binance payload being sent:", payload);
+    console.log('%c=== BINANCE PAYLOAD TO BACKEND ===', 'color: #6366f1; font-size: 14px; font-weight: bold');
+    console.log(JSON.stringify(payload, null, 2));
+
+    const token = tok();
+    if (!token) {
+      logger.error("No auth token — aborting Binance submit");
+      setError("Authentication token not found. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/wallet/deposit/binance/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      logger.info("Binance submit response status:", res.status);
+
+      const responseText = await res.text();
+      logger.info("Binance submit raw response:", responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        logger.response("/api/wallet/deposit/binance/submit", res.status, data);
+      } catch (parseErr) {
+        logger.error("Failed to parse Binance submit response as JSON:", parseErr.message);
+        throw new Error(`Server returned non-JSON (Status ${res.status}): ${responseText.substring(0, 300)}`);
+      }
+
+      if (!res.ok) {
+        // Extract the most useful error message from common backend shapes
+        const msg =
+          data?.message ||
+          data?.error ||
+          data?.detail ||
+          (Array.isArray(data?.errors) ? data.errors.map(e => e.msg || e.message || JSON.stringify(e)).join(", ") : null) ||
+          `Server error ${res.status}`;
+        logger.error("Binance submit server error:", { status: res.status, body: data, extracted: msg });
+        throw new Error(msg);
+      }
+
+      logger.success("Binance deposit submitted successfully:", data);
+      setBStep(BSTEP.SUCCESS);
+    } catch (e) {
+      logger.error("Binance submission exception:", { message: e.message, stack: e.stack });
+      setError(e.message || "Submission failed. Please try again.");
+    } finally {
+      logger.info("=== BINANCE DEPOSIT SUBMISSION ENDED ===");
+      setLoading(false);
+    }
   };
 
   const handleScreenshotChange = (e) => {
@@ -437,11 +490,15 @@ export default function DepositPage() {
       const payload = {
         txid: bkTxid.trim(),
         cryptoAmount: parseFloat(bkAmount),
-        coin: "USDT",  // Keep as USDT for backend compatibility
-        network: "TRC20",  // Keep as TRC20 for backend compatibility
-        expectedGhsAmount: parseFloat(bkExpected),
+        coin: "USDT",
+        network: "TRC20",
+        expectedLocalAmount: parseFloat(bkExpected),     // fixed: was expectedGhsAmount
+        currency: countryObj?.currency ?? "NGN",          // tells backend which currency
+        country: country ?? "NG",
+        depositType: "bank_transfer",                     // distinguishes from crypto
         senderAddress: bkSender.trim() || "Bank Transfer",
-        userNote: `[BANK TRANSFER - ${BANK_NAME}]\nRef: ${bkTxid.trim()}\nAmount Sent: ₦${parseFloat(bkAmount).toLocaleString()}\nExpected Credit: ₦${parseFloat(bkExpected).toLocaleString()}\nSender: ${bkSender.trim() || 'N/A'}\n${bkNote.trim() ? 'Note: ' + bkNote.trim() : ''}`.trim(),
+        userNote: `[BANK TRANSFER - ${BANK_NAME}]\nRef: ${bkTxid.trim()}\nAmount Sent: ${countryObj?.symbol ?? "₦"}${parseFloat(bkAmount).toLocaleString()}\nExpected Credit: ${countryObj?.symbol ?? "₦"}${parseFloat(bkExpected).toLocaleString()}\nSender: ${bkSender.trim() || 'N/A'}\n${bkNote.trim() ? 'Note: ' + bkNote.trim() : ''}`.trim(),
+        ...(bkScreenshotB64 ? { screenshotBase64: bkScreenshotB64 } : {}),
       };
       
       logger.request("/api/wallet/deposit/binance/submit", payload);
@@ -485,8 +542,14 @@ export default function DepositPage() {
       }
       
       if (!res.ok) {
-        logger.error("Server error:", { status: res.status, data });
-        throw new Error(data?.message || data?.error || `Server error (${res.status}): ${JSON.stringify(data)}`);
+        const msg =
+          data?.message ||
+          data?.error ||
+          data?.detail ||
+          (Array.isArray(data?.errors) ? data.errors.map(e => e.msg || e.message || JSON.stringify(e)).join(", ") : null) ||
+          `Server error ${res.status}`;
+        logger.error("Bank submit server error:", { status: res.status, body: data, extracted: msg });
+        throw new Error(msg);
       }
       
       logger.success("Bank deposit submitted successfully!");
@@ -1134,4 +1197,3 @@ export default function DepositPage() {
     </div>
   );
 }
-
