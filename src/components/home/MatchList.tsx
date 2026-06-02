@@ -24,7 +24,8 @@
 //   • ADMIN LIVE LOCK: Admin games that are live show odds as locked (greyed,
 //     lock icon) — betting is disabled while the admin match is in progress.
 //   • LEAGUE FALLBACK: When no league name is set, a deterministic lower-
-//     division / underground league name is shown instead of blank / "Special Game".
+//     division / underground league name is shown instead of blank / "Special Game"
+//     or "(no league)". Applied to ALL matches — admin and regular alike.
 // ---------------------------------------------------------------------------
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -46,9 +47,11 @@ import LockIcon from '@mui/icons-material/Lock';
 // ---------------------------------------------------------------------------
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  UNDERGROUND / LOWER-DIVISION FALLBACK LEAGUE NAMES                     ║
-// ║  Shown when a match has no league name set.                              ║
+// ║  Drawn from 5th-division & below leagues across the globe.              ║
+// ║  Shown for ANY match (admin or regular) that has no league name set.    ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 const FALLBACK_LEAGUE_NAMES: string[] = [
+  // England (Steps 4-7)
   'Northern Premier League Division One East',
   'Isthmian League South East Division',
   'Midland Football League Premier Division',
@@ -61,29 +64,82 @@ const FALLBACK_LEAGUE_NAMES: string[] = [
   'Western League Premier Division',
   'United Counties League Premier Division',
   'Wessex Football League Premier Division',
-  'Metropolitan Police League Division Two',
   'Essex Senior Football League',
   'Kent County Football League Premier Division',
-  'Merseyside Amateur Football Combination',
-  'Lancashire Amateur League Division Three',
-  'Sheffield & Hallamshire County Senior League',
-  'East Riding County Football League',
-  'Devon & Exeter Football League',
-  'Wearside Football League',
-  'Teesside Amateur Football League',
-  'West Yorkshire Association Football League',
-  'Gloucestershire County Football League',
-  'Somerset County Football League Premier Division',
-  'Dorset Premier Football League',
-  'Suffolk & Ipswich Football League',
-  'Cambridgeshire County Football League',
-  'Nottinghamshire Football Alliance',
-  'Leicestershire & Rutland County Football League',
+  // Germany (5th tier Regionalliga & below)
+  'Regionalliga Nordost',
+  'Regionalliga Bayern',
+  'Oberliga Hamburg',
+  'Oberliga Niedersachsen',
+  'Verbandsliga Württemberg',
+  'Landesliga Rheinland-Pfalz',
+  // Spain (4th–5th tier)
+  'Segunda Federación Grupo 5',
+  'Tercera Federación Grupo 8',
+  'División de Honor Juvenil Grupo 4',
+  // France (4th–5th tier)
+  'National 3 Poule D',
+  'Régional 1 Île-de-France',
+  'Ligue de Bretagne Division Honneur',
+  // Italy (4th–5th tier)
+  'Serie D Girone H',
+  'Eccellenza Campania Girone A',
+  'Promozione Sicilia Girone B',
+  'Prima Categoria Lombardia',
+  // Netherlands (4th–5th tier)
+  'Hoofdklasse Zaterdag A',
+  'Eerste Klasse Noord-Holland',
+  'Tweede Klasse Utrecht',
+  // Portugal (4th–5th tier)
+  'Campeonato de Portugal Série D',
+  'Divisão de Honra Associação Lisboa',
+  'Distritais AFC Setúbal',
+  // Brazil (4th–5th tier)
+  'Série D Grupo A8',
+  'Campeonato Paulista Série A3',
+  'Campeonato Carioca Série B1',
+  'Copa FPF Segunda Divisão',
+  // Argentina (4th–5th tier)
+  'Primera C Metropolitana',
+  'Primera D Metropolitana',
+  'Torneo Regional Amateur Zona NOA',
+  // Mexico (4th–5th tier)
+  'Liga de Expansión MX',
+  'Liga Premier Serie B Grupo Centro',
+  'Tercera División FEMEXFUT Zona Norte',
+  // USA / Canada (4th–5th tier)
+  'USL League Two Midwest Division',
+  'National Premier Soccer League Southeast Conference',
+  'NISA Independent Cup',
+  // Africa (lower divisions)
+  'Ghana Division Two Zone 3',
+  'Nigeria National League Group B',
+  'South Africa ABC Motsepe League NW',
+  'Kenya National Super League',
+  'Cameroun Régionale 1 Centre',
+  // Asia (lower divisions)
+  'J3 League',
+  'K League 2 Playoff Round',
+  'Chinese Football League Second Division',
+  'I-League 2 South Zone',
+  'Thai Regional League Zone 7',
+  // Scandinavia (4th–5th tier)
+  'Division 2 Norrland',
+  'Ettan Norra',
+  'Norwegian Fourth Division Avdeling 7',
+  'Ykkönen Lohko B',
+  'Superligaen Qualification Round B',
+  // Eastern Europe (lower divisions)
+  'Polish III Liga Group 3',
+  'Czech Divize C',
+  'Slovak Third Liga West',
+  'Hungarian Nemzeti Bajnokság III',
+  'Romanian Liga IV Prahova',
 ];
 
 /**
  * Returns a deterministic fallback league name based on matchId.
- * Stable across renders — same match always gets the same league name.
+ * Stable across renders — same match always gets the same fake league name.
  */
 function getFallbackLeagueName(matchId: string): string {
   let hash = 0;
@@ -94,12 +150,14 @@ function getFallbackLeagueName(matchId: string): string {
 }
 
 /**
- * Returns the display league name for a match.
- * Falls back to a deterministic underground league name if none is set.
+ * Returns the display league name for ANY match (admin or regular).
+ * Falls back to a deterministic underground / lower-division league name
+ * if the match has no league name set, so "(no league)" or blank
+ * is never shown to users.
  */
 function resolveLeagueName(match: Match): string {
   const raw = (match.league ?? '').trim();
-  if (raw && raw.toLowerCase() !== 'n/a' && raw !== '—') return raw;
+  if (raw && raw.toLowerCase() !== 'n/a' && raw !== '—' && raw !== '(no league)') return raw;
   return getFallbackLeagueName(match.id ?? 'default');
 }
 
@@ -1389,7 +1447,6 @@ function MatchCard({
   const awayWon   = isFinished && awayScore > homeScore;
   const odds = match.oddsMap;
 
-  // ── KEY CHANGE: lock odds for admin games that are live ──────────────────
   const adminOddsLocked = isAdmin && isLive;
 
   const isSel = (sel: string) =>
@@ -1402,10 +1459,8 @@ function MatchCard({
     showToast('Added to bet slip', 'success');
   };
 
-  // ── League display: use resolveLeagueName for admin matches ──────────────
-  const leagueDisplay = isAdmin
-    ? resolveLeagueName(match)
-    : (match.league || '');
+  // ── resolveLeagueName is used for ALL matches now (admin and regular) ────
+  const leagueDisplay = resolveLeagueName(match);
 
   const stateClass = isLive ? 'live' : isFinished ? 'finished' : 'upcoming';
   const oddsSlots = hasDraw
@@ -1500,7 +1555,6 @@ function MatchCard({
       )}
       {(isLive || isUpcoming) && (
         <>
-          {/* ── Admin live: locked odds row ── */}
           {adminOddsLocked ? (
             <div className="match-odds-row">
               {oddsSlots.map(({ key, label, val }) => (
@@ -1538,7 +1592,6 @@ function MatchCard({
             </div>
           )}
 
-          {/* ── Admin live: betting closed notice ── */}
           {adminOddsLocked ? (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6,
@@ -1560,10 +1613,20 @@ function MatchCard({
   );
 }
 
-function LeagueCard({ league, matches, leagueLogo, showDraw }: { league: string; matches: EnrichedMatch[]; leagueLogo?: string; showDraw: boolean }) {
+// ---------------------------------------------------------------------------
+// LeagueCard — uses resolveLeagueName so the group header never shows blank
+// ---------------------------------------------------------------------------
+function LeagueCard({ league, matches, leagueLogo, showDraw }: {
+  league: string;
+  matches: EnrichedMatch[];
+  leagueLogo?: string;
+  showDraw: boolean;
+}) {
   const navigate = useNavigate();
-  const isTop6   = TOP_6_LABELS.has(league);
-  const isCup    = CUPS_LABELS.has(league);
+  // Use the resolved name for the header label (falls back to underground name)
+  const displayLeague = resolveLeagueName({ id: matches[0]?.id ?? league, league } as Match);
+  const isTop6   = TOP_6_LABELS.has(displayLeague);
+  const isCup    = CUPS_LABELS.has(displayLeague);
   return (
     <div className="league-group">
       <div className="league-group-header">
@@ -1571,7 +1634,7 @@ function LeagueCard({ league, matches, leagueLogo, showDraw }: { league: string;
           <img src={leagueLogo} alt="" className="league-group-header-logo"
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         )}
-        <span className="league-group-name">{league || '—'}</span>
+        <span className="league-group-name">{displayLeague}</span>
         <span className="league-group-count">{matches.length}</span>
       </div>
       {matches.map((m) => (
@@ -1780,10 +1843,15 @@ function FallbackNotice({ tabLabel }: { tabLabel: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// groupByLeague — uses resolveLeagueName as the grouping key so matches
+// without a league are grouped under their deterministic fallback name
+// instead of "(no league)".
+// ---------------------------------------------------------------------------
 function groupByLeague(matches: EnrichedMatch[], sorted = false): Map<string, EnrichedMatch[]> {
   const map = new Map<string, EnrichedMatch[]>();
   for (const m of matches) {
-    const key = m.league || '(no league)';
+    const key = resolveLeagueName(m);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(m);
   }
@@ -1936,9 +2004,10 @@ export default function MatchList() {
       ));
     }
     if (activeSport === 'football' && (activeLeagueTab === 'all' || activeLeagueTab === 'other' || isFallback)) {
-      const top6   = matches.filter((m) => TOP_6_LABELS.has(m.league ?? ''));
-      const cups   = matches.filter((m) => !TOP_6_LABELS.has(m.league ?? '') && CUPS_LABELS.has(m.league ?? ''));
-      const others = matches.filter((m) => !TOP_6_LABELS.has(m.league ?? '') && !CUPS_LABELS.has(m.league ?? ''));
+      // Use resolved league names for grouping — no match ever lands in "(no league)"
+      const top6   = matches.filter((m) => TOP_6_LABELS.has(resolveLeagueName(m)));
+      const cups   = matches.filter((m) => !TOP_6_LABELS.has(resolveLeagueName(m)) && CUPS_LABELS.has(resolveLeagueName(m)));
+      const others = matches.filter((m) => !TOP_6_LABELS.has(resolveLeagueName(m)) && !CUPS_LABELS.has(resolveLeagueName(m)));
       return (
         <>
           {[...groupByLeague(top6, true).entries()].map(([league, lm]) => (
