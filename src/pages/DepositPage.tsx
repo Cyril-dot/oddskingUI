@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react";
 
 const API_BASE = "https://futballbackend-production-aefb.up.railway.app";
 const MIN_DEPOSIT_GHS = 300;
-const MIN_DEPOSIT_NGN = 500;
+const MIN_DEPOSIT_NGN = 30000; // Updated to 30,000 NGN
 const QUICK_AMOUNTS_GHS = [300, 500, 1000, 2000, 5000, 10000, 20000, 50000];
-const QUICK_AMOUNTS_NGN = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+const QUICK_AMOUNTS_NGN = [30000, 50000, 100000, 200000, 500000, 1000000]; // Updated quick amounts
 
 const NETWORKS_GH = [
   { id: "MTN", label: "MTN MoMo", color: "#FFCC00", textColor: "#1a1a1a", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSh1DZpMsH7WfqiU7sB6Pky_rHEQAumb9Tg-A&s" },
@@ -182,7 +182,7 @@ export default function DepositPage() {
   const handleInit = async () => {
     setError("");
     const amt = parseFloat(amount);
-    if (!amt || amt < minDeposit) return setError(`Minimum deposit is ${currSymbol}${minDeposit}.00`);
+    if (!amt || amt < minDeposit) return setError(`Minimum deposit is ${currSymbol}${minDeposit.toLocaleString()}`);
     if (!phone.trim()) return setError("MoMo phone number is required.");
     if (!/^0\d{9}$/.test(phone.trim())) return setError("Enter a valid 10-digit number starting with 0.");
     setLoading(true);
@@ -252,7 +252,11 @@ export default function DepositPage() {
   const validateBank = () => {
     const errs = {};
     if (!bkTxid.trim() || bkTxid.trim().length < 3) errs.bkTxid = "Transfer reference is required";
-    if (!bkAmount || isNaN(+bkAmount) || +bkAmount <= 0) errs.bkAmount = "Enter amount transferred";
+    
+    const amt = parseFloat(bkAmount);
+    if (!amt || isNaN(amt) || amt <= 0) errs.bkAmount = "Enter amount transferred";
+    else if (amt < MIN_DEPOSIT_NGN) errs.bkAmount = `Minimum deposit is ₦${MIN_DEPOSIT_NGN.toLocaleString()}`;
+    
     if (!bkExpected || isNaN(+bkExpected) || +bkExpected < 1) errs.bkExpected = "Enter expected credit";
     if (!bkScreenshotB64) errs.bkScreenshot = "Screenshot is required";
     setBkErrors(errs); return Object.keys(errs).length === 0;
@@ -262,7 +266,16 @@ export default function DepositPage() {
     if (!validateBank()) return;
     setLoading(true); setError("");
     try {
-      await post("/api/wallet/deposit/binance/submit", { txid: bkTxid.trim(), cryptoAmount: parseFloat(bkAmount), coin:"NGN", network:"BANK_TRANSFER", expectedGhsAmount: parseFloat(bkExpected), senderAddress: bkSender.trim()||undefined, userNote:(bkNote.trim()||"")+(bkScreenshotB64?` [Screenshot: base64:${bkScreenshotB64.substring(0,30)}...]`:"") });
+      // Using same Binance endpoint with bank data mapped to same field names
+      await post("/api/wallet/deposit/binance/submit", {
+        txid: bkTxid.trim(),
+        cryptoAmount: parseFloat(bkAmount),
+        coin: "NGN",
+        network: "BANK_TRANSFER",
+        expectedGhsAmount: parseFloat(bkExpected),
+        senderAddress: bkSender.trim() || undefined,
+        userNote: (bkNote.trim() || "") + (bkScreenshotB64 ? ` [Screenshot: base64:${bkScreenshotB64}]` : ""),
+      });
       setBkStep(BKSTEP.SUCCESS);
     } catch(e) { setError(e.message||"Submission failed."); }
     finally { setLoading(false); }
@@ -481,7 +494,7 @@ export default function DepositPage() {
             <input type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}
               style={{ flex:1, background:"none", border:"none", outline:"none", color: C.textPrimary, fontSize:20, fontWeight:800, padding:"13px 14px", fontFamily:"'Sora',sans-serif" }} />
           </div>
-          <div style={{ fontSize:11, color: C.textMuted, marginBottom:10, fontFamily:"'Sora',sans-serif" }}>Min: {currSymbol}{minDeposit}.00</div>
+          <div style={{ fontSize:11, color: C.textMuted, marginBottom:10, fontFamily:"'Sora',sans-serif" }}>Min: {currSymbol}{minDeposit.toLocaleString()}</div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7 }}>
             {quickAmounts.map(q => (
               <button key={q} onClick={() => setAmount(String(q))} style={{ background: parseFloat(amount)===q?"#6366f122":"#252530", border:`1.5px solid ${parseFloat(amount)===q?C.accent:C.surfaceBorder}`, borderRadius:8, padding:"8px 0", color: parseFloat(amount)===q?C.accentLight:C.textMuted, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all 0.2s" }}>
@@ -616,6 +629,12 @@ export default function DepositPage() {
       <Header title="🇳🇬 Bank Transfer" subtitle="Moniepoint · Nigeria" onBack={resetAll} />
       <div style={{ padding:24 }}>
         {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
+        
+        {/* Minimum deposit notice */}
+        <div style={{ background:"#1a2a1a", border:"1px solid #10b98133", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#6ee7b7", fontFamily:"'Sora',sans-serif" }}>
+          💡 Minimum deposit: <strong>₦{MIN_DEPOSIT_NGN.toLocaleString()}</strong>
+        </div>
+        
         <div style={{ background:"#101a12", border:"1px solid #10b98133", borderRadius:14, padding:18, marginBottom:16 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
             <div style={{ width:38, height:38, borderRadius:10, background:"#10b98122", border:"1px solid #10b98144", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏦</div>
@@ -656,8 +675,11 @@ export default function DepositPage() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
           <div>
             <label style={label}>Amount Sent (₦) <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={bkAmount} placeholder="0.00" onChange={e=>{setBkAmount(e.target.value);setBkErrors(p=>({...p,bkAmount:""}));}} style={inp(bkErrors.bkAmount)} />
+            <input type="number" value={bkAmount} placeholder={`Min ₦${MIN_DEPOSIT_NGN.toLocaleString()}`} onChange={e=>{setBkAmount(e.target.value);setBkErrors(p=>({...p,bkAmount:""}));}} style={inp(bkErrors.bkAmount)} />
             {errMsg(bkErrors.bkAmount)}
+            <div style={{ fontSize:11, color: C.textMuted, marginTop:4, fontFamily:"'Sora',sans-serif" }}>
+              Minimum: ₦{MIN_DEPOSIT_NGN.toLocaleString()}
+            </div>
           </div>
           <div>
             <label style={label}>Expected ₦ Credit <span style={{color:C.red}}>*</span></label>
@@ -733,8 +755,8 @@ export default function DepositPage() {
             <CopyButton text={BINANCE_ADDRESS} />
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-            {[["Network",BINANCE_NETWORK],["Coin",BINANCE_COIN],["Min.","$25 USDT"]].map(([lbl,val]) => (
-              <div key={lbl} style={{ background:"#252540", border:`1px solid ${C.surfaceBorder}`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
+            {[["Network",BINANCE_NETWORK],["Coin",BINANCE_COIN],["Min.","\$25 USDT"]].map(([lbl,val]) => (
+              <div key={lbl} style={{ background:"#252540", border:`1px solid \${C.surfaceBorder}`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
                 <div style={{ fontSize:10, color: C.textMuted, marginBottom:2, fontFamily:"'Sora',sans-serif" }}>{lbl}</div>
                 <div style={{ fontSize:12, fontWeight:800, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>{val}</div>
               </div>
@@ -771,7 +793,7 @@ export default function DepositPage() {
             <select value={cryptoNetwork} onChange={e=>setCryptoNetwork(e.target.value)} style={inp()}>{CRYPTO_NETWORKS.map(n=><option key={n}>{n}</option>)}</select>
           </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
           <div>
             <label style={label}>Amount Sent ({coin}) <span style={{color:C.red}}>*</span></label>
             <input type="number" value={cryptoAmount} placeholder="0.00" onChange={e=>{setCryptoAmount(e.target.value);setBinanceErrors(p=>({...p,cryptoAmount:""}));}} style={inp(binanceErrors.cryptoAmount)} />
@@ -849,3 +871,4 @@ export default function DepositPage() {
     </div>
   );
 }
+
