@@ -49,6 +49,9 @@ if (!document.getElementById("zyno-styles")) {
     ::-webkit-scrollbar-track{background:transparent;}
     ::-webkit-scrollbar-thumb{background:#333344;border-radius:4px;}
     .icon{font-family:'Material Icons Round';font-style:normal;font-weight:400;display:inline-block;line-height:1;text-transform:none;letter-spacing:normal;word-wrap:normal;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';}
+    .zupload-zone{transition:all .25s cubic-bezier(.22,1,.36,1);}
+    .zupload-zone:hover{border-color:#6366f1!important;background:#0e0e20!important;}
+    .zupload-zone.drag-over{border-color:#6366f1!important;background:#0e0e20!important;box-shadow:0 0 0 3px rgba(99,102,241,.15);}
   `;
   document.head.appendChild(s);
 }
@@ -225,6 +228,206 @@ function InfoBox({ icon, children, color=C.accent, bg }) {
   );
 }
 
+/* ─── Screenshot Upload Component ───────────────────────────────────────── */
+/**
+ * ScreenshotUpload
+ *
+ * Uploads an image file to POST /api/uploads/screenshot and returns the URL.
+ * Falls back to base64 data-URL preview locally while upload is in progress.
+ *
+ * Props:
+ *   value       – current screenshotUrl string (or "")
+ *   onChange    – (url: string) => void   called when upload completes
+ *   onError     – (msg: string) => void
+ *   tok         – () => string  auth token getter
+ *   label       – label text (optional)
+ *   required    – show red asterisk
+ *   error       – validation error string
+ */
+function ScreenshotUpload({ value, onChange, onError, tok, label="Payment Screenshot", required=false, error="" }) {
+  const fileRef       = useRef(null);
+  const [preview, setPreview] = useState(value || "");
+  const [uploading, setUploading] = useState(false);
+  const [isDrag, setIsDrag]     = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
+
+  /* sync external value → local preview */
+  useEffect(() => { if (value) setPreview(value); }, [value]);
+
+  const ACCEPTED = ["image/jpeg","image/jpg","image/png","image/webp","image/gif"];
+  const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!ACCEPTED.includes(file.type)) {
+      const msg = "Only JPG, PNG, WEBP, or GIF images are accepted.";
+      setUploadErr(msg); onError && onError(msg); return;
+    }
+    if (file.size > MAX_BYTES) {
+      const msg = "Image must be under 8 MB.";
+      setUploadErr(msg); onError && onError(msg); return;
+    }
+    setUploadErr("");
+
+    /* local preview immediately */
+    const reader = new FileReader();
+    reader.onload = e => setPreview(e.target.result);
+    reader.readAsDataURL(file);
+
+    /* upload */
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      log.api("POST", "/api/uploads/screenshot", { fileName: file.name, size: file.size });
+      const res = await fetch(`${API_BASE}/api/uploads/screenshot`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok()}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || data?.error || `Upload failed (${res.status})`);
+      /* backend returns { url: "https://…" } */
+      const url = data?.url || data?.data?.url || data?.screenshotUrl || data?.data?.screenshotUrl || "";
+      if (!url) throw new Error("Server did not return a screenshot URL.");
+      log.res("/api/uploads/screenshot", res.status, { url });
+      setPreview(url);
+      onChange && onChange(url);
+    } catch (e) {
+      log.err("Screenshot upload failed", e);
+      const msg = e.message || "Upload failed. Please try again.";
+      setUploadErr(msg);
+      onError && onError(msg);
+      /* keep local preview so user can see the image even if upload failed */
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onInputChange = e => { const f = e.target.files?.[0]; if (f) handleFile(f); };
+  const onDrop = e => {
+    e.preventDefault(); setIsDrag(false);
+    const f = e.dataTransfer.files?.[0]; if (f) handleFile(f);
+  };
+  const onDragOver = e => { e.preventDefault(); setIsDrag(true); };
+  const onDragLeave = () => setIsDrag(false);
+
+  const clear = () => {
+    setPreview(""); setUploadErr(""); onChange && onChange("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const activeErr = error || uploadErr;
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && (
+        <label style={lbl}>
+          {label} {required && <span style={{color:C.red}}>*</span>}
+        </label>
+      )}
+
+      {/* Upload zone or preview */}
+      {!preview ? (
+        <div
+          className={`zupload-zone${isDrag?" drag-over":""}`}
+          onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border:`2px dashed ${activeErr ? C.red+"88" : isDrag ? C.accent : C.surfaceBorder}`,
+            borderRadius:12, padding:"28px 16px", textAlign:"center", cursor:"pointer",
+            background: isDrag ? "#0e0e20" : "#0b0b16",
+            transition:"all .25s", position:"relative",
+          }}>
+          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange}
+            style={{ display:"none" }}/>
+          {uploading ? (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
+              <span style={{ width:28, height:28, border:"3px solid rgba(99,102,241,.2)", borderTopColor:C.accent,
+                borderRadius:"50%", animation:"spin 1s linear infinite", display:"block" }}/>
+              <span style={{ fontSize:12, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Uploading screenshot…</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ width:46, height:46, borderRadius:12, background:C.accentDim,
+                border:`1px solid ${C.accent}44`, display:"flex", alignItems:"center",
+                justifyContent:"center", margin:"0 auto 10px" }}>
+                <Icon name="add_photo_alternate" size={24} color={C.accentLight}/>
+              </div>
+              <div style={{ fontSize:13, fontWeight:700, color:C.t2, fontFamily:"'Sora',sans-serif", marginBottom:4 }}>
+                {isDrag ? "Drop to upload" : "Tap or drag screenshot here"}
+              </div>
+              <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>
+                JPG · PNG · WEBP · GIF &nbsp;·&nbsp; Max 8 MB
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ position:"relative", borderRadius:12, overflow:"hidden",
+          border:`1.5px solid ${C.green}44`, background:"#0b120d" }}>
+          <img src={preview} alt="Payment screenshot"
+            style={{ width:"100%", maxHeight:220, objectFit:"contain",
+              display:"block", background:"#0b120d" }}
+            onError={() => setPreview("")}/>
+          {/* overlay: uploading spinner */}
+          {uploading && (
+            <div style={{ position:"absolute", inset:0, background:"rgba(8,8,15,.7)",
+              display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:8 }}>
+              <span style={{ width:28, height:28, border:"3px solid rgba(255,255,255,.2)", borderTopColor:"#fff",
+                borderRadius:"50%", animation:"spin 1s linear infinite", display:"block" }}/>
+              <span style={{ fontSize:12, color:"rgba(255,255,255,.7)", fontFamily:"'Sora',sans-serif" }}>
+                Uploading…
+              </span>
+            </div>
+          )}
+          {/* top-right controls */}
+          <div style={{ position:"absolute", top:8, right:8, display:"flex", gap:6 }}>
+            {/* re-upload */}
+            <button onClick={e=>{ e.stopPropagation(); fileRef.current?.click(); }}
+              style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:700,
+                padding:"5px 10px", borderRadius:7, cursor:"pointer", border:"none",
+                background:"rgba(8,8,15,.85)", color:C.accentLight, fontFamily:"'Sora',sans-serif" }}>
+              <Icon name="upload" size={13}/> Change
+            </button>
+            {/* remove */}
+            <button onClick={e=>{ e.stopPropagation(); clear(); }}
+              style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, fontWeight:700,
+                padding:"5px 10px", borderRadius:7, cursor:"pointer", border:"none",
+                background:"rgba(239,68,68,.2)", color:C.red, fontFamily:"'Sora',sans-serif" }}>
+              <Icon name="close" size={13}/> Remove
+            </button>
+          </div>
+          {/* status badge */}
+          <div style={{ position:"absolute", bottom:8, left:8,
+            display:"flex", alignItems:"center", gap:4, fontSize:10, fontWeight:700,
+            padding:"4px 9px", borderRadius:20, fontFamily:"'Sora',sans-serif",
+            background: uploading ? "rgba(99,102,241,.85)" : uploadErr ? "rgba(239,68,68,.85)" : "rgba(16,185,129,.85)",
+            color:"#fff" }}>
+            <Icon name={uploading?"upload":uploadErr?"error":"check_circle"} size={11}/>
+            {uploading ? "Uploading…" : uploadErr ? "Upload failed" : "Uploaded"}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" onChange={onInputChange}
+            style={{ display:"none" }}/>
+        </div>
+      )}
+
+      {activeErr && <ErrMsg msg={activeErr}/>}
+      {!activeErr && preview && !uploading && !uploadErr && (
+        <div style={{ fontSize:11, color:C.green, marginTop:5, display:"flex", alignItems:"center",
+          gap:4, fontFamily:"'Sora',sans-serif" }}>
+          <Icon name="check_circle" size={12}/> Screenshot uploaded successfully
+        </div>
+      )}
+      {!activeErr && !preview && !uploading && (
+        <div style={{ fontSize:11, color:C.t3, marginTop:5, fontFamily:"'Sora',sans-serif" }}>
+          Upload a photo of your payment receipt or confirmation screen.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════ */
@@ -259,24 +462,26 @@ export default function DepositPage() {
   const [smsCode,        setSmsCode]        = useState("");
 
   /* ── crypto ── */
-  const [bStep,         setBStep]         = useState(BSTEP.INFO);
-  const [cryptoTxHash,  setCryptoTxHash]  = useState("");
-  const [cryptoCoin,    setCryptoCoin]    = useState("USDT");
-  const [cryptoNet,     setCryptoNet]     = useState("TRC20");
-  const [cryptoAmtSent, setCryptoAmtSent] = useState("");
-  const [cryptoExpected,setCryptoExpected]= useState("");
-  const [cryptoWallet,  setCryptoWallet]  = useState("");
-  const [cryptoNote,    setCryptoNote]    = useState("");
-  const [cryptoErrors,  setCryptoErrors]  = useState({});
+  const [bStep,            setBStep]            = useState(BSTEP.INFO);
+  const [cryptoTxHash,     setCryptoTxHash]     = useState("");
+  const [cryptoCoin,       setCryptoCoin]       = useState("USDT");
+  const [cryptoNet,        setCryptoNet]        = useState("TRC20");
+  const [cryptoAmtSent,    setCryptoAmtSent]    = useState("");
+  const [cryptoExpected,   setCryptoExpected]   = useState("");
+  const [cryptoWallet,     setCryptoWallet]     = useState("");
+  const [cryptoNote,       setCryptoNote]       = useState("");
+  const [cryptoErrors,     setCryptoErrors]     = useState({});
+  const [cryptoScreenshot, setCryptoScreenshot] = useState(""); // ← NEW
 
   /* ── bank ── */
-  const [bkStep,       setBkStep]       = useState(BKSTEP.INFO);
-  const [bankRef,      setBankRef]      = useState("");
-  const [bankAmtSent,  setBankAmtSent]  = useState("");
-  const [bankExpected, setBankExpected] = useState("");
-  const [bankSender,   setBankSender]   = useState("");
-  const [bankNote,     setBankNote]     = useState("");
-  const [bankErrors,   setBankErrors]   = useState({});
+  const [bkStep,          setBkStep]          = useState(BKSTEP.INFO);
+  const [bankRef,         setBankRef]         = useState("");
+  const [bankAmtSent,     setBankAmtSent]     = useState("");
+  const [bankExpected,    setBankExpected]    = useState("");
+  const [bankSender,      setBankSender]      = useState("");
+  const [bankNote,        setBankNote]        = useState("");
+  const [bankErrors,      setBankErrors]      = useState({});
+  const [bankScreenshot,  setBankScreenshot]  = useState(""); // ← NEW
 
   /* ── derived ── */
   const countryObj   = COUNTRIES.find(c => c.id === country);
@@ -374,6 +579,7 @@ export default function DepositPage() {
     if (!cryptoTxHash.trim() || cryptoTxHash.trim().length < 10) e.hash  = "A valid Transaction Hash is required";
     if (!cryptoAmtSent  || isNaN(+cryptoAmtSent)  || +cryptoAmtSent  <= 0) e.amt  = "Enter the amount you sent";
     if (!cryptoExpected || isNaN(+cryptoExpected) || +cryptoExpected < 1)   e.exp  = "Enter the expected credit amount";
+    // screenshot is optional for crypto but encouraged
     setCryptoErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -387,15 +593,16 @@ export default function DepositPage() {
         coin:              cryptoCoin,
         network:           cryptoNet,
         expectedGhsAmount: parseFloat(cryptoExpected),
-        senderAddress:     cryptoWallet.trim() || undefined,
-        userNote:          cryptoNote.trim()   || undefined,
+        senderAddress:     cryptoWallet.trim()     || undefined,
+        screenshotUrl:     cryptoScreenshot.trim() || undefined, // ← NEW
+        userNote:          cryptoNote.trim()        || undefined,
       });
       setBStep(BSTEP.SUCCESS);
     } catch(e) { setError(e.message); }
     finally    { setLoading(false); }
   };
 
-  /* ── Bank Transfer handler — uses new /api/wallet/bank-deposits endpoint ── */
+  /* ── Bank Transfer handler ── */
   const validateBank = () => {
     const e = {};
     if (!bankRef.trim() || bankRef.trim().length < 3) e.ref = "Transfer reference / narration is required";
@@ -403,6 +610,8 @@ export default function DepositPage() {
     if (!amt || isNaN(amt) || amt <= 0)  e.amt = "Enter the amount you transferred";
     else if (amt < MIN_NGN)              e.amt = `Minimum deposit is ₦${MIN_NGN.toLocaleString()}`;
     if (!bankExpected || isNaN(+bankExpected) || +bankExpected < 1) e.exp = "Enter expected wallet credit";
+    // screenshot required for bank transfer
+    if (!bankScreenshot.trim()) e.screenshot = "A payment screenshot is required for bank transfers";
     setBankErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -414,8 +623,9 @@ export default function DepositPage() {
         transferReference: bankRef.trim(),
         ngnAmountSent:     parseFloat(bankAmtSent),
         expectedNgnCredit: parseFloat(bankExpected),
-        senderAccountName: bankSender.trim() || undefined,
-        userNote:          bankNote.trim()   || undefined,
+        senderAccountName: bankSender.trim()       || undefined,
+        screenshotUrl:     bankScreenshot.trim(),               // ← NEW (required)
+        userNote:          bankNote.trim()          || undefined,
       });
       setBkStep(BKSTEP.SUCCESS);
     } catch(e) { setError(e.message); }
@@ -427,9 +637,10 @@ export default function DepositPage() {
     setStep(STEP.METHOD); setError(""); setInfo("");
     setAmount(""); setPhone(""); setNetwork("MTN"); setRef(""); setSmsCode(""); setSub(SUB.WAIT);
     setCryptoTxHash(""); setCryptoAmtSent(""); setCryptoCoin("USDT"); setCryptoNet("TRC20");
-    setCryptoExpected(""); setCryptoWallet(""); setCryptoNote(""); setCryptoErrors({}); setBStep(BSTEP.INFO);
+    setCryptoExpected(""); setCryptoWallet(""); setCryptoNote(""); setCryptoErrors({});
+    setCryptoScreenshot(""); setBStep(BSTEP.INFO);
     setBkStep(BKSTEP.INFO); setBankRef(""); setBankAmtSent(""); setBankExpected("");
-    setBankSender(""); setBankNote(""); setBankErrors({});
+    setBankSender(""); setBankNote(""); setBankErrors({}); setBankScreenshot("");
     clearInterval(timerRef.current);
   };
   const backToCountry = () => { resetAll(); setCountry(null); setStep(STEP.COUNTRY); };
@@ -440,7 +651,6 @@ export default function DepositPage() {
   const Header = ({ title, subtitle, onBack }) => (
     <div style={{ padding:"20px 22px 18px", borderBottom:`1px solid ${C.cardBorder}`, background:`linear-gradient(180deg,#13131f,${C.card})` }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:onBack||title?12:0 }}>
-        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:9 }}>
           <div style={{ width:32, height:32, borderRadius:9, background:"linear-gradient(135deg,#6366f1,#4f46e5)",
             display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -448,7 +658,6 @@ export default function DepositPage() {
           </div>
           <span style={{ fontSize:13, fontWeight:900, color:C.t1, letterSpacing:"1.5px", fontFamily:"'Sora',sans-serif" }}>ZYNOBET</span>
         </div>
-        {/* Support */}
         <button onClick={()=>setShowSupport(true)}
           style={{ display:"flex", alignItems:"center", gap:5, background:C.surface,
             border:`1px solid ${C.surfaceBorder}`, borderRadius:8, padding:"6px 11px",
@@ -522,7 +731,6 @@ export default function DepositPage() {
                 style={{ width:"100%", display:"flex", alignItems:"center", gap:15, background:C.surface,
                   border:`1.5px solid ${C.surfaceBorder}`, borderRadius:16, padding:"16px 18px",
                   cursor:"pointer", textAlign:"left", boxShadow:"0 2px 14px rgba(0,0,0,.25)" }}>
-                {/* Real SVG flag */}
                 <div style={{ width:54, height:36, borderRadius:8, overflow:"hidden",
                   border:"1.5px solid rgba(255,255,255,.08)", flexShrink:0, boxShadow:"0 2px 8px rgba(0,0,0,.3)" }}>
                   <FlagSvg/>
@@ -941,73 +1149,70 @@ export default function DepositPage() {
   /* ══════════════════════════════════════════════════════════════
      SCREEN: Bank Transfer — Info
   ══════════════════════════════════════════════════════════════ */
-  const renderBankInfo = () => {
-    const NgFlag = COUNTRIES.find(c=>c.id==="NG").flag;
-    return (
-      <>
-        <Header title={<span style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <Icon name="account_balance" size={20}/> Bank Transfer
-        </span>} subtitle="Moniepoint · Nigeria" onBack={resetAll}/>
-        <div style={{ padding:22 }}>
-          {error && (
-            <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:10,
-              padding:"11px 13px", color:C.red, fontSize:13, marginBottom:14,
-              display:"flex", alignItems:"center", gap:7, fontFamily:"'Sora',sans-serif" }}>
-              <Icon name="error" size={16}/> {error}
-            </div>
-          )}
+  const renderBankInfo = () => (
+    <>
+      <Header title={<span style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <Icon name="account_balance" size={20}/> Bank Transfer
+      </span>} subtitle="Moniepoint · Nigeria" onBack={resetAll}/>
+      <div style={{ padding:22 }}>
+        {error && (
+          <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:10,
+            padding:"11px 13px", color:C.red, fontSize:13, marginBottom:14,
+            display:"flex", alignItems:"center", gap:7, fontFamily:"'Sora',sans-serif" }}>
+            <Icon name="error" size={16}/> {error}
+          </div>
+        )}
 
-          <InfoBox icon="info" color={C.green}>
-            Minimum deposit: <strong>₦{MIN_NGN.toLocaleString()}</strong>
+        <InfoBox icon="info" color={C.green}>
+          Minimum deposit: <strong>₦{MIN_NGN.toLocaleString()}</strong>
+        </InfoBox>
+
+        <div style={{ background:"#080f0a", border:"1px solid #10b98133", borderRadius:14, padding:18, marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+            <div style={{ width:36, height:36, borderRadius:9, background:C.greenDim,
+              border:"1px solid #10b98144", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Icon name="account_balance" size={20} color={C.green}/>
+            </div>
+            <div>
+              <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Transfer to this account</div>
+              <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Then submit your payment proof below</div>
+            </div>
+          </div>
+
+          {[["Bank Name", BANK_NAME, "corporate_fare"], ["Account Name", BANK_ACCT, "person"], ["Account Number", BANK_NUMBER, "pin"]].map(([fieldLbl, val, ic]) => (
+            <div key={fieldLbl} style={{ background:"#0d1a0f", border:"1px solid #10b98133",
+              borderRadius:10, padding:"11px 13px", marginBottom:10 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:C.t3, textTransform:"uppercase",
+                letterSpacing:".5px", marginBottom:6, fontFamily:"'Sora',sans-serif",
+                display:"flex", alignItems:"center", gap:4 }}>
+                <Icon name={ic} size={11}/> {fieldLbl}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                <span style={{ fontFamily:fieldLbl==="Account Number"?"'DM Mono',monospace":"'Sora',sans-serif",
+                  fontSize:fieldLbl==="Account Number"?20:14, fontWeight:800, color:C.t1, wordBreak:"break-all" }}>{val}</span>
+                <CopyButton text={val}/>
+              </div>
+            </div>
+          ))}
+
+          <InfoBox icon="warning" color={C.yellow}>
+            Always include your <strong>username or phone number</strong> in the transfer narration so we can identify your payment.
           </InfoBox>
-
-          <div style={{ background:"#080f0a", border:"1px solid #10b98133", borderRadius:14, padding:18, marginBottom:16 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-              <div style={{ width:36, height:36, borderRadius:9, background:C.greenDim,
-                border:"1px solid #10b98144", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <Icon name="account_balance" size={20} color={C.green}/>
-              </div>
-              <div>
-                <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Transfer to this account</div>
-                <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Then submit your payment proof below</div>
-              </div>
-            </div>
-
-            {[["Bank Name", BANK_NAME, "corporate_fare"], ["Account Name", BANK_ACCT, "person"], ["Account Number", BANK_NUMBER, "pin"]].map(([fieldLbl, val, ic]) => (
-              <div key={fieldLbl} style={{ background:"#0d1a0f", border:"1px solid #10b98133",
-                borderRadius:10, padding:"11px 13px", marginBottom:10 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:C.t3, textTransform:"uppercase",
-                  letterSpacing:".5px", marginBottom:6, fontFamily:"'Sora',sans-serif",
-                  display:"flex", alignItems:"center", gap:4 }}>
-                  <Icon name={ic} size={11}/> {fieldLbl}
-                </div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                  <span style={{ fontFamily:fieldLbl==="Account Number"?"'DM Mono',monospace":"'Sora',sans-serif",
-                    fontSize:fieldLbl==="Account Number"?20:14, fontWeight:800, color:C.t1, wordBreak:"break-all" }}>{val}</span>
-                  <CopyButton text={val}/>
-                </div>
-              </div>
-            ))}
-
-            <InfoBox icon="warning" color={C.yellow}>
-              Always include your <strong>username or phone number</strong> in the transfer narration so we can identify your payment.
-            </InfoBox>
-          </div>
-
-          <button className="zbtn" onClick={()=>setBkStep(BKSTEP.FORM)} style={btn("green")}>
-            <Icon name="task_alt" size={16}/> I've Sent the Money — Submit Proof
-          </button>
-          <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
-            <Icon name="verified_user" size={13} color={C.t3}/> Verified within 5–10 minutes
-          </div>
         </div>
-      </>
-    );
-  };
+
+        <button className="zbtn" onClick={()=>setBkStep(BKSTEP.FORM)} style={btn("green")}>
+          <Icon name="task_alt" size={16}/> I've Sent the Money — Submit Proof
+        </button>
+        <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+          <Icon name="verified_user" size={13} color={C.t3}/> Verified within 5–10 minutes
+        </div>
+      </div>
+    </>
+  );
 
   /* ══════════════════════════════════════════════════════════════
-     SCREEN: Bank Transfer — Proof Form  →  POST /api/wallet/bank-deposits
+     SCREEN: Bank Transfer — Proof Form  (with screenshot upload)
   ══════════════════════════════════════════════════════════════ */
   const renderBankForm = () => (
     <>
@@ -1070,6 +1275,17 @@ export default function DepositPage() {
           </div>
         </div>
 
+        {/* ── SCREENSHOT UPLOAD (required for bank) ─────────────────── */}
+        <ScreenshotUpload
+          value={bankScreenshot}
+          onChange={url => { setBankScreenshot(url); setBankErrors(p=>({...p,screenshot:""})); }}
+          onError={msg => setBankErrors(p=>({...p,screenshot:msg}))}
+          tok={tok}
+          label="Payment Screenshot"
+          required={true}
+          error={bankErrors.screenshot}
+        />
+
         {/* userNote */}
         <div style={{ marginBottom:20 }}>
           <label style={lbl}>Note to Admin</label>
@@ -1091,6 +1307,9 @@ export default function DepositPage() {
     </>
   );
 
+  /* ══════════════════════════════════════════════════════════════
+     SCREEN: Bank Transfer — Success
+  ══════════════════════════════════════════════════════════════ */
   const renderBankSuccess = () => (
     <>
       <div style={{ background:"linear-gradient(135deg,#052e1c,#064e32)", padding:"22px 22px 18px",
@@ -1211,7 +1430,7 @@ export default function DepositPage() {
   );
 
   /* ══════════════════════════════════════════════════════════════
-     SCREEN: Crypto — Proof Form  →  POST /api/wallet/binance-deposits
+     SCREEN: Crypto — Proof Form  (with screenshot upload)
   ══════════════════════════════════════════════════════════════ */
   const renderBinanceForm = () => (
     <>
@@ -1285,6 +1504,17 @@ export default function DepositPage() {
             onChange={e=>setCryptoWallet(e.target.value)} style={inp()}/>
         </div>
 
+        {/* ── SCREENSHOT UPLOAD (optional for crypto) ──────────────────── */}
+        <ScreenshotUpload
+          value={cryptoScreenshot}
+          onChange={url => setCryptoScreenshot(url)}
+          onError={msg => log.warn("Crypto screenshot upload error:", msg)}
+          tok={tok}
+          label="Transaction Screenshot (optional)"
+          required={false}
+          error={cryptoErrors.screenshot || ""}
+        />
+
         {/* userNote */}
         <div style={{ marginBottom:20 }}>
           <label style={lbl}>Note to Admin</label>
@@ -1306,6 +1536,9 @@ export default function DepositPage() {
     </>
   );
 
+  /* ══════════════════════════════════════════════════════════════
+     SCREEN: Crypto — Success
+  ══════════════════════════════════════════════════════════════ */
   const renderBinanceSuccess = () => (
     <>
       <div style={{ background:"linear-gradient(135deg,#0c0a2e,#13104a)", padding:"22px 22px 18px",
