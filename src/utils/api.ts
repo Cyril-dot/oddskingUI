@@ -1,1199 +1,3046 @@
-import { useState, useEffect, useRef } from "react";
+// =============================================================================
+// api.ts — futball api
+// Base URL: https://futballbackend.onrender.com
+// =============================================================================
 
-const API_BASE = "https://futballbackend-production-aefb.up.railway.app";
-const MIN_DEPOSIT_GHS = 300;
-const MIN_DEPOSIT_NGN = 30000;
-const QUICK_AMOUNTS_GHS = [300, 500, 1000, 2000, 5000, 10000, 20000, 50000];
-const QUICK_AMOUNTS_NGN = [30000, 50000, 100000, 200000, 500000, 1000000];
+const BASE_URL = "https://futballbackend-production-aefb.up.railway.app";
+// ---------------------------------------------------------------------------
+// Types & Schemas
+// ---------------------------------------------------------------------------
 
-const NETWORKS_GH = [
-  { id: "MTN", label: "MTN MoMo", color: "#FFCC00", textColor: "#1a1a1a", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSh1DZpMsH7WfqiU7sB6Pky_rHEQAumb9Tg-A&s" },
-  { id: "VODAFONE", label: "Telecel Cash", color: "#E00000", textColor: "#fff", logo: "https://www.telecel.com.gh/img/Telecel-Icon-Red.png" },
-  { id: "AIRTELTIGO", label: "AirtelTigo Money", color: "#EF3E2D", textColor: "#fff", logo: "https://amaghanaonline.com/wp-content/uploads/2022/07/WhatsApp-Image-2022-07-27-at-5.16.26-PM.jpeg" },
-];
+export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
+export type UserStatus = "ACTIVE" | "DISABLED" | "LOCKED";
+export type WithdrawalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SETTLED" | "FAILED";
+export type BetStatus = "PENDING" | "WON" | "LOST" | "VOID" | "CASHED_OUT";
+export type PayoutStatus = "REQUESTED" | "APPROVED" | "REJECTED" | "PAID";
+export type AffiliateWithdrawalStatus = "PENDING" | "PROCESSED" | "REJECTED";
+export type AdminUpgradeChatStatus = "PENDING_COMMISSION" | "COMMISSION_SET" | "CLOSED";
+export type SenderRole = "USER" | "SUPER_ADMIN" | "SYSTEM";
+export type TransactionKind =
+  | "DEPOSIT"
+  | "WITHDRAW"
+  | "WITHDRAW_HOLD"
+  | "WITHDRAW_RELEASE"
+  | "BET_STAKE"
+  | "BET_WIN"
+  | "REFERRAL_COMMISSION"
+  | "PAYOUT"
+  | "ADJUSTMENT"
+  | "VIP_CASHBACK"
+  | "VIP_MEMBERSHIP"
+  | "WELCOME_BONUS"
+  | "WITHDRAWAL_REFUND"
+  | "ADMIN_UPGRADE_FEE";
+export type MatchSource =
+  | "SPORTDB"
+  | "SPORTSRC"
+  | "BSD"
+  | "FOOTBALL_DATA"
+  | "API_FOOTBALL"
+  | "VIRTUAL"
+  | "ADMIN_CREATED"
+  | "LIVESCORE"
+  | "ESPN";
+export type SportEnum =
+  | "FOOTBALL"
+  | "BASKETBALL"
+  | "BASEBALL"
+  | "AMERICAN_FOOTBALL"
+  | "MMA"
+  | "TENNIS";
+export type BinanceDepositStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-const BINANCE_ADDRESS = "THHf1TpvjtpZ8QoLnCXXeUgs116pgHwgVq";
-const BINANCE_NETWORK = "TRC20";
-const BINANCE_COIN = "USDT";
-const CRYPTO_COINS = ["USDT", "BTC", "ETH", "BNB", "USDC"];
-const CRYPTO_NETWORKS = ["TRC20", "BEP20", "ERC20", "Arbitrum", "Optimism"];
+export type FootballLeague =
+  | "PREMIER_LEAGUE" | "LA_LIGA" | "BUNDESLIGA" | "SERIE_A" | "LIGUE_1"
+  | "CHAMPIONS_LEAGUE_GROUP" | "CHAMPIONSHIP" | "EREDIVISIE" | "PRIMEIRA_LIGA"
+  | "SCOTTISH_PREM" | "BELGIAN_PRO" | "TURKISH_SUPER" | "RUSSIAN_PREMIER"
+  | "GREEK_SUPER" | "UKRAINIAN_PREMIER" | "AUSTRIAN_BUNDESLIGA" | "SWISS_SUPER"
+  | "DANISH_SUPER" | "NORWEGIAN_ELITE" | "SWEDISH_ALLSVENSKAN" | "CZECH_FIRST"
+  | "POLISH_EKSTRA" | "ROMANIAN_LIGA1" | "CROATIAN_HNL" | "SERBIAN_SUPER"
+  | "ISRAELI_PREMIER" | "HUNGARIAN_LIGA" | "SLOVAK_SUPER" | "SLOVENIAN_PRVA"
+  | "BELARUSIAN_PREMIER" | "KAZAKH_PREMIER" | "FINNISH_VEIKKAUS"
+  | "SOUTH_AFRICAN_PREMIER" | "MOROCCAN_BOTOLA" | "EGYPTIAN_PREMIER"
+  | "NIGERIAN_PREMIER" | "GHANAIAN_PREMIER" | "SAUDI_PRO" | "UAE_PRO"
+  | "INDIAN_SUPER" | "J1_LEAGUE" | "K_LEAGUE_1" | "CHINESE_SUPER"
+  | "THAI_LEAGUE_1" | "MALAYSIAN_SUPER" | "INDONESIAN_LIGA1" | "IRANIAN_PGPL"
+  | "A_LEAGUE" | "MLS" | "LIGA_MX" | "BRAZILIAN_SERIE_A" | "ARGENTINE_PRIMERA"
+  | "COLOMBIAN_PRIMERA" | "CHILEAN_PRIMERA" | "PERUVIAN_LIGA1"
+  | "ECUADORIAN_SERIE_A" | "URUGUAYAN_PRIMERA" | "VENEZUELAN_PRIMERA"
+  | "BOLIVIAN_DFP" | "PARAGUAYAN_DP";
 
-const BANK_NAME = "MONIEPOINT";
-const BANK_ACCT = "ALIYU ABDULMALIK SANNI";
-const BANK_NUMBER = "8051691303";
+export type FootballCup =
+  | "FA_CUP" | "EFL_CUP" | "COPA_DEL_REY" | "DFB_POKAL" | "COPPA_ITALIA"
+  | "COUPE_DE_FRANCE" | "CHAMPIONS_LEAGUE" | "EUROPA_LEAGUE"
+  | "CONFERENCE_LEAGUE" | "NATIONS_LEAGUE" | "EUROS" | "COPA_LIBERTADORES"
+  | "COPA_AMERICA" | "CONCACAF_CHAMPIONS" | "AFC_CHAMPIONS" | "CAF_CHAMPIONS"
+  | "AFCON" | "WORLD_CUP" | "WOMENS_WORLD_CUP" | "CLUB_WORLD_CUP";
 
-const COUNTRIES = [
-  { id: "GH", name: "Ghana", flag: "🇬🇭", currency: "GHS", symbol: "GH₵", color: "#006B3F", accent: "#FCD116" },
-  { id: "NG", name: "Nigeria", flag: "🇳🇬", currency: "NGN", symbol: "₦", color: "#008751", accent: "#ffffff" },
-];
-
-const STEP = { COUNTRY: -1, METHOD: 0, DETAILS: 1, APPROVE: 2, DONE: 3 };
-const SUB = { SMS: "sms", WAIT: "wait", VERIFY: "verify" };
-const BSTEP = { INFO: "binance-info", FORM: "binance-form", SUCCESS: "binance-success" };
-const BKSTEP = { INFO: "bank-info", FORM: "bank-form", SUCCESS: "bank-success" };
-
-const SUPPORT_CHANNELS = [
-  { icon: "💬", label: "WhatsApp Support", sub: "Chat with us instantly", href: "https://wa.me/233000000000", color: "#25D366" },
-  { icon: "✉️", label: "Email Support", sub: "support@zynobet.site", href: "mailto:support@zynobet.site", color: "#4A90E2" },
-  { icon: "📱", label: "Telegram", sub: "@zynobet", href: "https://t.me/zynobet", color: "#0088cc" },
-];
-
-/* ─── Logger utility ─────────────────────────────────────────────────────── */
-const logger = {
-  info: (msg, data) => {
-    console.log(`%c[INFO] ${msg}`, 'color: #6366f1; font-weight: bold', data || '');
-  },
-  error: (msg, data) => {
-    console.error(`%c[ERROR] ${msg}`, 'color: #ef4444; font-weight: bold', data || '');
-  },
-  warn: (msg, data) => {
-    console.warn(`%c[WARN] ${msg}`, 'color: #f59e0b; font-weight: bold', data || '');
-  },
-  success: (msg, data) => {
-    console.log(`%c[SUCCESS] ${msg}`, 'color: #10b981; font-weight: bold', data || '');
-  },
-  request: (url, payload) => {
-    console.log(`%c[REQUEST] ${url}`, 'color: #818cf8; font-weight: bold');
-    console.log('%cPayload:', 'color: #94a3b8', JSON.stringify(payload, null, 2));
-  },
-  response: (url, status, data) => {
-    const color = status >= 200 && status < 300 ? '#10b981' : '#ef4444';
-    console.log(`%c[RESPONSE] ${url} - Status: ${status}`, `color: ${color}; font-weight: bold`);
-    console.log('%cData:', 'color: #94a3b8', data);
-  }
-};
-
-/* ─── Inject keyframes ──────────────────────────────────────────────────────── */
-const styleTag = document.createElement("style");
-styleTag.textContent = `
-  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Sora', sans-serif; }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
-  .zcard { animation: fadeUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
-  .zbtn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
-  .zbtn:active:not(:disabled) { transform: translateY(0); }
-  .zmethod:hover { border-color: #6366f1 !important; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99,102,241,0.15); }
-  .zcountry:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.18) !important; }
-  .zcopy:hover { background: #e0e7ff !important; }
-  input:focus, textarea:focus, select:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); outline: none; }
-`;
-document.head.appendChild(styleTag);
-
-/* ─── CopyButton ──────────────────────────────────────────────────────────── */
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button className="zcopy" onClick={() => { navigator.clipboard.writeText(text).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false),2000); }}
-      style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:6, cursor:"pointer", border:"none", background: copied?"#d1fae5":"#eef2ff", color: copied?"#065f46":"#6366f1", transition:"all 0.2s", fontFamily:"'Sora',sans-serif" }}>
-      {copied ? "✓ Copied" : "Copy"}
-    </button>
-  );
+export interface GrantedAuthority {
+  authority: string;
 }
 
-/* ─── Badge ───────────────────────────────────────────────────────────────── */
-function Badge({ label, color = "#6366f1", bg }) {
-  return (
-    <span style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:20, background: bg || color+"22", color, fontFamily:"'Sora',sans-serif", letterSpacing:"0.3px" }}>
-      {label}
-    </span>
-  );
+export interface User {
+  id: string;
+  email: string;
+  phone?: string;
+  passwordHash?: string;
+  firstName?: string;
+  lastName?: string;
+  country?: string;
+  role: UserRole;
+  status: UserStatus;
+  createdByAdminId?: string;
+  referredViaLinkId?: string;
+  themePreference?: string;
+  winSeen?: boolean;
+  totpSecret?: string;
+  totpEnabled?: boolean;
+  totpBackupCodes?: string;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
+  verificationToken?: string;
+  resetToken?: string;
+  resetTokenExpiresAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  authorities?: GrantedAuthority[];
+  enabled?: boolean;
+  password?: string;
+  username?: string;
+  accountNonLocked?: boolean;
+  credentialsNonExpired?: boolean;
+  accountNonExpired?: boolean;
 }
 
-/* ─── SectionLabel ─────────────────────────────────────────────────────────── */
-function SectionLabel({ children }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-      <span style={{ fontSize:10, fontWeight:800, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"1.2px", fontFamily:"'Sora',sans-serif" }}>{children}</span>
-      <div style={{ flex:1, height:1, background:"linear-gradient(to right, #e5e7eb, transparent)" }} />
-    </div>
-  );
+export interface UserDto {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  role: string;
+  themePreference?: string;
 }
 
-/* ─── Steps ────────────────────────────────────────────────────────────────── */
-function Steps({ current, labels }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:0, marginBottom:20 }}>
-      {labels.map((lbl, i) => {
-        const done = i < current; const active = i === current;
-        return (
-          <div key={i} style={{ display:"flex", alignItems:"center", flex: i < labels.length-1 ? 1 : "none" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:800, flexShrink:0, background: done?"#6366f1": active?"#6366f1":"#f3f4f6", color: done||active?"#fff":"#9ca3af", border: active?"3px solid #c7d2fe":"3px solid transparent", transition:"all 0.3s" }}>
-                {done ? "✓" : i+1}
-              </div>
-              <span style={{ fontSize:11, fontWeight:700, color: active?"#6366f1": done?"#6366f1":"#9ca3af", whiteSpace:"nowrap", fontFamily:"'Sora',sans-serif" }}>{lbl}</span>
-            </div>
-            {i < labels.length-1 && <div style={{ flex:1, height:2, background: done?"#6366f1":"#e5e7eb", margin:"0 8px", minWidth:16, borderRadius:2, transition:"background 0.3s" }} />}
-          </div>
-        );
-      })}
-    </div>
-  );
+export interface UserSummaryDto {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  role: string;
+  emailVerified?: boolean;
+  createdAt?: string;
 }
 
-/* ─── Main ──────────────────────────────────────────────────────────────────── */
-export default function DepositPage() {
-  const navigate = (typeof window !== "undefined" && window.__navigate) ? window.__navigate : (to) => window.location.href = to;
+export interface WalletSummaryDto {
+  walletId: string;
+  balance: number;
+  currency?: string;
+  totalTransactions?: number;
+  totalDeposited?: number;
+  totalWithdrawn?: number;
+}
 
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
-    logger.info("Auth check - Token exists:", !!token);
-    if (!token) {
-      logger.warn("No token found, redirecting to login");
-      window.location.href = "/login";
-    }
-  }, []);
+export interface UserDetailDto {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  role: string;
+  emailVerified?: boolean;
+  createdAt?: string;
+  wallet?: WalletSummaryDto;
+}
 
-  const tok = () => {
-    const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken") || "";
-    logger.info("Getting token:", token ? "Token found" : "No token");
-    return token;
+export interface ReferralSummaryDto {
+  linkId?: string;
+  code?: string;
+  commissionPercent?: number;
+  totalReferrals?: number;
+  totalEarnings?: number;
+}
+
+export interface AdminDetailDto {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  emailVerified?: boolean;
+  createdAt?: string;
+  wallet?: WalletSummaryDto;
+  referral?: ReferralSummaryDto;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  tokenType: string;
+  user: UserDto;
+  mustSetup2fa?: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  walletId: string;
+  kind: TransactionKind;
+  amount: number;
+  balanceAfter: number;
+  providerRef?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TransactionDto {
+  id: string;
+  walletId: string;
+  userId: string;
+  userEmail?: string;
+  kind: TransactionKind;
+  amount: number;
+  balanceAfter: number;
+  providerRef?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  user: User;
+  amount: number;
+  currency?: string;
+  status: WithdrawalStatus;
+  method: string;
+  accountNumber: string;
+  accountName: string;
+  network?: string;
+  admin?: User;
+  adminNote?: string;
+  superAdmin?: User;
+  superAdminNote?: string;
+  reviewedAt?: string;
+  settledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AffiliateWithdrawalRequest {
+  id: string;
+  userId: string;
+  amount: number;
+  currency?: string;
+  status: AffiliateWithdrawalStatus;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  mobileMoneyNumber?: string;
+  reference?: string;
+  rejectReason?: string;
+  requestedAt: string;
+  processedAt?: string;
+  updatedAt: string;
+}
+
+export interface PayoutRequest {
+  id: string;
+  adminId: string;
+  amount: number;
+  status: PayoutStatus;
+  periodEnd?: string;
+  rejectReason?: string;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminUpgradeChatMessageDto {
+  id: string;
+  chatId: string;
+  senderId: string;
+  senderRole: SenderRole;
+  senderName?: string;
+  content: string;
+  sentAt: string;
+}
+
+export interface AdminUpgradeChatDto {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  userFirstName?: string;
+  status: AdminUpgradeChatStatus;
+  commissionRate?: number;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+}
+
+export interface GameRound {
+  id: string;
+  userId: string;
+  game: string;
+  stake: number;
+  result?: Record<string, unknown>;
+  payout?: number;
+  playedAt: string;
+}
+
+export interface GameCrashSchedule {
+  id: string;
+  gameSlug: string;
+  roundNumber: number;
+  crashAt: number;
+  tier?: string;
+  highCrash?: boolean;
+  extremeCrash?: boolean;
+  generatedBy?: string;
+  generatedAt: string;
+  playedAt?: string;
+  adminNotified?: boolean;
+  overrideReason?: string;
+}
+
+export interface Match {
+  id: string;
+  source: MatchSource;
+  externalId?: string;
+  minutePlayed?: number;
+  sport?: string;
+  sportEnum?: SportEnum;
+  league?: string;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt?: string;
+  status?: string;
+  scoreHome?: number;
+  scoreAway?: number;
+  homeLogo?: string;
+  awayLogo?: string;
+  createdByAdminId?: string;
+  leagueLogo?: string;
+  featured?: boolean;
+  metadata?: Record<string, unknown>;
+  settledAt?: string;
+  createdAt: string;
+}
+
+export interface Odds {
+  id: string;
+  matchId: string;
+  market: string;
+  selection: string;
+  value: number;
+  line?: number;
+  handicap?: number;
+  capturedAt: string;
+}
+
+export interface BetSelection {
+  id: string;
+  matchId: string;
+  market: string;
+  selection: string;
+  oddsLocked: number;
+  result?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+}
+
+export interface Bet {
+  id: string;
+  userId: string;
+  stake: number;
+  currency?: string;
+  totalOdds: number;
+  potentialReturn: number;
+  status: BetStatus;
+  winSeen?: boolean;
+  placedAt: string;
+  settledAt?: string;
+  bookingCodeUsedId?: string;
+  selections: BetSelection[];
+}
+
+export interface BookingCode {
+  id: string;
+  code: string;
+  creatorAdminId?: string;
+  label?: string;
+  kind?: string;
+  bookingType?: string;
+  version?: number;
+  currency?: string;
+  stake?: number;
+  selections?: Record<string, unknown>[];
+  totalOdds?: number;
+  potentialPayout?: number;
+  status?: string;
+  redemptionCount?: number;
+  maxRedemptions?: number;
+  expiresAt?: string;
+  createdAt: string;
+}
+
+export interface RedeemResponse {
+  booking: BookingCode;
+  enrichedSelections?: Record<string, unknown>[];
+  currentTotalOdds?: number;
+}
+
+export interface ReferralLink {
+  id: string;
+  adminId: string;
+  code: string;
+  label?: string;
+  commissionPercent?: number;
+  active?: boolean;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface AiPrediction {
+  id: string;
+  matchId: string;
+  model?: string;
+  generatedAt: string;
+  prediction?: Record<string, unknown>;
+  sharedAt?: string;
+  sharedByAdminId?: string;
+  publishedToUsers?: boolean;
+  adminNote?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actorUserId: string;
+  action: string;
+  targetEntity?: string;
+  targetId?: string;
+  beforeState?: Record<string, unknown>;
+  afterState?: Record<string, unknown>;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface AffiliateStatsDTO {
+  totalReferrals: number;
+  lifetimeStake: number;
+  lifetimeCommission: number;
+  availableBalance: number;
+  currency?: string;
+}
+
+export interface AdminAffiliateStatsDTO {
+  totalReferrals: number;
+  lifetimeStake: number;
+  lifetimeCommission: number;
+  commissionBalance: number;
+  totalEarnedLifetime: number;
+  totalPaidOutLifetime: number;
+  currency?: string;
+  lastPayoutAt?: string;
+}
+
+export interface ReferredUserDTO {
+  userId: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  joinedAt: string;
+  lifetimeStake?: number;
+  lifetimeCommission?: number;
+}
+
+export interface RevenueOverviewDto {
+  totalDepositsAllTime: number;
+  totalDepositsThisMonth: number;
+  totalDepositsToday: number;
+  totalWithdrawalsAllTime: number;
+  totalWithdrawalsThisMonth: number;
+  totalDepositCount: number;
+  totalWithdrawalCount: number;
+  currency?: string;
+}
+
+// ── Binance / Crypto deposit ──────────────────────────────────────────────────
+
+export interface BinanceDeposit {
+  id: string;
+  userId: string;
+  txid: string;
+  cryptoAmount: number;
+  coin: string;
+  network: string;
+  expectedGhsAmount: number;
+  creditedGhsAmount?: number;
+  senderAddress?: string;
+  screenshotUrl?: string;
+  userNote?: string;
+  status: BinanceDepositStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  adminNote?: string;
+  walletTransactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Request DTOs
+// ---------------------------------------------------------------------------
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  country?: string;
+  ref?: string;
+}
+
+export interface DemoLoginRequest {
+  role?: string;
+}
+
+export interface UpdateProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  themePreference?: string;
+}
+
+export interface WithdrawalRequestDto {
+  amount: number;
+  currency?: string;
+  method: string;
+  accountNumber: string;
+  accountName: string;
+  network?: string;
+}
+
+export interface AccountDetailsDTO {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  mobileMoneyNumber?: string;
+}
+
+export interface WithdrawalRequestDTO {
+  amount: number;
+  accountDetails: AccountDetailsDTO;
+}
+
+export interface PlaceBetRequest {
+  stake: number;
+  currency?: string;
+  selections: SelectionDto[];
+  bookingCodeUsedId?: string;
+}
+
+export interface SelectionDto {
+  matchId: string;
+  fixtureId?: string;
+  market: string;
+  selection: string;
+  submittedOdds: number;
+}
+
+export interface RedeemRequest {
+  code: string;
+}
+
+export interface SendMessageRequest {
+  content: string;
+}
+
+export interface SetCommissionRequest {
+  commissionRate: number;
+}
+
+export interface CreateLinkRequest {
+  label?: string;
+  expiresAt?: string;
+}
+
+export interface AdminMatchRequest {
+  homeTeam: string;
+  awayTeam: string;
+  league?: string;
+  sport?: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  leagueLogo?: string;
+  kickoffAt?: string;
+  status?: string;
+  featured?: boolean;
+}
+
+export interface AdminStatusUpdateRequest {
+  status: string;
+}
+
+export interface AdminScoreUpdateRequest {
+  scoreHome: number;
+  scoreAway: number;
+  minutePlayed?: number;
+}
+
+export interface CreateBookingRequest {
+  kind?: string;
+  label?: string;
+  currency?: string;
+  stake?: number;
+  selections?: Record<string, unknown>[];
+  maxRedemptions?: number;
+  expiresAt?: string;
+}
+
+// ── Binance deposit request DTOs ──────────────────────────────────────────────
+
+export interface BinanceDepositSubmitRequest {
+  txid: string;
+  cryptoAmount: number;
+  coin: string;
+  network: string;
+  expectedGhsAmount: number;
+  senderAddress?: string;
+  screenshotUrl?: string;
+  userNote?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Paginated response wrappers
+// ---------------------------------------------------------------------------
+
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  timestamp?: string;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP utility
+// ---------------------------------------------------------------------------
+
+function getAuthHeader(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = localStorage.getItem("accessToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...getAuthHeader(),
+    ...extraHeaders,
   };
 
-  const [country, setCountry] = useState(null);
-  const [amount, setAmount] = useState("");
-  const [phone, setPhone] = useState("");
-  const [network, setNetwork] = useState("MTN");
-  const [step, setStep] = useState(STEP.COUNTRY);
-  const [sub, setSub] = useState(SUB.WAIT);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
-  const [externalRef, setRef] = useState("");
-  const [countdown, setCount] = useState(120);
-  const [actionRequired, setActionRequired] = useState(false);
-  const [smsCode, setSmsCode] = useState("");
-  const [showSupport, setShowSupport] = useState(false);
-  const timerRef = useRef(null);
-
-  const [bStep, setBStep] = useState(BSTEP.INFO);
-  const [txid, setTxid] = useState("");
-  const [cryptoAmount, setCryptoAmount] = useState("");
-  const [coin, setCoin] = useState("USDT");
-  const [cryptoNetwork, setCryptoNetwork] = useState("TRC20");
-  const [expectedLocal, setExpectedLocal] = useState("");
-  const [senderAddress, setSenderAddress] = useState("");
-  const [userNote, setUserNote] = useState("");
-  const [binanceErrors, setBinanceErrors] = useState({});
-
-  const [bkStep, setBkStep] = useState(BKSTEP.INFO);
-  const [bkTxid, setBkTxid] = useState("");
-  const [bkAmount, setBkAmount] = useState("");
-  const [bkExpected, setBkExpected] = useState("");
-  const [bkSender, setBkSender] = useState("");
-  const [bkNote, setBkNote] = useState("");
-  const [bkScreenshot, setBkScreenshot] = useState(null);
-  const [bkScreenshotB64, setBkScreenshotB64] = useState("");
-  const [bkErrors, setBkErrors] = useState({});
-
-  useEffect(() => {
-    if (step === STEP.APPROVE && sub === SUB.WAIT) {
-      setCount(120);
-      timerRef.current = setInterval(() => setCount(p => { if(p<=1){clearInterval(timerRef.current);return 0;} return p-1; }), 1000);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [step, sub]);
-
-  const fmt = sc => `${String(Math.floor(sc/60)).padStart(2,"0")}:${String(sc%60).padStart(2,"0")}`;
-  const networkLabel = NETWORKS_GH.find(n => n.id === network)?.label ?? network;
-  const countryObj = COUNTRIES.find(c => c.id === country);
-  const currSymbol = countryObj?.symbol ?? "GH₵";
-  const minDeposit = country === "NG" ? MIN_DEPOSIT_NGN : MIN_DEPOSIT_GHS;
-  const quickAmounts = country === "NG" ? QUICK_AMOUNTS_NGN : QUICK_AMOUNTS_GHS;
-
-  const post = async (path, body) => {
-    logger.request(path, body);
-    
-    const token = tok();
-    logger.info("Using token for request:", token ? "Token present" : "No token");
-    
-    const res = await fetch(`${API_BASE}${path}`, { 
-      method:"POST", 
-      headers:{
-        "Content-Type":"application/json", 
-        Authorization:`Bearer ${token}`
-      }, 
-      body:JSON.stringify(body) 
-    });
-    
-    logger.response(path, res.status, { status: res.status, ok: res.ok });
-    
-    const data = await res.json();
-    logger.info("Response data:", data);
-    
-    if (!res.ok) {
-      logger.error("Request failed:", { status: res.status, data });
-      throw new Error(data?.message || data?.error || `Request failed with status ${res.status}`);
-    }
-    
-    logger.success("Request successful:", data);
-    return data;
-  };
-
-  const handleInit = async () => {
-    setError("");
-    const amt = parseFloat(amount);
-    logger.info("Initiating MoMo deposit:", { amount: amt, phone, network });
-    
-    if (!amt || amt < minDeposit) {
-      logger.warn("Invalid amount:", { amt, minDeposit });
-      return setError(`Minimum deposit is ${currSymbol}${minDeposit.toLocaleString()}`);
-    }
-    if (!phone.trim()) {
-      logger.warn("No phone number");
-      return setError("MoMo phone number is required.");
-    }
-    if (!/^0\d{9}$/.test(phone.trim())) {
-      logger.warn("Invalid phone format:", phone);
-      return setError("Enter a valid 10-digit number starting with 0.");
-    }
-    
-    setLoading(true);
-    try {
-      const data = await post("/api/wallet/deposit/moolre/init", { amount: amt, phone: phone.trim(), network });
-      setRef(data?.data?.externalref || "");
-      const isAR = data?.data?.actionRequired === true;
-      logger.info("MoMo init response:", { externalref: data?.data?.externalref, actionRequired: isAR });
-      setActionRequired(isAR);
-      setSub(isAR ? SUB.SMS : SUB.WAIT);
-      setStep(STEP.APPROVE);
-    } catch(e) { 
-      logger.error("MoMo init failed:", e.message);
-      setError(e.message || "Network error."); 
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleSmsSubmit = async () => {
-    setError("");
-    logger.info("Submitting SMS code:", { externalref: externalRef, otpLength: smsCode.length });
-    
-    if (!smsCode.trim()) return setError("Please enter the SMS code.");
-    setLoading(true);
-    try { 
-      await post("/api/wallet/deposit/moolre/otp", { externalref: externalRef, otp: smsCode.trim() }); 
-      logger.success("SMS code verified successfully");
-      setSmsCode(""); 
-      setSub(SUB.WAIT); 
-    }
-    catch(e) { 
-      logger.error("SMS verification failed:", e.message);
-      setError(e.message || "Code verification failed."); 
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleVerify = async () => {
-    setError(""); setInfo("");
-    logger.info("Verifying MoMo payment:", { externalref: externalRef });
-    
-    setLoading(true);
-    try {
-      const data = await post("/api/wallet/deposit/moolre/verify", { externalref: externalRef });
-      const r = data?.data;
-      logger.info("Verification result:", r);
-      
-      if (r?.credited) {
-        logger.success("Payment credited!");
-        setStep(STEP.DONE);
-      }
-      else if (r?.txstatus === 0) {
-        logger.info("Payment still pending");
-        setInfo("Still pending — approve the prompt on your phone.");
-      }
-      else if (r?.txstatus === 2) {
-        logger.warn("Payment cancelled or failed");
-        setError("Payment cancelled or failed.");
-      }
-      else {
-        logger.info("Unclear status:", r?.message);
-        setInfo(r?.message || "Status unclear. Try again.");
-      }
-    } catch(e) { 
-      logger.error("Verification failed:", e.message);
-      setError(e.message || "Verification failed."); 
-    }
-    finally { setLoading(false); }
-  };
-
-  const restart = () => { 
-    logger.info("Restarting deposit flow");
-    setStep(STEP.DETAILS); setError(""); setInfo(""); setRef(""); setSmsCode(""); setSub(SUB.WAIT); clearInterval(timerRef.current); 
-  };
-
-  const validateBinance = () => {
-    const errs = {};
-    if (!txid.trim() || txid.trim().length < 10) errs.txid = "Valid Transaction Hash required";
-    if (!cryptoAmount || isNaN(+cryptoAmount) || +cryptoAmount <= 0) errs.cryptoAmount = "Enter amount sent";
-    if (!expectedLocal || isNaN(+expectedLocal) || +expectedLocal < 1) errs.expectedLocal = "Enter expected credit amount";
-    setBinanceErrors(errs);
-    logger.info("Binance validation:", { errors: errs, valid: Object.keys(errs).length === 0 });
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleBinanceSubmit = async () => {
-    logger.info("=== BINANCE DEPOSIT SUBMISSION STARTED ===");
-    if (!validateBinance()) {
-      logger.warn("Binance form validation failed, aborting");
-      return;
-    }
-    setLoading(true); setError("");
-
-    const payload = {
-      txid: txid.trim(),
-      cryptoAmount: parseFloat(cryptoAmount),
-      coin,
-      network: cryptoNetwork,
-      expectedLocalAmount: parseFloat(expectedLocal),   // fixed: was expectedGhsAmount
-      currency: countryObj?.currency ?? "GHS",          // tells backend which currency
-      country: country ?? "GH",                         // e.g. "GH" or "NG"
-      depositType: "crypto",
-      senderAddress: senderAddress.trim() || undefined,
-      userNote: userNote.trim() || undefined,
-    };
-
-    logger.info("Binance payload being sent:", payload);
-    console.log('%c=== BINANCE PAYLOAD TO BACKEND ===', 'color: #6366f1; font-size: 14px; font-weight: bold');
-    console.log(JSON.stringify(payload, null, 2));
-
-    const token = tok();
-    if (!token) {
-      logger.error("No auth token — aborting Binance submit");
-      setError("Authentication token not found. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/api/wallet/deposit/binance/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      logger.info("Binance submit response status:", res.status);
-
-      const responseText = await res.text();
-      logger.info("Binance submit raw response:", responseText);
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        logger.response("/api/wallet/deposit/binance/submit", res.status, data);
-      } catch (parseErr) {
-        logger.error("Failed to parse Binance submit response as JSON:", parseErr.message);
-        throw new Error(`Server returned non-JSON (Status ${res.status}): ${responseText.substring(0, 300)}`);
-      }
-
-      if (!res.ok) {
-        // Extract the most useful error message from common backend shapes
-        const msg =
-          data?.message ||
-          data?.error ||
-          data?.detail ||
-          (Array.isArray(data?.errors) ? data.errors.map(e => e.msg || e.message || JSON.stringify(e)).join(", ") : null) ||
-          `Server error ${res.status}`;
-        logger.error("Binance submit server error:", { status: res.status, body: data, extracted: msg });
-        throw new Error(msg);
-      }
-
-      logger.success("Binance deposit submitted successfully:", data);
-      setBStep(BSTEP.SUCCESS);
-    } catch (e) {
-      logger.error("Binance submission exception:", { message: e.message, stack: e.stack });
-      setError(e.message || "Submission failed. Please try again.");
-    } finally {
-      logger.info("=== BINANCE DEPOSIT SUBMISSION ENDED ===");
-      setLoading(false);
-    }
-  };
-
-  const handleScreenshotChange = (e) => {
-    const file = e.target.files[0]; 
-    if(!file) {
-      logger.warn("No file selected for screenshot");
-      return;
-    }
-    
-    logger.info("Screenshot selected:", { name: file.name, size: file.size, type: file.type });
-    setBkScreenshot(file);
-    
-    const r = new FileReader();
-    r.onload = ev => {
-      const base64 = ev.target.result.split(",")[1];
-      logger.info("Screenshot converted to base64:", { length: base64.length });
-      setBkScreenshotB64(base64);
-    };
-    r.onerror = (err) => {
-      logger.error("Failed to read screenshot:", err);
-    };
-    r.readAsDataURL(file);
-  };
-
-  const validateBank = () => {
-    const errs = {};
-    
-    logger.info("Validating bank form:", { 
-      bkTxid: bkTxid, 
-      bkAmount: bkAmount, 
-      bkExpected: bkExpected, 
-      hasScreenshot: !!bkScreenshotB64 
-    });
-    
-    if (!bkTxid.trim() || bkTxid.trim().length < 3) {
-      errs.bkTxid = "Transfer reference is required (minimum 3 characters)";
-      logger.warn("Invalid transfer reference:", bkTxid);
-    }
-    
-    const amt = parseFloat(bkAmount);
-    if (!amt || isNaN(amt) || amt <= 0) {
-      errs.bkAmount = "Enter amount transferred";
-      logger.warn("Invalid amount:", bkAmount);
-    }
-    
-    const expAmt = parseFloat(bkExpected);
-    if (!expAmt || isNaN(expAmt) || expAmt <= 0) {
-      errs.bkExpected = "Enter expected credit amount";
-      logger.warn("Invalid expected credit:", bkExpected);
-    }
-    
-    if (!bkScreenshotB64) {
-      errs.bkScreenshot = "Screenshot is required";
-      logger.warn("No screenshot provided");
-    }
-    
-    setBkErrors(errs); 
-    logger.info("Bank validation result:", { errors: errs, valid: Object.keys(errs).length === 0 });
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleBankSubmit = async () => {
-    logger.info("=== BANK DEPOSIT SUBMISSION STARTED ===");
-    
-    if (!validateBank()) {
-      logger.error("Bank validation failed");
-      return;
-    }
-    
-    setLoading(true); 
-    setError("");
-    
-    try {
-      // Build payload - using same structure as Binance but with bank-specific values
-      const payload = {
-        txid: bkTxid.trim(),
-        cryptoAmount: parseFloat(bkAmount),
-        coin: "USDT",
-        network: "TRC20",
-        expectedLocalAmount: parseFloat(bkExpected),     // fixed: was expectedGhsAmount
-        currency: countryObj?.currency ?? "NGN",          // tells backend which currency
-        country: country ?? "NG",
-        depositType: "bank_transfer",                     // distinguishes from crypto
-        senderAddress: bkSender.trim() || "Bank Transfer",
-        userNote: `[BANK TRANSFER - ${BANK_NAME}]\nRef: ${bkTxid.trim()}\nAmount Sent: ${countryObj?.symbol ?? "₦"}${parseFloat(bkAmount).toLocaleString()}\nExpected Credit: ${countryObj?.symbol ?? "₦"}${parseFloat(bkExpected).toLocaleString()}\nSender: ${bkSender.trim() || 'N/A'}\n${bkNote.trim() ? 'Note: ' + bkNote.trim() : ''}`.trim(),
-        ...(bkScreenshotB64 ? { screenshotBase64: bkScreenshotB64 } : {}),
-      };
-      
-      logger.request("/api/wallet/deposit/binance/submit", payload);
-      
-      // Log the exact payload being sent
-      console.log('%c=== PAYLOAD TO BACKEND ===', 'color: #f59e0b; font-size: 14px; font-weight: bold');
-      console.log(JSON.stringify(payload, null, 2));
-      console.log('%c=== END PAYLOAD ===', 'color: #f59e0b; font-size: 14px; font-weight: bold');
-      
-      const token = tok();
-      logger.info("Token for request:", token ? `Present (${token.substring(0, 20)}...)` : "MISSING!");
-      
-      if (!token) {
-        throw new Error("Authentication token not found. Please log in again.");
-      }
-      
-      const res = await fetch(`${API_BASE}/api/wallet/deposit/binance/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      logger.info("Response status:", res.status);
-      logger.info("Response headers:", Object.fromEntries(res.headers.entries()));
-      
-      // Get raw response text first
-      const responseText = await res.text();
-      logger.info("Raw response:", responseText);
-      
-      // Try to parse as JSON
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        logger.response("/api/wallet/deposit/binance/submit", res.status, data);
-      } catch (parseError) {
-        logger.error("Failed to parse response as JSON:", parseError);
-        throw new Error(`Server returned invalid response (Status ${res.status}): ${responseText.substring(0, 200)}`);
-      }
-      
-      if (!res.ok) {
-        const msg =
-          data?.message ||
-          data?.error ||
-          data?.detail ||
-          (Array.isArray(data?.errors) ? data.errors.map(e => e.msg || e.message || JSON.stringify(e)).join(", ") : null) ||
-          `Server error ${res.status}`;
-        logger.error("Bank submit server error:", { status: res.status, body: data, extracted: msg });
-        throw new Error(msg);
-      }
-      
-      logger.success("Bank deposit submitted successfully!");
-      setBkStep(BKSTEP.SUCCESS);
-      
-    } catch(e) {
-      logger.error("Bank submission error:", {
-        message: e.message,
-        stack: e.stack,
-        name: e.name
-      });
-      setError(`Deposit submission failed: ${e.message}`);
-    }
-    finally { 
-      logger.info("=== BANK DEPOSIT SUBMISSION ENDED ===");
-      setLoading(false); 
-    }
-  };
-
-  const resetAll = () => {
-    logger.info("Resetting all states");
-    setStep(STEP.METHOD); setError(""); setInfo("");
-    setAmount(""); setPhone(""); setNetwork("MTN");
-    setRef(""); setSmsCode(""); setSub(SUB.WAIT);
-    setTxid(""); setCryptoAmount(""); setCoin("USDT"); setCryptoNetwork("TRC20");
-    setExpectedLocal(""); setSenderAddress(""); setUserNote("");
-    setBinanceErrors({}); setBStep(BSTEP.INFO);
-    setBkStep(BKSTEP.INFO); setBkTxid(""); setBkAmount(""); setBkExpected("");
-    setBkSender(""); setBkNote(""); setBkScreenshot(null); setBkScreenshotB64("");
-    setBkErrors({}); clearInterval(timerRef.current);
-  };
-
-  const backToCountry = () => { 
-    logger.info("Going back to country selection");
-    resetAll(); setCountry(null); setStep(STEP.COUNTRY); 
-  };
-
-  /* ── shared styles ── */
-  const C = {
-    bg: "#0f0f13",
-    card: "#1a1a22",
-    cardBorder: "#2d2d3d",
-    surface: "#252530",
-    surfaceBorder: "#333344",
-    accent: "#6366f1",
-    accentLight: "#818cf8",
-    green: "#10b981",
-    yellow: "#f59e0b",
-    red: "#ef4444",
-    textPrimary: "#f1f5f9",
-    textSecondary: "#94a3b8",
-    textMuted: "#64748b",
-  };
-
-  const T = { fontFamily:"'Sora',sans-serif" };
-
-  const inp = (hasErr) => ({
-    width:"100%", padding:"13px 16px", background:"#1e1e2a",
-    border: `1.5px solid ${hasErr ? C.red+"88" : C.surfaceBorder}`,
-    borderRadius:10, color: C.textPrimary, fontSize:14, fontFamily:"'Sora',sans-serif",
-    outline:"none", transition:"border-color 0.2s, box-shadow 0.2s",
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    credentials: "include",
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  const btn = (variant="primary", disabled=false) => {
-    const base = { width:"100%", padding:"14px 20px", borderRadius:11, fontSize:14, fontWeight:700, cursor:disabled?"not-allowed":"pointer", border:"none", fontFamily:"'Sora',sans-serif", transition:"all 0.2s", marginBottom:10 };
-    if (disabled) return { ...base, background:"#2d2d3d", color:"#4a4a5a" };
-    if (variant==="primary") return { ...base, background:"linear-gradient(135deg,#6366f1,#4f46e5)", color:"#fff", boxShadow:"0 4px 18px rgba(99,102,241,0.35)" };
-    if (variant==="secondary") return { ...base, background:"#252530", border:"1.5px solid #333344", color:"#94a3b8" };
-    if (variant==="ghost") return { ...base, background:"transparent", color:"#64748b", width:"auto", padding:"8px 0" };
-    if (variant==="green") return { ...base, background:"linear-gradient(135deg,#10b981,#059669)", color:"#fff", boxShadow:"0 4px 18px rgba(16,185,129,0.3)" };
-    return base;
-  };
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error?.message ?? `HTTP ${res.status}`);
+  }
 
-  const label = { display:"block", fontSize:11, fontWeight:700, color: C.textMuted, textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:7, fontFamily:"'Sora',sans-serif" };
-  const errMsg = (msg) => msg ? <div style={{ fontSize:11, color:C.red, marginTop:5, fontFamily:"'Sora',sans-serif" }}>⚠ {msg}</div> : null;
-
-  /* ── Header ── */
-  const Header = ({ title, sub: subtitle, onBack, backLabel="← Back" }) => (
-    <div style={{ padding:"24px 24px 20px", borderBottom:`1px solid ${C.cardBorder}` }}>
-      {/* Top bar */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: onBack||subtitle ? 14 : 0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#6366f1,#4f46e5)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <span style={{ fontSize:16 }}>⚡</span>
-          </div>
-          <span style={{ fontSize:12, fontWeight:800, color: C.textMuted, letterSpacing:"1px", textTransform:"uppercase", fontFamily:"'Sora',sans-serif" }}>ZYNOBET</span>
-        </div>
-        <button onClick={() => setShowSupport(true)} style={{ display:"flex", alignItems:"center", gap:6, background:"#252530", border:`1px solid ${C.surfaceBorder}`, borderRadius:8, padding:"6px 12px", cursor:"pointer", color: C.textSecondary, fontSize:11, fontWeight:700, fontFamily:"'Sora',sans-serif", transition:"all 0.2s" }}>
-          <span>🎧</span> Support
-        </button>
-      </div>
-      {onBack && (
-        <button onClick={onBack} style={{ background:"none", border:"none", color: C.textMuted, cursor:"pointer", fontSize:12, padding:0, marginBottom:10, display:"flex", alignItems:"center", gap:5, fontFamily:"'Sora',sans-serif", fontWeight:600 }}>
-          ← {backLabel}
-        </button>
-      )}
-      {title && <div style={{ fontSize:20, fontWeight:800, color: C.textPrimary, fontFamily:"'Sora',sans-serif", letterSpacing:"-0.3px" }}>{title}</div>}
-      {subtitle && <div style={{ fontSize:12, color: C.textMuted, marginTop:3, fontFamily:"'Sora',sans-serif" }}>{subtitle}</div>}
-    </div>
-  );
-
-  /* ── Support Modal ── */
-  const SupportModal = () => !showSupport ? null : (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000, backdropFilter:"blur(4px)" }} onClick={() => setShowSupport(false)}>
-      <div onClick={e=>e.stopPropagation()} className="zcard" style={{ width:"100%", maxWidth:440, background:C.card, borderRadius:"20px 20px 0 0", padding:24, border:`1px solid ${C.cardBorder}`, borderBottom:"none" }}>
-        <div style={{ width:36, height:4, background:"#333", borderRadius:2, margin:"0 auto 20px" }} />
-        <div style={{ fontSize:16, fontWeight:800, color: C.textPrimary, marginBottom:4, fontFamily:"'Sora',sans-serif" }}>Need Help?</div>
-        <div style={{ fontSize:12, color: C.textMuted, marginBottom:20, fontFamily:"'Sora',sans-serif" }}>Our support team is available 24/7</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
-          {SUPPORT_CHANNELS.map(ch => (
-            <a key={ch.label} href={ch.href} target="_blank" rel="noopener noreferrer" style={{ display:"flex", alignItems:"center", gap:14, background:C.surface, border:`1px solid ${C.surfaceBorder}`, borderRadius:12, padding:"14px 16px", textDecoration:"none", transition:"transform 0.2s", cursor:"pointer" }}>
-              <div style={{ width:40, height:40, borderRadius:10, background:ch.color+"22", border:`1px solid ${ch.color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{ch.icon}</div>
-              <div>
-                <div style={{ fontSize:13, fontWeight:700, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>{ch.label}</div>
-                <div style={{ fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif", marginTop:2 }}>{ch.sub}</div>
-              </div>
-              <div style={{ marginLeft:"auto", color: C.textMuted, fontSize:14 }}>→</div>
-            </a>
-          ))}
-        </div>
-        <div style={{ background:"#1a2a1a", border:"1px solid #10b98133", borderRadius:10, padding:"11px 14px", fontSize:11, color:"#6ee7b7", fontFamily:"'Sora',sans-serif", lineHeight:1.6, marginBottom:16 }}>
-          💡 For faster support, include your <strong>username</strong> and <strong>transaction details</strong> when reaching out.
-        </div>
-        <button onClick={() => setShowSupport(false)} style={{ ...btn("secondary"), marginBottom:0 }}>Close</button>
-      </div>
-    </div>
-  );
-
-  /* ══ COUNTRY SELECTION ══ */
-  const renderCountrySelect = () => (
-    <>
-      <Header title="Add Funds" subtitle="Select your country to get started" />
-      <div style={{ padding:24 }}>
-        <SectionLabel>Select Country</SectionLabel>
-        <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:24 }}>
-          {COUNTRIES.map(c => (
-            <button key={c.id} className="zcountry zbtn" onClick={() => { 
-              logger.info("Country selected:", c.name);
-              setCountry(c.id); 
-              setStep(STEP.METHOD); 
-            }}
-              style={{ width:"100%", display:"flex", alignItems:"center", gap:16, background:C.surface, border:`1.5px solid ${C.surfaceBorder}`, borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"left", transition:"all 0.25s", boxShadow:"0 2px 12px rgba(0,0,0,0.2)" }}>
-              <div style={{ width:52, height:52, borderRadius:14, background:`${c.color}22`, border:`1.5px solid ${c.color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:30, flexShrink:0 }}>
-                {c.flag}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:800, fontSize:16, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>{c.flag} {c.name}</div>
-                <div style={{ fontSize:12, color: C.textMuted, marginTop:3, fontFamily:"'Sora',sans-serif" }}>{c.currency} · {c.symbol} · Deposits Available</div>
-              </div>
-              <div style={{ width:28, height:28, borderRadius:"50%", background:`${C.accent}22`, border:`1.5px solid ${C.accent}44`, display:"flex", alignItems:"center", justifyContent:"center", color: C.accentLight, fontSize:13 }}>→</div>
-            </button>
-          ))}
-        </div>
-        <div style={{ background:"#1a1a2e", border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:"13px 16px", display:"flex", alignItems:"center", gap:10 }}>
-          <span style={{ fontSize:16 }}>🔒</span>
-          <div>
-            <div style={{ fontSize:12, fontWeight:700, color: C.textSecondary, fontFamily:"'Sora',sans-serif" }}>Secured by Zynobet</div>
-            <div style={{ fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>256-bit SSL · All deposits encrypted · Fast processing</div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
-  /* ══ METHOD SELECTION ══ */
-  const renderMethod = () => (
-    <>
-      <Header title={`${countryObj?.flag} Deposit · ${countryObj?.currency}`} subtitle={`${countryObj?.name} — Choose your payment method`} onBack={backToCountry} backLabel="Change Country" />
-      <div style={{ padding:24 }}>
-        <SectionLabel>Payment Method</SectionLabel>
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {country === "GH" && (
-            <button className="zmethod zbtn" onClick={() => setStep(STEP.DETAILS)}
-              style={{ width:"100%", display:"flex", alignItems:"center", gap:14, background:C.surface, border:`1.5px solid ${C.surfaceBorder}`, borderRadius:14, padding:"16px 18px", cursor:"pointer", textAlign:"left", transition:"all 0.25s" }}>
-              <div style={{ width:46, height:46, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#4f46e5)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:22 }}>📱</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:800, fontSize:15, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Mobile Money</div>
-                <div style={{ fontSize:11, color: C.textMuted, marginTop:2, fontFamily:"'Sora',sans-serif" }}>MTN MoMo · Telecel Cash · AirtelTigo</div>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-                <Badge label="⚡ Instant" color="#10b981" />
-                <span style={{ color: C.textMuted, fontSize:14 }}>→</span>
-              </div>
-            </button>
-          )}
-          {country === "NG" && (
-            <button className="zmethod zbtn" onClick={() => { 
-              logger.info("Bank transfer selected");
-              setBkStep(BKSTEP.INFO); 
-              setStep(98); 
-            }}
-              style={{ width:"100%", display:"flex", alignItems:"center", gap:14, background:C.surface, border:`1.5px solid ${C.surfaceBorder}`, borderRadius:14, padding:"16px 18px", cursor:"pointer", textAlign:"left", transition:"all 0.25s" }}>
-              <div style={{ width:46, height:46, borderRadius:12, background:"linear-gradient(135deg,#10b981,#059669)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:22 }}>🏦</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:800, fontSize:15, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Bank Transfer</div>
-                <div style={{ fontSize:11, color: C.textMuted, marginTop:2, fontFamily:"'Sora',sans-serif" }}>Moniepoint · Direct Bank Transfer</div>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-                <Badge label="5–10 min" color="#10b981" />
-                <span style={{ color: C.textMuted, fontSize:14 }}>→</span>
-              </div>
-            </button>
-          )}
-          <button className="zmethod zbtn" onClick={() => { 
-            logger.info("Crypto deposit selected");
-            setBStep(BSTEP.INFO); 
-            setStep(99); 
-          }}
-            style={{ width:"100%", display:"flex", alignItems:"center", gap:14, background:"#1c1810", border:"1.5px solid #3d3318", borderRadius:14, padding:"16px 18px", cursor:"pointer", textAlign:"left", transition:"all 0.25s" }}>
-            <div style={{ width:46, height:46, borderRadius:12, background:"linear-gradient(135deg,#f59e0b,#d97706)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:22 }}>₿</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:800, fontSize:15, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Crypto · Binance</div>
-              <div style={{ fontSize:11, color: C.textMuted, marginTop:2, fontFamily:"'Sora',sans-serif" }}>USDT (TRC20) · BTC · ETH · BNB</div>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-              <Badge label="1–5 min" color="#f59e0b" />
-              <span style={{ color: C.textMuted, fontSize:14 }}>→</span>
-            </div>
-          </button>
-        </div>
-        <div style={{ marginTop:20, background:"#191924", border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:"13px 16px", display:"flex", alignItems:"center", gap:12 }}>
-          <span style={{ fontSize:22 }}>🎧</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:12, fontWeight:700, color: C.textSecondary, fontFamily:"'Sora',sans-serif" }}>Need help with your deposit?</div>
-            <div style={{ fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>Our team is online 24/7</div>
-          </div>
-          <button onClick={() => setShowSupport(true)} style={{ background:`${C.accent}22`, border:`1px solid ${C.accent}44`, borderRadius:8, padding:"6px 12px", color: C.accentLight, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>Chat</button>
-        </div>
-      </div>
-    </>
-  );
-
-  /* ══ MOMO DETAILS ══ */
-  const renderDetails = () => (
-    <>
-      <Header title="Mobile Money" subtitle={`${countryObj?.flag} ${countryObj?.currency} · USSD Direct Charge`} onBack={() => setStep(STEP.METHOD)} />
-      <div style={{ padding:"16px 24px 8px" }}>
-        <Steps current={0} labels={["Details","Approve","Done"]} />
-      </div>
-      <div style={{ padding:"0 24px 24px" }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        <div style={{ marginBottom:20 }}>
-          <label style={label}>Amount ({countryObj?.currency})</label>
-          <div style={{ display:"flex", alignItems:"center", background:"#1e1e2a", border:`1.5px solid ${C.surfaceBorder}`, borderRadius:10, overflow:"hidden", marginBottom:10 }}>
-            <span style={{ padding:"13px 14px", color: C.textMuted, fontSize:13, fontWeight:700, borderRight:`1px solid ${C.surfaceBorder}`, background:"#252530", fontFamily:"'Sora',sans-serif" }}>{countryObj?.currency}</span>
-            <input type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}
-              style={{ flex:1, background:"none", border:"none", outline:"none", color: C.textPrimary, fontSize:20, fontWeight:800, padding:"13px 14px", fontFamily:"'Sora',sans-serif" }} />
-          </div>
-          <div style={{ fontSize:11, color: C.textMuted, marginBottom:10, fontFamily:"'Sora',sans-serif" }}>Min: {currSymbol}{minDeposit.toLocaleString()}</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7 }}>
-            {quickAmounts.map(q => (
-              <button key={q} onClick={() => setAmount(String(q))} style={{ background: parseFloat(amount)===q?"#6366f122":"#252530", border:`1.5px solid ${parseFloat(amount)===q?C.accent:C.surfaceBorder}`, borderRadius:8, padding:"8px 0", color: parseFloat(amount)===q?C.accentLight:C.textMuted, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all 0.2s" }}>
-                {q>=1000?`${q/1000}k`:q}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={label}>MoMo Phone Number</label>
-          <input type="tel" placeholder="0244123456" value={phone} maxLength={10} onChange={e=>setPhone(e.target.value)} style={inp()} />
-          <div style={{ fontSize:11, color: C.textMuted, marginTop:5, fontFamily:"'Sora',sans-serif" }}>Format: 0XXXXXXXXX (10 digits)</div>
-        </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={label}>Network</label>
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {NETWORKS_GH.map(n => (
-              <button key={n.id} onClick={() => setNetwork(n.id)} style={{ display:"flex", alignItems:"center", gap:12, background: network===n.id?"#1e1e35":"#252530", border:`1.5px solid ${network===n.id?C.accent:C.surfaceBorder}`, borderRadius:10, padding:"11px 14px", cursor:"pointer", transition:"all 0.2s" }}>
-                <img src={n.logo} alt={n.label} style={{ width:28, height:28, borderRadius:6, objectFit:"contain", background:"#fff", padding:2 }} onError={e=>{e.target.style.display="none";}} />
-                <span style={{ color: network===n.id?C.accentLight:C.textSecondary, fontSize:14, fontWeight:700, flex:1, textAlign:"left", fontFamily:"'Sora',sans-serif" }}>{n.label}</span>
-                {network===n.id && <div style={{ width:20, height:20, borderRadius:"50%", background:C.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900 }}>✓</div>}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ background:"#1a1e2a", border:`1px solid ${C.accent}33`, borderRadius:10, padding:"11px 14px", fontSize:12, color:"#a5b4fc", marginBottom:18, lineHeight:1.6, fontFamily:"'Sora',sans-serif" }}>
-          📲 A USSD prompt will appear on <strong>{phone||"your phone"}</strong>. Approve within 2 minutes.
-        </div>
-        <button className="zbtn" onClick={handleInit} disabled={loading||!amount||!phone} style={btn("primary", loading||!amount||!phone)}>
-          {loading ? "⏳ Initiating…" : `Send Prompt · ${currSymbol}${parseFloat(amount)||"0.00"}`}
-        </button>
-      </div>
-    </>
-  );
-
-  /* ══ MOMO APPROVE ══ */
-  const renderApprove = () => (
-    <>
-      <Header title="Approve Payment" subtitle={`${currSymbol}${parseFloat(amount).toFixed(2)} via ${networkLabel}`} />
-      <div style={{ padding:"16px 24px 8px" }}>
-        <Steps current={1} labels={["Details","Approve","Done"]} />
-      </div>
-      <div style={{ padding:"0 24px 24px" }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        {sub === SUB.SMS && (
-          <>
-            <div style={{ background:"#1c1a10", border:"1px solid #3d350a", borderRadius:12, padding:18, marginBottom:18, textAlign:"center" }}>
-              <div style={{ fontSize:36, marginBottom:10 }}>💬</div>
-              <div style={{ fontWeight:800, fontSize:14, color:"#fcd34d", marginBottom:6, fontFamily:"'Sora',sans-serif" }}>Check your SMS</div>
-              <div style={{ fontSize:12, color:"#b45309", lineHeight:1.7, fontFamily:"'Sora',sans-serif" }}>MTN sent a code to <strong style={{color:"#fcd34d"}}>{phone}</strong>.<br/>Enter it below to trigger the USSD prompt.</div>
-            </div>
-            <div style={{ marginBottom:16 }}>
-              <label style={label}>SMS Verification Code</label>
-              <input type="text" inputMode="numeric" placeholder="······" value={smsCode} maxLength={8} autoFocus onChange={e=>setSmsCode(e.target.value.replace(/\D/g,""))}
-                style={{ ...inp(), fontSize:28, fontWeight:800, letterSpacing:12, textAlign:"center", padding:16, fontFamily:"'DM Mono',monospace" }} />
-            </div>
-            <button className="zbtn" onClick={handleSmsSubmit} disabled={loading||smsCode.length<4} style={btn("primary", loading||smsCode.length<4)}>
-              {loading?"Verifying…":"Submit Code & Send USSD Prompt →"}
-            </button>
-            <button className="zbtn" onClick={restart} style={btn("secondary")}>← Start Over</button>
-          </>
-        )}
-        {sub === SUB.WAIT && (
-          <>
-            <div style={{ background:"#1c1a10", border:"1px solid #3d350a", borderRadius:14, padding:20, marginBottom:16, textAlign:"center" }}>
-              <div style={{ fontSize:44, marginBottom:10 }}>📳</div>
-              <div style={{ fontWeight:800, fontSize:15, color:"#fcd34d", marginBottom:8, fontFamily:"'Sora',sans-serif" }}>Approve the USSD Prompt</div>
-              <div style={{ fontSize:12, color:"#b45309", lineHeight:1.8, fontFamily:"'Sora',sans-serif" }}>
-                A prompt was sent to <strong style={{color:"#fcd34d"}}>{phone}</strong>.<br/>
-                Approve <strong style={{color:"#fcd34d"}}>{currSymbol}{parseFloat(amount).toFixed(2)}</strong> on {networkLabel}.
-              </div>
-              <div style={{ marginTop:12, display:"inline-flex", alignItems:"center", gap:8, background:"#2a2010", border:"1px solid #4a3a10", borderRadius:20, padding:"6px 14px" }}>
-                <span style={{ fontSize:12, color: countdown>30?"#fcd34d":"#ef4444", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{fmt(countdown)}</span>
-                <span style={{ fontSize:11, color:"#78716c", fontFamily:"'Sora',sans-serif" }}>{countdown>0?"remaining":"expired"}</span>
-              </div>
-            </div>
-            <button className="zbtn" onClick={() => { setSub(SUB.VERIFY); setError(""); setInfo(""); }} style={btn("primary")}>
-              ✅ I've Approved — Verify Payment
-            </button>
-            <button className="zbtn" onClick={restart} style={btn("secondary")}>← Start Over</button>
-          </>
-        )}
-        {sub === SUB.VERIFY && (
-          <>
-            {info && <div style={{ background:"#1a2030", border:`1px solid ${C.accent}44`, borderRadius:10, padding:"11px 14px", color:"#a5b4fc", fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>ℹ {info}</div>}
-            <div style={{ textAlign:"center", marginBottom:20 }}>
-              <div style={{ fontSize:40, marginBottom:10 }}>🔍</div>
-              <div style={{ fontWeight:800, fontSize:16, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Checking Payment…</div>
-              <div style={{ fontSize:12, color: C.textMuted, marginTop:4, fontFamily:"'Sora',sans-serif" }}>{currSymbol}{parseFloat(amount).toFixed(2)} · {networkLabel}</div>
-            </div>
-            <button className="zbtn" onClick={handleVerify} disabled={loading} style={btn("primary", loading)}>
-              {loading?"🔄 Verifying…":"Verify Payment"}
-            </button>
-            <button className="zbtn" onClick={() => { setSub(SUB.WAIT); setError(""); setInfo(""); }} style={btn("secondary")}>← Still Waiting</button>
-            <button className="zbtn" onClick={restart} style={btn("ghost")}>Start Over</button>
-          </>
-        )}
-      </div>
-    </>
-  );
-
-  /* ══ MOMO DONE ══ */
-  const renderDone = () => (
-    <>
-      <div style={{ background:"linear-gradient(135deg,#065f46,#047857)", padding:"24px 24px 20px", borderBottom:`1px solid ${C.cardBorder}` }}>
-        <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:8, fontFamily:"'Sora',sans-serif" }}>ZYNOBET</div>
-        <div style={{ fontSize:20, fontWeight:800, color:"#fff", fontFamily:"'Sora',sans-serif" }}>✅ Deposit Successful</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:3, fontFamily:"'Sora',sans-serif" }}>Funds added to your wallet</div>
-      </div>
-      <div style={{ padding:"16px 24px 8px" }}><Steps current={2} labels={["Details","Approve","Done"]} /></div>
-      <div style={{ padding:"0 24px 24px", textAlign:"center" }}>
-        <div style={{ width:72, height:72, borderRadius:"50%", background:"#10b98122", border:"2px solid #10b98166", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px" }}>✅</div>
-        <div style={{ fontWeight:900, fontSize:28, color:C.green, fontFamily:"'Sora',sans-serif", marginBottom:4 }}>{currSymbol}{parseFloat(amount).toFixed(2)}</div>
-        <div style={{ fontSize:13, color: C.textMuted, marginBottom:24, fontFamily:"'Sora',sans-serif" }}>successfully added to your wallet</div>
-        <div style={{ background:C.surface, border:`1px solid ${C.surfaceBorder}`, borderRadius:12, padding:"14px 16px", marginBottom:20, textAlign:"left" }}>
-          {[["Amount", `${currSymbol} ${parseFloat(amount).toFixed(2)}`],["Network", networkLabel],["Phone", phone],["Status","✅ Credited"]].map(([k,v]) => (
-            <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:k==="Status"?0:10 }}>
-              <span style={{ color: C.textMuted, fontSize:12, fontFamily:"'Sora',sans-serif" }}>{k}</span>
-              <span style={{ color: k==="Status"?C.green:C.textPrimary, fontSize:12, fontWeight:700, fontFamily:"'Sora',sans-serif" }}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <button className="zbtn" onClick={() => window.location.href="/"} style={btn("primary")}>Back to Home</button>
-        <button className="zbtn" onClick={() => { setStep(STEP.DETAILS); setAmount(""); setPhone(""); setNetwork("MTN"); setError(""); setInfo(""); setRef(""); setSmsCode(""); setSub(SUB.WAIT); }} style={btn("secondary")}>Make Another Deposit</button>
-      </div>
-    </>
-  );
-
-  /* ══ BANK TRANSFER ══ */
-  const renderBankInfo = () => (
-    <>
-      <Header title="🇳🇬 Bank Transfer" subtitle="Moniepoint · Nigeria" onBack={resetAll} />
-      <div style={{ padding:24 }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        
-        {/* Minimum deposit notice */}
-        <div style={{ background:"#1a2a1a", border:"1px solid #10b98133", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#6ee7b7", fontFamily:"'Sora',sans-serif" }}>
-          💡 Minimum deposit: <strong>₦{MIN_DEPOSIT_NGN.toLocaleString()}</strong>
-        </div>
-        
-        <div style={{ background:"#101a12", border:"1px solid #10b98133", borderRadius:14, padding:18, marginBottom:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:"#10b98122", border:"1px solid #10b98144", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🏦</div>
-            <div>
-              <div style={{ fontWeight:800, fontSize:14, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Transfer to this account</div>
-              <div style={{ fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>Then submit your payment proof</div>
-            </div>
-          </div>
-          {[["Bank Name", BANK_NAME],["Account Name", BANK_ACCT],["Account Number", BANK_NUMBER]].map(([lbl, val]) => (
-            <div key={lbl} style={{ background:"#1a2a1c", border:"1px solid #10b98133", borderRadius:10, padding:"11px 14px", marginBottom:10 }}>
-              <div style={{ fontSize:10, fontWeight:700, color: C.textMuted, textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:5, fontFamily:"'Sora',sans-serif" }}>{lbl}</div>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                <span style={{ fontFamily: lbl==="Account Number"?"'DM Mono',monospace":"'Sora',sans-serif", fontSize: lbl==="Account Number"?20:14, fontWeight:800, color: C.textPrimary, wordBreak:"break-all" }}>{val}</span>
-                <CopyButton text={val} />
-              </div>
-            </div>
-          ))}
-          <div style={{ background:"#1c1810", border:"1px solid #3d350a", borderRadius:8, padding:"10px 12px", fontSize:11, color:"#b45309", lineHeight:1.6, fontFamily:"'Sora',sans-serif" }}>
-            ⚠ Always include your <strong style={{color:"#fcd34d"}}>username or phone number</strong> in the transfer narration so we can identify your payment.
-          </div>
-        </div>
-        <button className="zbtn" onClick={() => setBkStep(BKSTEP.FORM)} style={btn("green")}>I've Sent the Money → Submit Proof</button>
-        <div style={{ textAlign:"center", fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>📸 Screenshot required · Verified within 5–10 minutes</div>
-      </div>
-    </>
-  );
-
-  const renderBankForm = () => (
-    <>
-      <Header title="Payment Proof" subtitle="Provide your transfer details" onBack={() => setBkStep(BKSTEP.INFO)} />
-      <div style={{ padding:24 }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        
-        {/* Debug info */}
-        <div style={{ background:"#1a1a2e", border:"1px solid #6366f144", borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:10, color:"#a5b4fc", fontFamily:"'DM Mono',monospace" }}>
-          🔍 Debug: Step={step}, BKStep={bkStep}, Token={tok() ? '✓' : '✗'}
-        </div>
-        
-        <div style={{ marginBottom:16 }}>
-          <label style={label}>Transfer Reference / Narration <span style={{color:C.red}}>*</span></label>
-          <input type="text" value={bkTxid} onChange={e=>{setBkTxid(e.target.value);setBkErrors(p=>({...p,bkTxid:""}));}} placeholder="Your name, username or receipt ref" style={inp(bkErrors.bkTxid)} />
-          {errMsg(bkErrors.bkTxid)}
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-          <div>
-            <label style={label}>Amount Sent (₦) <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={bkAmount} placeholder={`Min ₦${MIN_DEPOSIT_NGN.toLocaleString()}`} onChange={e=>{setBkAmount(e.target.value);setBkErrors(p=>({...p,bkAmount:""}));}} style={inp(bkErrors.bkAmount)} />
-            {errMsg(bkErrors.bkAmount)}
-            <div style={{ fontSize:11, color: C.textMuted, marginTop:4, fontFamily:"'Sora',sans-serif" }}>
-              Minimum: ₦{MIN_DEPOSIT_NGN.toLocaleString()}
-            </div>
-          </div>
-          <div>
-            <label style={label}>Expected ₦ Credit <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={bkExpected} placeholder="0.00" onChange={e=>{setBkExpected(e.target.value);setBkErrors(p=>({...p,bkExpected:""}));}} style={inp(bkErrors.bkExpected)} />
-            {errMsg(bkErrors.bkExpected)}
-          </div>
-        </div>
-        <div style={{ marginBottom:16 }}>
-          <label style={label}>Sender Account Name</label>
-          <input type="text" value={bkSender} placeholder="Name on your bank account (optional)" onChange={e=>setBkSender(e.target.value)} style={inp()} />
-        </div>
-        <div style={{ marginBottom:16 }}>
-          <label style={label}>Payment Screenshot <span style={{color:C.red}}>*</span></label>
-          <label htmlFor="bk-screenshot" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"20px", borderRadius:10, cursor:"pointer", background: bkErrors.bkScreenshot?"#2a1515":"#1e1e2a", border:`2px dashed ${bkErrors.bkScreenshot?C.red+"66":bkScreenshot?C.accent:C.surfaceBorder}`, transition:"all 0.2s" }}>
-            {bkScreenshot ? (<><div style={{fontSize:28}}>🖼️</div><div style={{fontSize:13,fontWeight:700,color:C.green,fontFamily:"'Sora',sans-serif"}}>{bkScreenshot.name}</div><div style={{fontSize:11,color:C.textMuted,fontFamily:"'Sora',sans-serif"}}>Tap to change</div></>) : (<><div style={{fontSize:28}}>📸</div><div style={{fontSize:13,fontWeight:700,color:C.accentLight,fontFamily:"'Sora',sans-serif"}}>Upload Screenshot</div><div style={{fontSize:11,color:C.textMuted,fontFamily:"'Sora',sans-serif"}}>JPG, PNG, PDF</div></>)}
-            <input id="bk-screenshot" type="file" accept="image/*,application/pdf" onChange={handleScreenshotChange} style={{display:"none"}} />
-          </label>
-          {errMsg(bkErrors.bkScreenshot)}
-        </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={label}>Note to Admin</label>
-          <textarea value={bkNote} onChange={e=>setBkNote(e.target.value)} placeholder="Any additional info (optional)" rows={3} style={{ ...inp(), resize:"vertical", lineHeight:1.6 }} />
-        </div>
-        <button className="zbtn" onClick={handleBankSubmit} disabled={loading} style={btn("green", loading)}>
-          {loading?"Submitting…":"Submit Transfer Proof"}
-        </button>
-        <div style={{ textAlign:"center", fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>🔍 Reviewed & credited within 5–10 minutes</div>
-      </div>
-    </>
-  );
-
-  const renderBankSuccess = () => (
-    <>
-      <div style={{ background:"linear-gradient(135deg,#065f46,#047857)", padding:"24px", borderBottom:`1px solid ${C.cardBorder}` }}>
-        <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:8, fontFamily:"'Sora',sans-serif" }}>ZYNOBET</div>
-        <div style={{ fontSize:20, fontWeight:800, color:"#fff", fontFamily:"'Sora',sans-serif" }}>Proof Submitted!</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:3, fontFamily:"'Sora',sans-serif" }}>Under admin review · 🇳🇬 Bank Transfer</div>
-      </div>
-      <div style={{ padding:"32px 24px 24px", textAlign:"center" }}>
-        <div style={{ width:72, height:72, borderRadius:"50%", background:"#fef3c722", border:"2px solid #f59e0b66", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px" }}>⏳</div>
-               <div style={{ fontWeight:800, fontSize:20, color: C.textPrimary, fontFamily:"'Sora',sans-serif", marginBottom:8 }}>Pending Review</div>
-        <div style={{ fontSize:13, color: C.textMuted, lineHeight:1.8, marginBottom:24, fontFamily:"'Sora',sans-serif" }}>Your bank transfer is under review.<br/>An admin will verify and credit your wallet within <strong style={{color:C.textPrimary}}>5–10 minutes</strong>.</div>
-        <button className="zbtn" onClick={resetAll} style={btn("primary")}>Back to Deposit</button>
-        <button className="zbtn" onClick={() => window.location.href="/"} style={btn("secondary")}>Go to Home</button>
-      </div>
-    </>
-  );
-
-  /* ══ BINANCE ══ */
-  const renderBinanceInfo = () => (
-    <>
-      <Header title="₿ Crypto Deposit" subtitle="Send USDT · TRC20 Network" onBack={resetAll} />
-      <div style={{ padding:24 }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        <div style={{ background:"#1c1810", border:"1px solid #3d350a", borderRadius:12, padding:"14px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:14 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:13, color:"#fcd34d", fontFamily:"'Sora',sans-serif" }}>New to Binance?</div>
-            <div style={{ fontSize:12, color:"#b45309", marginTop:3, lineHeight:1.5, fontFamily:"'Sora',sans-serif" }}>Create a free account to buy & send crypto.</div>
-          </div>
-          <a href="https://www.binance.com/en/register" target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, fontWeight:800, padding:"8px 14px", borderRadius:8, background:"#f59e0b", color:"#fff", textDecoration:"none", flexShrink:0, fontFamily:"'Sora',sans-serif" }}>Sign Up ↗</a>
-        </div>
-        <div style={{ background:"#1a1830", border:`1px solid ${C.accent}33`, borderRadius:14, padding:18, marginBottom:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:`${C.accent}22`, border:`1px solid ${C.accent}44`, display:"flex", alignItems:"center", justifyContent:"center", color:C.accentLight, fontWeight:900, fontSize:18 }}>₮</div>
-            <div>
-              <div style={{ fontWeight:800, fontSize:14, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>Send USDT to this address</div>
-              <div style={{ fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>Network: <strong style={{color:C.accentLight}}>TRC20 (TRON)</strong></div>
-            </div>
-          </div>
-          <div style={{ background:"#252540", border:`1px solid ${C.surfaceBorder}`, borderRadius:10, padding:"12px 14px", marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color: C.textMuted, textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:6, fontFamily:"'Sora',sans-serif" }}>Wallet Address</div>
-            <div style={{ fontFamily:"'DM Mono',monospace", fontSize:12, color: C.textPrimary, wordBreak:"break-all", lineHeight:1.6, marginBottom:10 }}>{BINANCE_ADDRESS}</div>
-            <CopyButton text={BINANCE_ADDRESS} />
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-            {[["Network",BINANCE_NETWORK],["Coin",BINANCE_COIN],["Min.","\$25 USDT"]].map(([lbl,val]) => (
-              <div key={lbl} style={{ background:"#252540", border:`1px solid \${C.surfaceBorder}`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
-                <div style={{ fontSize:10, color: C.textMuted, marginBottom:2, fontFamily:"'Sora',sans-serif" }}>{lbl}</div>
-                <div style={{ fontSize:12, fontWeight:800, color: C.textPrimary, fontFamily:"'Sora',sans-serif" }}>{val}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ background:"#1c1810", border:"1px solid #3d350a", borderRadius:8, padding:"10px 12px", fontSize:11, color:"#b45309", lineHeight:1.6, fontFamily:"'Sora',sans-serif" }}>
-            ⚠ Only send <strong style={{color:"#fcd34d"}}>USDT via TRC20</strong>. Wrong network = <strong>permanent loss of funds</strong>.
-          </div>
-        </div>
-        <button className="zbtn" onClick={() => setBStep(BSTEP.FORM)} style={btn("primary")}>I've Sent the Payment → Submit Proof</button>
-        <div style={{ textAlign:"center", fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>🔍 Credited after admin verification (1–5 mins)</div>
-      </div>
-    </>
-  );
-
-  const renderBinanceForm = () => (
-    <>
-      <Header title="Payment Proof" subtitle="Provide your transaction details" onBack={() => setBStep(BSTEP.INFO)} />
-      <div style={{ padding:24 }}>
-        {error && <div style={{ background:"#2a1515", border:`1px solid ${C.red}44`, borderRadius:10, padding:"11px 14px", color:C.red, fontSize:13, marginBottom:16, fontFamily:"'Sora',sans-serif" }}>⚠ {error}</div>}
-        <div style={{ marginBottom:16 }}>
-          <label style={label}>Transaction Hash (TXID) <span style={{color:C.red}}>*</span></label>
-          <input type="text" value={txid} onChange={e=>{setTxid(e.target.value);setBinanceErrors(p=>({...p,txid:""}));}} placeholder="Paste your blockchain TXID here" style={inp(binanceErrors.txid)} />
-          {errMsg(binanceErrors.txid)}
-          <div style={{ fontSize:11, color: C.textMuted, marginTop:4, fontFamily:"'Sora',sans-serif" }}>Find in Binance withdrawal history or blockchain explorer.</div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-          <div>
-            <label style={label}>Coin <span style={{color:C.red}}>*</span></label>
-            <select value={coin} onChange={e=>setCoin(e.target.value)} style={inp()}>{CRYPTO_COINS.map(c=><option key={c}>{c}</option>)}</select>
-          </div>
-          <div>
-            <label style={label}>Network <span style={{color:C.red}}>*</span></label>
-            <select value={cryptoNetwork} onChange={e=>setCryptoNetwork(e.target.value)} style={inp()}>{CRYPTO_NETWORKS.map(n=><option key={n}>{n}</option>)}</select>
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-          <div>
-            <label style={label}>Amount Sent ({coin}) <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={cryptoAmount} placeholder="0.00" onChange={e=>{setCryptoAmount(e.target.value);setBinanceErrors(p=>({...p,cryptoAmount:""}));}} style={inp(binanceErrors.cryptoAmount)} />
-            {errMsg(binanceErrors.cryptoAmount)}
-          </div>
-          <div>
-            <label style={label}>Expected {countryObj?.currency??""} <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={expectedLocal} placeholder="0.00" onChange={e=>{setExpectedLocal(e.target.value);setBinanceErrors(p=>({...p,expectedLocal:""}));}} style={inp(binanceErrors.expectedLocal)} />
-            {errMsg(binanceErrors.expectedLocal)}
-          </div>
-        </div>
-        <div style={{ marginBottom:16 }}>
-          <label style={label}>Sender Wallet Address</label>
-          <input type="text" value={senderAddress} placeholder="Address you sent from (optional)" onChange={e=>setSenderAddress(e.target.value)} style={inp()} />
-        </div>
-        <div style={{ marginBottom:20 }}>
-          <label style={label}>Note to Admin</label>
-          <textarea value={userNote} onChange={e=>setUserNote(e.target.value)} placeholder="Any additional info (optional)" rows={3} style={{ ...inp(), resize:"vertical", lineHeight:1.6 }} />
-        </div>
-        <button className="zbtn" onClick={handleBinanceSubmit} disabled={loading} style={btn("primary", loading)}>
-          {loading?"Submitting…":"Submit Deposit Proof"}
-        </button>
-        <div style={{ textAlign:"center", fontSize:11, color: C.textMuted, fontFamily:"'Sora',sans-serif" }}>🔍 Reviewed & credited within 1–5 minutes</div>
-      </div>
-    </>
-  );
-
-  const renderBinanceSuccess = () => (
-    <>
-      <div style={{ background:"linear-gradient(135deg,#1e3a5f,#1a2a4f)", padding:"24px", borderBottom:`1px solid ${C.cardBorder}` }}>
-        <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:8, fontFamily:"'Sora',sans-serif" }}>ZYNOBET</div>
-        <div style={{ fontSize:20, fontWeight:800, color:"#fff", fontFamily:"'Sora',sans-serif" }}>Proof Submitted!</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:3, fontFamily:"'Sora',sans-serif" }}>Under admin review · Crypto Deposit</div>
-      </div>
-      <div style={{ padding:"32px 24px 24px", textAlign:"center" }}>
-        <div style={{ width:72, height:72, borderRadius:"50%", background:"#1e3a5f", border:`2px solid ${C.accent}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px" }}>⏳</div>
-        <div style={{ fontWeight:800, fontSize:20, color: C.textPrimary, fontFamily:"'Sora',sans-serif", marginBottom:8 }}>Pending Review</div>
-        <div style={{ fontSize:13, color: C.textMuted, lineHeight:1.8, marginBottom:24, fontFamily:"'Sora',sans-serif" }}>Your crypto deposit is under review.<br/>An admin will verify and credit your wallet within <strong style={{color:C.textPrimary}}>1–5 minutes</strong>.</div>
-        <button className="zbtn" onClick={resetAll} style={btn("primary")}>Back to Deposit</button>
-        <button className="zbtn" onClick={() => window.location.href="/"} style={btn("secondary")}>Go to Home</button>
-      </div>
-    </>
-  );
-
-  /* ══ ROOT RENDER ══ */
-  const renderContent = () => {
-    logger.info("Rendering content for step:", { step, bkStep, bStep });
-    
-    if (step === 98) {
-      if (bkStep === BKSTEP.INFO) return renderBankInfo();
-      if (bkStep === BKSTEP.FORM) return renderBankForm();
-      if (bkStep === BKSTEP.SUCCESS) return renderBankSuccess();
-    }
-    if (step === 99) {
-      if (bStep === BSTEP.INFO) return renderBinanceInfo();
-      if (bStep === BSTEP.FORM) return renderBinanceForm();
-      if (bStep === BSTEP.SUCCESS) return renderBinanceSuccess();
-    }
-    if (step === STEP.COUNTRY) return renderCountrySelect();
-    if (step === STEP.METHOD) return renderMethod();
-    if (step === STEP.DETAILS) return renderDetails();
-    if (step === STEP.APPROVE) return renderApprove();
-    if (step === STEP.DONE) return renderDone();
-    
-    logger.warn("Unknown step, defaulting to country select");
-    return renderCountrySelect();
-  };
-
-  // Log initial render
-  useEffect(() => {
-    logger.info("DepositPage mounted");
-    logger.info("Initial state:", { 
-      step, 
-      country, 
-      hasToken: !!tok(),
-      apiBase: API_BASE 
-    });
-  }, []);
-
-  return (
-    <div style={{ minHeight:"100vh", background:"#0a0a10", backgroundImage:"radial-gradient(ellipse at 20% 50%, #1a1040 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, #0d1a30 0%, transparent 50%)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"24px 16px 48px", fontFamily:"'Sora',sans-serif" }}>
-      <SupportModal />
-      <div style={{ width:"100%", maxWidth:440 }}>
-        <div className="zcard" style={{ background:C.card, borderRadius:20, boxShadow:"0 20px 60px rgba(0,0,0,0.5), 0 4px 20px rgba(0,0,0,0.3)", overflow:"hidden", border:`1px solid ${C.cardBorder}` }}>
-          {renderContent()}
-        </div>
-        <div style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#334155", fontFamily:"'Sora',sans-serif" }}>
-          © 2025 Zynobet · <a href="https://www.zynobet.site" style={{ color:"#475569", textDecoration:"none" }}>zynobet.site</a>
-        </div>
-      </div>
-    </div>
-  );
+  return res.json() as Promise<T>;
 }
+
+const http = {
+  get: <T>(path: string, extraHeaders?: Record<string, string>) =>
+    request<T>("GET", path, undefined, extraHeaders),
+  post: <T>(path: string, body?: unknown, extraHeaders?: Record<string, string>) =>
+    request<T>("POST", path, body, extraHeaders),
+  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
+};
+
+// ---------------------------------------------------------------------------
+// Helper to build query strings
+// ---------------------------------------------------------------------------
+
+function qs(params: Record<string, string | number | boolean | undefined>): string {
+  const filtered = Object.entries(params).filter(([, v]) => v !== undefined);
+  if (!filtered.length) return "";
+  return "?" + filtered.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
+}
+
+// =============================================================================
+// AUTH
+// =============================================================================
+
+export const auth = {
+  /** POST /api/auth/login */
+  login: (body: LoginRequest) =>
+    http.post<ApiResponse<AuthResponse>>("/api/auth/login", body),
+
+  /** POST /api/auth/register */
+  register: (body: RegisterRequest) =>
+    http.post<ApiResponse<AuthResponse>>("/api/auth/register", body),
+
+  /** POST /api/auth/demo-login */
+  demoLogin: (body: DemoLoginRequest) =>
+    http.post<ApiResponse<AuthResponse>>("/api/auth/demo-login", body),
+
+  /** POST /api/auth/logout */
+  logout: () =>
+    http.post<ApiResponse<void>>("/api/auth/logout"),
+
+  /** POST /api/auth/refresh */
+  refresh: () =>
+    http.post<ApiResponse<AuthResponse>>("/api/auth/refresh"),
+
+  /** POST /api/auth/verify-email */
+  verifyEmail: (body: Record<string, string>) =>
+    http.post<ApiResponse<Record<string, string>>>("/api/auth/verify-email", body),
+
+  /** POST /api/auth/send-verification */
+  sendVerification: (body: Record<string, string>) =>
+    http.post<ApiResponse<Record<string, string>>>("/api/auth/send-verification", body),
+
+  /** POST /api/auth/request-password-reset */
+  requestPasswordReset: (body: Record<string, string>) =>
+    http.post<ApiResponse<Record<string, string>>>("/api/auth/request-password-reset", body),
+
+  /** POST /api/auth/reset-password */
+  resetPassword: (body: Record<string, string>) =>
+    http.post<ApiResponse<Record<string, string>>>("/api/auth/reset-password", body),
+};
+
+// =============================================================================
+// USER
+// =============================================================================
+
+export const user = {
+  /** GET /api/users/me */
+  me: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/users/me"),
+
+  /** PATCH /api/users/me */
+  update: (body: UpdateProfileRequest) =>
+    http.patch<ApiResponse<UserDto>>("/api/users/me", body),
+};
+
+// =============================================================================
+// WALLET
+// =============================================================================
+
+export const wallet = {
+  /** GET /api/wallet */
+  getWallet: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/wallet"),
+
+  /** GET /api/wallet/transactions */
+  getTransactions: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<Transaction>>>(
+      `/api/wallet/transactions${qs({ page, size })}`
+    ),
+
+  /** POST /api/wallet/withdraw */
+  withdraw: (body: Record<string, unknown>) =>
+    http.post<ApiResponse<Transaction>>("/api/wallet/withdraw", body),
+};
+
+// =============================================================================
+// WALLET — WITHDRAWALS
+// =============================================================================
+
+export const withdrawals = {
+  /** GET /api/wallet/withdrawals */
+  getMyWithdrawals: (page = 0, size = 20, status?: WithdrawalStatus) =>
+    http.get<ApiResponse<PageResponse<WithdrawalRequest>>>(
+      `/api/wallet/withdrawals${qs({ page, size, status })}`
+    ),
+
+  /** POST /api/wallet/withdrawals */
+  submit: (body: WithdrawalRequestDto) =>
+    http.post<ApiResponse<WithdrawalRequest>>("/api/wallet/withdrawals", body),
+
+  /** GET /api/wallet/withdrawals/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<WithdrawalRequest>>(`/api/wallet/withdrawals/${id}`),
+
+  /** GET /api/wallet/withdrawals/admin/all */
+  getAllForAdmin: (page = 0, size = 20, status?: WithdrawalStatus) =>
+    http.get<ApiResponse<PageResponse<WithdrawalRequest>>>(
+      `/api/wallet/withdrawals/admin/all${qs({ page, size, status })}`
+    ),
+
+  /** GET /api/wallet/withdrawals/admin/stats */
+  getAdminStats: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/wallet/withdrawals/admin/stats"),
+
+  /** GET /api/wallet/withdrawals/super-admin/stats */
+  getSuperAdminStats: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/wallet/withdrawals/super-admin/stats"),
+
+  /** POST /api/wallet/withdrawals/admin/:id/approve */
+  approve: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<WithdrawalRequest>>(`/api/wallet/withdrawals/admin/${id}/approve`, body),
+
+  /** POST /api/wallet/withdrawals/admin/:id/reject */
+  reject: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<WithdrawalRequest>>(`/api/wallet/withdrawals/admin/${id}/reject`, body),
+
+  /** POST /api/wallet/withdrawals/super-admin/:id/settle */
+  settle: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<WithdrawalRequest>>(`/api/wallet/withdrawals/super-admin/${id}/settle`, body),
+
+  /** POST /api/wallet/withdrawals/super-admin/:id/mark-failed */
+  markFailed: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<WithdrawalRequest>>(`/api/wallet/withdrawals/super-admin/${id}/mark-failed`, body),
+};
+
+// =============================================================================
+// DEPOSITS
+// =============================================================================
+
+export const deposits = {
+  /** POST /api/wallet/deposit/stripe/intent */
+  stripeIntent: (body: Record<string, unknown>) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/stripe/intent", body),
+
+  /** POST /api/wallet/deposit/paystack/init */
+  paystackInit: (body: Record<string, unknown>) =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/wallet/deposit/paystack/init", body),
+
+  // ── Binance / Crypto deposits ─────────────────────────────────────────────
+
+  /** POST /api/wallet/binance-deposits */
+  binanceSubmit: (body: BinanceDepositSubmitRequest) =>
+    http.post<ApiResponse<BinanceDeposit>>("/api/wallet/binance-deposits", body),
+
+  /** GET /api/wallet/binance-deposits */
+  getBinanceDeposits: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<BinanceDeposit>>>(
+      `/api/wallet/binance-deposits${qs({ page, size })}`
+    ),
+
+  // ── Super-admin Binance deposit management ────────────────────────────────
+
+  /** GET /api/admin/binance-deposits */
+  adminGetAllBinanceDeposits: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<BinanceDeposit>>>(
+      `/api/admin/binance-deposits${qs({ page, size })}`
+    ),
+
+  /** GET /api/admin/binance-deposits/pending */
+  adminGetPendingBinanceDeposits: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<BinanceDeposit>>>(
+      `/api/admin/binance-deposits/pending${qs({ page, size })}`
+    ),
+
+  /** GET /api/admin/binance-deposits/:id */
+  adminGetBinanceDeposit: (id: string) =>
+    http.get<ApiResponse<BinanceDeposit>>(`/api/admin/binance-deposits/${id}`),
+
+  /** POST /api/admin/binance-deposits/:id/approve */
+  adminApproveBinanceDeposit: (
+    id: string,
+    body: { creditedGhsAmount: number; adminNote?: string }
+  ) =>
+    http.post<ApiResponse<BinanceDeposit>>(
+      `/api/admin/binance-deposits/${id}/approve`,
+      body
+    ),
+
+  /** POST /api/admin/binance-deposits/:id/reject */
+  adminRejectBinanceDeposit: (id: string, body: { adminNote: string }) =>
+    http.post<ApiResponse<BinanceDeposit>>(
+      `/api/admin/binance-deposits/${id}/reject`,
+      body
+    ),
+};
+
+// =============================================================================
+// WEBHOOKS
+// =============================================================================
+
+export const webhooks = {
+  /** POST /api/webhooks/stripe */
+  stripe: (payload: string, signature: string) =>
+    http.post<string>("/api/webhooks/stripe", payload, { "Stripe-Signature": signature }),
+
+  /** POST /api/webhooks/paystack */
+  paystack: (signature?: string) => {
+    const headers = signature ? { "x-paystack-signature": signature } : undefined;
+    return http.post<string>("/api/webhooks/paystack", undefined, headers);
+  },
+};
+
+// =============================================================================
+// BETS
+// =============================================================================
+
+export const bets = {
+  /** GET /api/bets */
+  getMyBets: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<Bet>>>(`/api/bets${qs({ page, size })}`),
+
+  /** POST /api/bets */
+  place: (body: PlaceBetRequest) =>
+    http.post<ApiResponse<Bet>>("/api/bets", body),
+
+  /** GET /api/bets/:id */
+  getOne: (id: string) =>
+    http.get<ApiResponse<Bet>>(`/api/bets/${id}`),
+
+  /** GET /api/bets/unseen-wins */
+  getUnseenWins: () =>
+    http.get<ApiResponse<Bet[]>>("/api/bets/unseen-wins"),
+
+  /** POST /api/bets/:id/dismiss-win */
+  dismissWin: (id: string) =>
+    http.post<ApiResponse<void>>(`/api/bets/${id}/dismiss-win`),
+};
+
+// =============================================================================
+// GAMES
+// =============================================================================
+
+export const games = {
+  /** POST /api/games/:game/play */
+  play: (game: string, body: Record<string, unknown>) =>
+    http.post<ApiResponse<GameRound>>(`/api/games/${game}/play`, body),
+
+  /** POST /api/games/:game/cashout */
+  cashout: (game: string, body: Record<string, unknown>) =>
+    http.post<ApiResponse<Record<string, unknown>>>(`/api/games/${game}/cashout`, body),
+
+  /** GET /api/games/:game/current-round */
+  currentRound: (game: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/games/${game}/current-round`),
+
+  /** GET /api/games/history */
+  history: (limit = 20) =>
+    http.get<ApiResponse<GameRound[]>>(`/api/games/history${qs({ limit })}`),
+};
+
+// =============================================================================
+// BOOKING CODES (user-facing)
+// =============================================================================
+
+export const booking = {
+  /** POST /api/booking/redeem */
+  redeem: (body: RedeemRequest) =>
+    http.post<ApiResponse<RedeemResponse>>("/api/booking/redeem", body),
+};
+
+// =============================================================================
+// ADMIN — BOOKING CODES
+// =============================================================================
+
+export const adminBooking = {
+  /** GET /api/admin/booking-codes */
+  list: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<BookingCode>>>(
+      `/api/admin/booking-codes${qs({ page, size })}`
+    ),
+
+  /** POST /api/admin/booking-codes — Standard code */
+  createBookingCode: (body: CreateBookingRequest) =>
+    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", body),
+
+  /** POST /api/admin/booking-codes — Admin-only matches */
+  createAdminOnlyBookingCode: (body: CreateBookingRequest) =>
+    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", {
+      ...body,
+      bookingType: "ADMIN_ONLY",
+    }),
+
+  /** POST /api/admin/booking-codes — Mixed */
+  createMixedBookingCode: (body: CreateBookingRequest) =>
+    http.post<ApiResponse<BookingCode>>("/api/admin/booking-codes", {
+      ...body,
+      bookingType: "MIXED",
+    }),
+
+  /** GET /api/admin/booking-codes/:id */
+  detail: (id: string) =>
+    http.get<ApiResponse<BookingCode>>(`/api/admin/booking-codes/${id}`),
+};
+
+// =============================================================================
+// GEO
+// =============================================================================
+
+export const geo = {
+  /** GET /api/geo/currency */
+  getCurrency: () =>
+    http.get<Record<string, string>>("/api/geo/currency"),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL MATCHES
+// =============================================================================
+
+export const publicFootball = {
+  /** GET /api/public/football/matches */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/football/matches"),
+
+  /** GET /api/public/football/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/upcoming"),
+
+  /** GET /api/public/football/matches/today */
+  today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/today"),
+
+  /** GET /api/public/football/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/live"),
+
+  /** GET /api/public/football/matches/future */
+  future: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/future"),
+
+  /** GET /api/public/football/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/football/matches/results${qs({ limit })}`),
+
+  /** GET /api/public/football/matches/featured */
+  featured: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/football/matches/featured"),
+
+  /** GET /api/public/football/matches/with-odds */
+  withOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/football/matches/with-odds"),
+
+  /** GET /api/public/football/matches/with-all-odds */
+  withAllOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/football/matches/with-all-odds"),
+
+  /** GET /api/public/football/matches/top6/upcoming */
+  top6Upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/top6/upcoming"),
+
+  /** GET /api/public/football/matches/top6/today */
+  top6Today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/top6/today"),
+
+  /** GET /api/public/football/matches/top6/live */
+  top6Live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/top6/live"),
+
+  /** GET /api/public/football/matches/cups/upcoming */
+  cupsUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/cups/upcoming"),
+
+  /** GET /api/public/football/matches/cups/today */
+  cupsToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/cups/today"),
+
+  /** GET /api/public/football/matches/cups/live */
+  cupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/cups/live"),
+
+  /** GET /api/public/football/matches/all-cups/upcoming */
+  allCupsUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/all-cups/upcoming"),
+
+  /** GET /api/public/football/matches/all-cups/today */
+  allCupsToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/all-cups/today"),
+
+  /** GET /api/public/football/matches/all-cups/live */
+  allCupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/matches/all-cups/live"),
+
+  /** GET /api/public/football/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/football/matches/${id}`),
+
+  /** GET /api/public/football/matches/:id/stats */
+  stats: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/stats`),
+
+  /** GET /api/public/football/matches/:id/prediction */
+  prediction: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/prediction`),
+
+  /** GET /api/public/football/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/odds`),
+
+  /** GET /api/public/football/matches/:id/odds/raw */
+  oddsRaw: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/public/football/matches/${id}/odds/raw`),
+
+  /** GET /api/public/football/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/odds/all`),
+
+  /** GET /api/public/football/matches/:id/odds/handicap */
+  oddsHandicap: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/odds/handicap`),
+
+  /** GET /api/public/football/matches/:id/odds/half-time */
+  oddsHalfTime: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/odds/half-time`),
+
+  /** GET /api/public/football/matches/:id/odds/correct-score */
+  oddsCorrectScore: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/odds/correct-score`),
+
+  /** GET /api/public/football/matches/:id/odds/goalscorer */
+  oddsGoalscorer: (id: string) =>
+    http.get<ApiResponse<Record<string, Record<string, unknown>[]>>>(`/api/public/football/matches/${id}/odds/goalscorer`),
+
+  /** GET /api/public/football/matches/:id/odds/espn */
+  oddsEspn: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/odds/espn`),
+
+  /** GET /api/public/football/matches/:id/odds/cache-status */
+  oddsCacheStatus: (id: string) =>
+    http.get<ApiResponse<Record<string, boolean>>>(`/api/public/football/matches/${id}/odds/cache-status`),
+
+  /** GET /api/public/football/matches/:id/lineups */
+  lineups: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/lineups`),
+
+  /** GET /api/public/football/matches/:id/h2h */
+  h2h: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/h2h`),
+
+  /** GET /api/public/football/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/events`),
+
+  /** GET /api/public/football/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/matches/${id}/detail`),
+
+  /** GET /api/public/football/matches/:id/form */
+  form: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/form`),
+
+  /** GET /api/public/football/matches/:id/news */
+  news: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/news`),
+
+  /** GET /api/public/football/matches/:id/videos */
+  videos: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/matches/${id}/videos`),
+
+  /** GET /api/public/football/matches/:id/venue */
+  venue: (id: string) =>
+    http.get<ApiResponse<string>>(`/api/public/football/matches/${id}/venue`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL LEAGUES
+// =============================================================================
+
+export const publicFootballLeagues = {
+  /** GET /api/public/football/leagues/:league/upcoming */
+  upcoming: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/${league}/upcoming`),
+
+  /** GET /api/public/football/leagues/:league/today */
+  today: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/${league}/today`),
+
+  /** GET /api/public/football/leagues/:league/live */
+  live: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/${league}/live`),
+
+  /** GET /api/public/football/leagues/top6/:league/upcoming */
+  top6Upcoming: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/top6/${league}/upcoming`),
+
+  /** GET /api/public/football/leagues/top6/:league/today */
+  top6Today: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/top6/${league}/today`),
+
+  /** GET /api/public/football/leagues/top6/:league/live */
+  top6Live: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/top6/${league}/live`),
+
+  /** GET /api/public/football/leagues/top6/:league/results/finished */
+  top6Finished: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/top6/${league}/results/finished`),
+
+  /** GET /api/public/football/leagues/top6/:league/teams */
+  top6Teams: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/leagues/top6/${league}/teams`),
+
+  /** GET /api/public/football/leagues/top6/:league/teams/:teamId/schedule */
+  top6TeamSchedule: (league: FootballLeague, teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/leagues/top6/${league}/teams/${teamId}/schedule`),
+
+  /** GET /api/public/football/leagues/top6/:league/fixtures/date/:date */
+  top6FixturesByDate: (league: FootballLeague, date: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/leagues/top6/${league}/fixtures/date/${date}`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL CUPS
+// =============================================================================
+
+export const publicFootballCups = {
+  /** GET /api/public/football/cups/:cup/upcoming */
+  upcoming: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/cups/${cup}/upcoming`),
+
+  /** GET /api/public/football/cups/:cup/today */
+  today: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/cups/${cup}/today`),
+
+  /** GET /api/public/football/cups/:cup/live */
+  live: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/cups/${cup}/live`),
+
+  /** GET /api/public/football/cups/:cup/results/finished */
+  finished: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/cups/${cup}/results/finished`),
+
+  /** GET /api/public/football/cups/:cup/matches/:eventId/detail */
+  matchDetail: (cup: FootballCup, eventId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/cups/${cup}/matches/${eventId}/detail`),
+
+  /** GET /api/public/football/cups/fixtures/date/:date */
+  fixturesByDate: (date: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/cups/fixtures/date/${date}`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL TEAMS
+// =============================================================================
+
+export const publicFootballTeams = {
+  /** GET /api/public/football/teams/:team/upcoming */
+  upcoming: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/teams/${team}/upcoming`),
+
+  /** GET /api/public/football/teams/:team/results */
+  results: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/football/teams/${team}/results`),
+
+  /** GET /api/public/football/teams/:team/live */
+  live: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/teams/${team}/live`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL STANDINGS
+// =============================================================================
+
+export const publicFootballStandings = {
+  /** GET /api/public/football/standings/:competitionId */
+  byCompetition: (competitionId: number) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/standings/${competitionId}`),
+
+  /** GET /api/public/football/standings/top6 */
+  top6: () =>
+    http.get<ApiResponse<Record<string, Record<string, unknown>>>>("/api/public/football/standings/top6"),
+
+  /** GET /api/public/football/standings/leagues/:league */
+  byLeague: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/standings/leagues/${league}`),
+
+  /** GET /api/public/football/standings/leagues/top6/:league */
+  top6ByLeague: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/standings/leagues/top6/${league}`),
+
+  /** GET /api/public/football/standings/cups/:cup */
+  byCup: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/standings/cups/${cup}`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL SCORERS
+// =============================================================================
+
+export const publicFootballScorers = {
+  /** GET /api/public/football/scorers/:competitionId */
+  byCompetition: (competitionId: number) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/scorers/${competitionId}`),
+
+  /** GET /api/public/football/scorers/leagues/:league */
+  byLeague: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/scorers/leagues/${league}`),
+
+  /** GET /api/public/football/scorers/leagues/top6/:league */
+  top6ByLeague: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/football/scorers/leagues/top6/${league}`),
+};
+
+// =============================================================================
+// PUBLIC — FOOTBALL LIVESCORE
+// =============================================================================
+
+export const publicFootballLivescore = {
+  /** GET /api/public/football/livescore/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/live"),
+
+  /** GET /api/public/football/livescore/today */
+  today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/today"),
+
+  /** GET /api/public/football/livescore/fixtures */
+  fixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/fixtures"),
+
+  /** GET /api/public/football/livescore/top6/live */
+  top6Live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/top6/live"),
+
+  /** GET /api/public/football/livescore/top6/fixtures */
+  top6Fixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/top6/fixtures"),
+
+  /** GET /api/public/football/livescore/top6/all-fixtures */
+  top6AllFixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/top6/all-fixtures"),
+
+  /** GET /api/public/football/livescore/leagues/top6/:league/live */
+  top6LeagueLive: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/livescore/leagues/top6/${league}/live`),
+
+  /** GET /api/public/football/livescore/leagues/top6/:league/fixtures */
+  top6LeagueFixtures: (league: FootballLeague) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/livescore/leagues/top6/${league}/fixtures`),
+
+  /** GET /api/public/football/livescore/cups/live */
+  cupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/cups/live"),
+
+  /** GET /api/public/football/livescore/cups/fixtures */
+  cupsFixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/cups/fixtures"),
+
+  /** GET /api/public/football/livescore/cups/:cup/live */
+  cupLive: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/livescore/cups/${cup}/live`),
+
+  /** GET /api/public/football/livescore/cups/:cup/fixtures */
+  cupFixtures: (cup: FootballCup) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/football/livescore/cups/${cup}/fixtures`),
+
+  /** GET /api/public/football/livescore/all-leagues/today */
+  allLeaguesToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/all-leagues/today"),
+
+  /** GET /api/public/football/livescore/all-cups/today */
+  allCupsToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/football/livescore/all-cups/today"),
+};
+
+// =============================================================================
+// PUBLIC — BASKETBALL / NBA MATCHES
+// =============================================================================
+
+export const publicBasketball = {
+  /** GET /api/public/basketball/matches  (also /api/public/nba/matches) */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/basketball/matches"),
+
+  /** GET /api/public/basketball/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/matches/upcoming"),
+
+  /** GET /api/public/basketball/matches/today */
+  today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/matches/today"),
+
+  /** GET /api/public/basketball/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/matches/live"),
+
+  /** GET /api/public/basketball/matches/future */
+  future: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/matches/future"),
+
+  /** GET /api/public/basketball/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/basketball/matches/results${qs({ limit })}`),
+
+  /** GET /api/public/basketball/matches/with-odds */
+  withOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/basketball/matches/with-odds"),
+
+  /** GET /api/public/basketball/matches/with-all-odds */
+  withAllOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/basketball/matches/with-all-odds"),
+
+  /** GET /api/public/basketball/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/basketball/matches/${id}`),
+
+  /** GET /api/public/basketball/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds`),
+
+  /** GET /api/public/basketball/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/odds/all`),
+
+  /** GET /api/public/basketball/matches/:id/odds/moneyline */
+  oddsMoneyline: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds/moneyline`),
+
+  /** GET /api/public/basketball/matches/:id/odds/spread */
+  oddsSpread: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds/spread`),
+
+  /** GET /api/public/basketball/matches/:id/odds/total */
+  oddsTotal: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds/total`),
+
+  /** GET /api/public/basketball/matches/:id/odds/quarters */
+  oddsQuarters: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds/quarters`),
+
+  /** GET /api/public/basketball/matches/:id/odds/margin */
+  oddsMargin: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/matches/${id}/odds/margin`),
+
+  /** GET /api/public/basketball/matches/:id/stats */
+  stats: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/stats`),
+
+  /** GET /api/public/basketball/matches/:id/lineups */
+  lineups: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/lineups`),
+
+  /** GET /api/public/basketball/matches/:id/h2h */
+  h2h: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/h2h`),
+
+  /** GET /api/public/basketball/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/events`),
+
+  /** GET /api/public/basketball/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/matches/${id}/detail`),
+
+  /** GET /api/public/basketball/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/basketball/standings"),
+
+  /** GET /api/public/basketball/teams */
+  teams: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/basketball/teams"),
+
+  /** GET /api/public/basketball/teams/:team/upcoming */
+  teamUpcoming: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/teams/${team}/upcoming`),
+
+  /** GET /api/public/basketball/teams/:team/results */
+  teamResults: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/basketball/teams/${team}/results`),
+
+  /** GET /api/public/basketball/teams/:team/live */
+  teamLive: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/basketball/teams/${team}/live`),
+
+  /** GET /api/public/basketball/teams/:teamId/schedule */
+  teamSchedule: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/teams/${teamId}/schedule`),
+
+  /** GET /api/public/basketball/teams/:teamId/roster */
+  teamRoster: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/teams/${teamId}/roster`),
+
+  /** GET /api/public/basketball/teams/:teamId/info */
+  teamInfo: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/teams/${teamId}/info`),
+
+  /** GET /api/public/basketball/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/espn/upcoming"),
+
+  /** GET /api/public/basketball/espn/today */
+  espnToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/espn/today"),
+
+  /** GET /api/public/basketball/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/basketball/espn/live"),
+
+  /** GET /api/public/basketball/espn/game/:espnGameId */
+  espnGameDetail: (espnGameId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/basketball/espn/game/${espnGameId}`),
+};
+
+// =============================================================================
+// PUBLIC — NFL / AMERICAN FOOTBALL MATCHES
+// =============================================================================
+
+export const publicNfl = {
+  /** GET /api/public/nfl/matches */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/nfl/matches"),
+
+  /** GET /api/public/nfl/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/matches/upcoming"),
+
+  /** GET /api/public/nfl/matches/today */
+  today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/matches/today"),
+
+  /** GET /api/public/nfl/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/matches/live"),
+
+  /** GET /api/public/nfl/matches/results */
+  results: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/nfl/matches/results"),
+
+  /** GET /api/public/nfl/matches/with-odds */
+  withOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/nfl/matches/with-odds"),
+
+  /** GET /api/public/nfl/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/nfl/matches/${id}`),
+
+  /** GET /api/public/nfl/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/nfl/matches/${id}/odds`),
+
+  /** GET /api/public/nfl/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/nfl/matches/${id}/odds/all`),
+
+  /** GET /api/public/nfl/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/nfl/matches/${id}/score`),
+
+  /** GET /api/public/nfl/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/nfl/matches/${id}/detail`),
+
+  /** GET /api/public/nfl/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/nfl/standings"),
+
+  /** GET /api/public/nfl/espn/week */
+  espnCurrentWeek: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/espn/week"),
+
+  /** GET /api/public/nfl/espn/week/:week */
+  espnByWeek: (week: number, seasonType = 2) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/nfl/espn/week/${week}${qs({ seasonType })}`),
+
+  /** GET /api/public/nfl/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/espn/upcoming"),
+
+  /** GET /api/public/nfl/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/espn/live"),
+
+  /** GET /api/public/nfl/espn/finished */
+  espnFinished: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/nfl/espn/finished"),
+
+  /** GET /api/public/nfl/espn/date/:date */
+  espnByDate: (date: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/nfl/espn/date/${date}`),
+};
+
+// =============================================================================
+// PUBLIC — BASEBALL MATCHES
+// =============================================================================
+
+export const publicBaseball = {
+  /** GET /api/public/baseball/matches */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/baseball/matches"),
+
+  /** GET /api/public/baseball/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/baseball/matches/upcoming"),
+
+  /** GET /api/public/baseball/matches/today */
+  today: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/baseball/matches/today"),
+
+  /** GET /api/public/baseball/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/baseball/matches/live"),
+
+  /** GET /api/public/baseball/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/baseball/matches/results${qs({ limit })}`),
+
+  /** GET /api/public/baseball/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/baseball/matches/${id}`),
+
+  /** GET /api/public/baseball/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/baseball/matches/${id}/odds`),
+
+  /** GET /api/public/baseball/matches/:id/odds/persisted */
+  oddsDb: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/public/baseball/matches/${id}/odds/persisted`),
+
+  /** GET /api/public/baseball/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/baseball/matches/${id}/score`),
+
+  /** GET /api/public/baseball/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/baseball/matches/${id}/detail`),
+
+  /** GET /api/public/baseball/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/baseball/standings"),
+
+  /** GET /api/public/baseball/teams/:team/upcoming */
+  teamUpcoming: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/baseball/teams/${team}/upcoming`),
+
+  /** GET /api/public/baseball/teams/:team/results */
+  teamResults: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/baseball/teams/${team}/results`),
+
+  /** GET /api/public/baseball/teams/:team/live */
+  teamLive: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/baseball/teams/${team}/live`),
+
+  /** GET /api/public/baseball/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/baseball/espn/upcoming"),
+
+  /** GET /api/public/baseball/espn/today */
+  espnToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/baseball/espn/today"),
+
+  /** GET /api/public/baseball/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/baseball/espn/live"),
+
+  /** GET /api/public/baseball/espn/game/:espnGameId */
+  espnGameDetail: (espnGameId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/baseball/espn/game/${espnGameId}`),
+};
+
+// =============================================================================
+// PUBLIC — MMA MATCHES
+// =============================================================================
+
+export const publicMma = {
+  /** GET /api/public/mma/matches */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/mma/matches"),
+
+  /** GET /api/public/mma/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/matches/upcoming"),
+
+  /** GET /api/public/mma/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/matches/live"),
+
+  /** GET /api/public/mma/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/mma/matches/results${qs({ limit })}`),
+
+  /** GET /api/public/mma/matches/featured */
+  featured: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/mma/matches/featured"),
+
+  /** GET /api/public/mma/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/mma/matches/${id}`),
+
+  /** GET /api/public/mma/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/mma/matches/${id}/odds`),
+
+  /** GET /api/public/mma/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/public/mma/matches/${id}/odds/all`),
+
+  /** GET /api/public/mma/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/mma/matches/${id}/score`),
+
+  /** GET /api/public/mma/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/mma/matches/${id}/detail`),
+
+  /** GET /api/public/mma/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/mma/matches/${id}/events`),
+
+  /** GET /api/public/mma/matches/:id/full */
+  fullDetail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/mma/matches/${id}/full`),
+
+  /** GET /api/public/mma/matches/:id/fight-card */
+  fightCard: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/mma/matches/${id}/fight-card`),
+
+  /** GET /api/public/mma/matches/with-odds */
+  withOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/mma/matches/with-odds"),
+
+  /** GET /api/public/mma/fighters/:athleteId */
+  fighter: (athleteId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/mma/fighters/${athleteId}`),
+
+  /** GET /api/public/mma/espn/events */
+  espnEvents: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/espn/events"),
+
+  /** GET /api/public/mma/espn/events/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/espn/events/upcoming"),
+
+  /** GET /api/public/mma/espn/events/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/espn/events/live"),
+
+  /** GET /api/public/mma/espn/events/finished */
+  espnFinished: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/mma/espn/events/finished"),
+};
+
+// =============================================================================
+// PUBLIC — TENNIS MATCHES
+// =============================================================================
+
+export const publicTennis = {
+  /** GET /api/public/tennis/matches */
+  getAll: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/tennis/matches"),
+
+  /** GET /api/public/tennis/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/matches/upcoming"),
+
+  /** GET /api/public/tennis/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/matches/live"),
+
+  /** GET /api/public/tennis/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/public/tennis/matches/results${qs({ limit })}`),
+
+  /** GET /api/public/tennis/matches/featured */
+  featured: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/tennis/matches/featured"),
+
+  /** GET /api/public/tennis/matches/with-odds */
+  withOdds: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/tennis/matches/with-odds"),
+
+  /** GET /api/public/tennis/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/tennis/matches/${id}`),
+
+  /** GET /api/public/tennis/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/tennis/matches/${id}/odds`),
+
+  /** GET /api/public/tennis/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/tennis/matches/${id}/score`),
+
+  /** GET /api/public/tennis/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/tennis/matches/${id}/events`),
+
+  /** GET /api/public/tennis/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/tennis/matches/${id}/detail`),
+
+  /** GET /api/public/tennis/atp/matches */
+  atpMatches: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/atp/matches"),
+
+  /** GET /api/public/tennis/atp/live */
+  atpLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/atp/live"),
+
+  /** GET /api/public/tennis/atp/upcoming */
+  atpUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/atp/upcoming"),
+
+  /** GET /api/public/tennis/atp/tournaments */
+  atpTournaments: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/atp/tournaments"),
+
+  /** GET /api/public/tennis/atp/rankings */
+  atpRankings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/tennis/atp/rankings"),
+
+  /** GET /api/public/tennis/wta/matches */
+  wtaMatches: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/wta/matches"),
+
+  /** GET /api/public/tennis/wta/live */
+  wtaLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/wta/live"),
+
+  /** GET /api/public/tennis/wta/upcoming */
+  wtaUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/wta/upcoming"),
+
+  /** GET /api/public/tennis/wta/tournaments */
+  wtaTournaments: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/public/tennis/wta/tournaments"),
+
+  /** GET /api/public/tennis/wta/rankings */
+  wtaRankings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/tennis/wta/rankings"),
+
+  /** GET /api/public/tennis/tours/:tour/upcoming */
+  tourUpcoming: (tour: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/tennis/tours/${tour}/upcoming`),
+
+  /** GET /api/public/tennis/tours/:tour/live */
+  tourLive: (tour: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/public/tennis/tours/${tour}/live`),
+};
+
+// =============================================================================
+// PUBLIC — ADMIN MATCHES
+// =============================================================================
+
+export const publicAdminMatches = {
+  /** GET /api/public/admin-matches */
+  getAll: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/admin-matches"),
+
+  /** GET /api/public/admin-matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/admin-matches/upcoming"),
+
+  /** GET /api/public/admin-matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/public/admin-matches/live"),
+
+  /** GET /api/public/admin-matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/public/admin-matches/${id}`),
+
+  /** GET /api/public/admin-matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/public/admin-matches/${id}/odds`),
+
+  /** GET /api/public/admin-matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/public/admin-matches/${id}/odds/all`),
+};
+
+// =============================================================================
+// PUBLIC — CONFIG & PREDICTIONS
+// =============================================================================
+
+export const publicConfig = {
+  /** GET /api/public/config */
+  get: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/public/config"),
+};
+
+export const publicPredictions = {
+  /** GET /api/predictions/public */
+  feed: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<AiPrediction>>>(
+      `/api/predictions/public${qs({ page, size })}`
+    ),
+
+  /** GET /api/tip/:id */
+  getTip: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/tip/${id}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — FOOTBALL MATCHES
+// =============================================================================
+
+export const matches = {
+  /** GET /api/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/matches/${id}`),
+
+  /** GET /api/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/matches/upcoming"),
+
+  /** GET /api/matches/today */
+  today: () =>
+    http.get<ApiResponse<Match[]>>("/api/matches/today"),
+
+  /** GET /api/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/matches/live"),
+
+  /** GET /api/matches/future */
+  future: () =>
+    http.get<ApiResponse<Match[]>>("/api/matches/future"),
+
+  /** GET /api/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/matches/results${qs({ limit })}`),
+
+  /** GET /api/matches/top6/upcoming */
+  top6Upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/top6/upcoming"),
+
+  /** GET /api/matches/top6/today */
+  top6Today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/top6/today"),
+
+  /** GET /api/matches/top6/live */
+  top6Live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/top6/live"),
+
+  /** GET /api/matches/cups/upcoming */
+  cupsUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/cups/upcoming"),
+
+  /** GET /api/matches/cups/today */
+  cupsToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/cups/today"),
+
+  /** GET /api/matches/cups/live */
+  cupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/cups/live"),
+
+  /** GET /api/matches/all-cups/upcoming */
+  allCupsUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/all-cups/upcoming"),
+
+  /** GET /api/matches/all-cups/today */
+  allCupsToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/all-cups/today"),
+
+  /** GET /api/matches/all-cups/live */
+  allCupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/matches/all-cups/live"),
+
+  /** GET /api/matches/:id/stats */
+  stats: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/stats`),
+
+  /** GET /api/matches/:id/prediction */
+  prediction: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/prediction`),
+
+  /** GET /api/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/matches/${id}/odds`),
+
+  /** GET /api/matches/:id/odds/live */
+  oddsLive: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/matches/${id}/odds/live`),
+
+  /** GET /api/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/odds/all`),
+
+  /** GET /api/matches/:id/odds/handicap */
+  oddsHandicap: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/matches/${id}/odds/handicap`),
+
+  /** GET /api/matches/:id/odds/half-time */
+  oddsHalfTime: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/matches/${id}/odds/half-time`),
+
+  /** GET /api/matches/:id/odds/correct-score */
+  oddsCorrectScore: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/matches/${id}/odds/correct-score`),
+
+  /** GET /api/matches/:id/lineups */
+  lineups: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/lineups`),
+
+  /** GET /api/matches/:id/h2h */
+  h2h: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/h2h`),
+
+  /** GET /api/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/events`),
+
+  /** GET /api/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/matches/${id}/detail`),
+};
+
+// =============================================================================
+// AUTHENTICATED — LIVESCORE
+// =============================================================================
+
+export const livescore = {
+  /** GET /api/livescore/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/live"),
+
+  /** GET /api/livescore/today */
+  today: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/today"),
+
+  /** GET /api/livescore/fixtures */
+  fixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/fixtures"),
+
+  /** GET /api/livescore/top6/live */
+  top6Live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/top6/live"),
+
+  /** GET /api/livescore/top6/fixtures */
+  top6Fixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/top6/fixtures"),
+
+  /** GET /api/livescore/top6/all-fixtures */
+  top6AllFixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/top6/all-fixtures"),
+
+  /** GET /api/livescore/leagues/top6/:league/live */
+  top6LeagueLive: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/livescore/leagues/top6/${league}/live`),
+
+  /** GET /api/livescore/leagues/top6/:league/fixtures */
+  top6LeagueFixtures: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/livescore/leagues/top6/${league}/fixtures`),
+
+  /** GET /api/livescore/cups/live */
+  cupsLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/cups/live"),
+
+  /** GET /api/livescore/cups/fixtures */
+  cupsFixtures: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/livescore/cups/fixtures"),
+
+  /** GET /api/livescore/cups/:cup/live */
+  cupLive: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/livescore/cups/${cup}/live`),
+
+  /** GET /api/livescore/cups/:cup/fixtures */
+  cupFixtures: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/livescore/cups/${cup}/fixtures`),
+};
+
+// =============================================================================
+// AUTHENTICATED — STANDINGS
+// =============================================================================
+
+export const standings = {
+  /** GET /api/standings/:competitionId */
+  byCompetition: (competitionId: number) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/standings/${competitionId}`),
+
+  /** GET /api/standings/top6 */
+  top6: () =>
+    http.get<ApiResponse<Record<string, Record<string, unknown>>>>("/api/standings/top6"),
+
+  /** GET /api/standings/leagues/:league */
+  byLeague: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/standings/leagues/${league}`),
+
+  /** GET /api/standings/leagues/top6/:league */
+  top6ByLeague: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/standings/leagues/top6/${league}`),
+
+  /** GET /api/standings/cups/:cup */
+  byCup: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/standings/cups/${cup}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — SCORERS
+// =============================================================================
+
+export const scorers = {
+  /** GET /api/scorers/:competitionId */
+  byCompetition: (competitionId: number) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/scorers/${competitionId}`),
+
+  /** GET /api/scorers/leagues/:league */
+  byLeague: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/scorers/leagues/${league}`),
+
+  /** GET /api/scorers/leagues/top6/:league */
+  top6ByLeague: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/scorers/leagues/top6/${league}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — TEAMS (football)
+// =============================================================================
+
+export const teams = {
+  /** GET /api/teams/name/:team/upcoming */
+  upcoming: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/teams/name/${team}/upcoming`),
+
+  /** GET /api/teams/name/:team/results */
+  results: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/teams/name/${team}/results`),
+
+  /** GET /api/teams/name/:team/live */
+  live: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/teams/name/${team}/live`),
+
+  /** GET /api/teams/id/:teamId/matches */
+  matchesById: (teamId: number) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/teams/id/${teamId}/matches`),
+
+  /** GET /api/teams/id/:teamId/live */
+  liveById: (teamId: number) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/teams/id/${teamId}/live`),
+
+  /** GET /api/teams/id/:teamId/fixtures */
+  fixturesById: (teamId: number) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/teams/id/${teamId}/fixtures`),
+};
+
+// =============================================================================
+// AUTHENTICATED — LEAGUES (football)
+// =============================================================================
+
+export const leagues = {
+  /** GET /api/leagues/:league/upcoming */
+  upcoming: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/${league}/upcoming`),
+
+  /** GET /api/leagues/:league/today */
+  today: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/${league}/today`),
+
+  /** GET /api/leagues/:league/live */
+  live: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/${league}/live`),
+
+  /** GET /api/leagues/top6/:league/upcoming */
+  top6Upcoming: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/top6/${league}/upcoming`),
+
+  /** GET /api/leagues/top6/:league/today */
+  top6Today: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/top6/${league}/today`),
+
+  /** GET /api/leagues/top6/:league/live */
+  top6Live: (league: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/leagues/top6/${league}/live`),
+};
+
+// =============================================================================
+// AUTHENTICATED — CUPS (football)
+// =============================================================================
+
+export const cups = {
+  /** GET /api/cups/:cup/upcoming */
+  upcoming: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/cups/${cup}/upcoming`),
+
+  /** GET /api/cups/:cup/today */
+  today: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/cups/${cup}/today`),
+
+  /** GET /api/cups/:cup/live */
+  live: (cup: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/cups/${cup}/live`),
+};
+
+// =============================================================================
+// AUTHENTICATED — NBA / BASKETBALL (auth)
+// =============================================================================
+
+export const nba = {
+  /** GET /api/nba/matches/upcoming  (also /api/basketball/matches/upcoming) */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/nba/matches/upcoming"),
+
+  /** GET /api/nba/matches/today */
+  today: () =>
+    http.get<ApiResponse<Match[]>>("/api/nba/matches/today"),
+
+  /** GET /api/nba/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/nba/matches/live"),
+
+  /** GET /api/nba/matches/future */
+  future: () =>
+    http.get<ApiResponse<Match[]>>("/api/nba/matches/future"),
+
+  /** GET /api/nba/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/nba/matches/results${qs({ limit })}`),
+
+  /** GET /api/nba/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/nba/matches/${id}`),
+
+  /** GET /api/nba/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/nba/matches/${id}/odds`),
+
+  /** GET /api/nba/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/odds/all`),
+
+  /** GET /api/nba/matches/:id/odds/moneyline */
+  oddsMoneyline: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/matches/${id}/odds/moneyline`),
+
+  /** GET /api/nba/matches/:id/odds/spread */
+  oddsSpread: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/matches/${id}/odds/spread`),
+
+  /** GET /api/nba/matches/:id/odds/total */
+  oddsTotal: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/matches/${id}/odds/total`),
+
+  /** GET /api/nba/matches/:id/odds/quarters */
+  oddsQuarters: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/matches/${id}/odds/quarters`),
+
+  /** GET /api/nba/matches/:id/odds/margin */
+  oddsMargin: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/matches/${id}/odds/margin`),
+
+  /** GET /api/nba/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/score`),
+
+  /** GET /api/nba/matches/:id/stats */
+  stats: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/stats`),
+
+  /** GET /api/nba/matches/:id/lineups */
+  lineups: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/lineups`),
+
+  /** GET /api/nba/matches/:id/h2h */
+  h2h: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/h2h`),
+
+  /** GET /api/nba/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/events`),
+
+  /** GET /api/nba/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/detail`),
+
+  /** GET /api/nba/matches/:id/detail/full */
+  detailFull: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/matches/${id}/detail/full`),
+
+  /** GET /api/nba/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/nba/standings"),
+
+  /** GET /api/nba/teams */
+  teams: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/nba/teams"),
+
+  /** GET /api/nba/teams/:team/upcoming */
+  teamUpcoming: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/teams/${team}/upcoming`),
+
+  /** GET /api/nba/teams/:team/results */
+  teamResults: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/nba/teams/${team}/results`),
+
+  /** GET /api/nba/teams/:team/live */
+  teamLive: (team: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nba/teams/${team}/live`),
+
+  /** GET /api/nba/teams/:teamId/schedule */
+  teamSchedule: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/teams/${teamId}/schedule`),
+
+  /** GET /api/nba/teams/:teamId/roster */
+  teamRoster: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/teams/${teamId}/roster`),
+
+  /** GET /api/nba/teams/:teamId/info */
+  teamInfo: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/teams/${teamId}/info`),
+
+  /** GET /api/nba/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nba/espn/upcoming"),
+
+  /** GET /api/nba/espn/today */
+  espnToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nba/espn/today"),
+
+  /** GET /api/nba/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nba/espn/live"),
+
+  /** GET /api/nba/espn/game/:espnGameId */
+  espnGameDetail: (espnGameId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nba/espn/game/${espnGameId}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — NFL (auth)
+// =============================================================================
+
+export const nfl = {
+  /** GET /api/nfl/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/nfl/matches/upcoming"),
+
+  /** GET /api/nfl/matches/today */
+  today: () =>
+    http.get<ApiResponse<Match[]>>("/api/nfl/matches/today"),
+
+  /** GET /api/nfl/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/nfl/matches/live"),
+
+  /** GET /api/nfl/matches/results */
+  results: () =>
+    http.get<ApiResponse<Match[]>>("/api/nfl/matches/results"),
+
+  /** GET /api/nfl/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/nfl/matches/${id}`),
+
+  /** GET /api/nfl/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nfl/matches/${id}/odds`),
+
+  /** GET /api/nfl/matches/:id/odds/db */
+  oddsDb: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/nfl/matches/${id}/odds/db`),
+
+  /** GET /api/nfl/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/matches/${id}/odds/all`),
+
+  /** GET /api/nfl/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/matches/${id}/score`),
+
+  /** GET /api/nfl/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/matches/${id}/detail`),
+
+  /** GET /api/nfl/matches/espn/:espnGameId/full */
+  espnFullGame: (espnGameId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/matches/espn/${espnGameId}/full`),
+
+  /** GET /api/nfl/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/nfl/standings"),
+
+  /** GET /api/nfl/teams */
+  teams: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/nfl/teams"),
+
+  /** GET /api/nfl/teams/:teamId */
+  teamInfo: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/teams/${teamId}`),
+
+  /** GET /api/nfl/teams/:teamId/schedule */
+  teamSchedule: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/teams/${teamId}/schedule`),
+
+  /** GET /api/nfl/teams/:teamId/roster */
+  teamRoster: (teamId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/nfl/teams/${teamId}/roster`),
+
+  /** GET /api/nfl/espn/week */
+  espnCurrentWeek: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nfl/espn/week"),
+
+  /** GET /api/nfl/espn/week/:week */
+  espnByWeek: (week: number, seasonType = 2) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nfl/espn/week/${week}${qs({ seasonType })}`),
+
+  /** GET /api/nfl/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nfl/espn/upcoming"),
+
+  /** GET /api/nfl/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nfl/espn/live"),
+
+  /** GET /api/nfl/espn/finished */
+  espnFinished: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/nfl/espn/finished"),
+
+  /** GET /api/nfl/espn/date/:date */
+  espnByDate: (date: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/nfl/espn/date/${date}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — BASEBALL (auth)
+// =============================================================================
+
+export const baseball = {
+  /** GET /api/baseball/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/baseball/matches/upcoming"),
+
+  /** GET /api/baseball/matches/today */
+  today: () =>
+    http.get<ApiResponse<Match[]>>("/api/baseball/matches/today"),
+
+  /** GET /api/baseball/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/baseball/matches/live"),
+
+  /** GET /api/baseball/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/baseball/matches/results${qs({ limit })}`),
+
+  /** GET /api/baseball/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/baseball/matches/${id}`),
+
+  /** GET /api/baseball/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/baseball/matches/${id}/odds`),
+
+  /** GET /api/baseball/matches/:id/odds/persisted */
+  oddsDb: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/baseball/matches/${id}/odds/persisted`),
+
+  /** GET /api/baseball/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/baseball/matches/${id}/score`),
+
+  /** GET /api/baseball/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/baseball/matches/${id}/detail`),
+
+  /** GET /api/baseball/standings */
+  standings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/baseball/standings"),
+
+  /** GET /api/baseball/teams/:team/upcoming */
+  teamUpcoming: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/baseball/teams/${team}/upcoming`),
+
+  /** GET /api/baseball/teams/:team/results */
+  teamResults: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/baseball/teams/${team}/results`),
+
+  /** GET /api/baseball/teams/:team/live */
+  teamLive: (team: string) =>
+    http.get<ApiResponse<Match[]>>(`/api/baseball/teams/${team}/live`),
+
+  /** GET /api/baseball/espn/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/baseball/espn/upcoming"),
+
+  /** GET /api/baseball/espn/today */
+  espnToday: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/baseball/espn/today"),
+
+  /** GET /api/baseball/espn/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/baseball/espn/live"),
+
+  /** GET /api/baseball/espn/game/:espnGameId */
+  espnGameDetail: (espnGameId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/baseball/espn/game/${espnGameId}`),
+};
+
+// =============================================================================
+// AUTHENTICATED — MMA (auth)
+// =============================================================================
+
+export const mma = {
+  /** GET /api/mma/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Match[]>>("/api/mma/matches/upcoming"),
+
+  /** GET /api/mma/matches/live */
+  live: () =>
+    http.get<ApiResponse<Match[]>>("/api/mma/matches/live"),
+
+  /** GET /api/mma/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/mma/matches/results${qs({ limit })}`),
+
+  /** GET /api/mma/matches/featured */
+  featured: () =>
+    http.get<ApiResponse<Match[]>>("/api/mma/matches/featured"),
+
+  /** GET /api/mma/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/mma/matches/${id}`),
+
+  /** GET /api/mma/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/mma/matches/${id}/odds`),
+
+  /** GET /api/mma/matches/:id/odds/all */
+  oddsAll: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/mma/matches/${id}/odds/all`),
+
+  /** GET /api/mma/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/mma/matches/${id}/score`),
+
+  /** GET /api/mma/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/mma/matches/${id}/detail`),
+
+  /** GET /api/mma/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/mma/matches/${id}/events`),
+
+  /** GET /api/mma/matches/:id/full */
+  fullDetail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/mma/matches/${id}/full`),
+
+  /** GET /api/mma/matches/:id/fight-card */
+  fightCard: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/mma/matches/${id}/fight-card`),
+
+  /** GET /api/mma/fighters/:athleteId */
+  fighter: (athleteId: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/mma/fighters/${athleteId}`),
+
+  /** GET /api/mma/espn/events */
+  espnEvents: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/mma/espn/events"),
+
+  /** GET /api/mma/espn/events/upcoming */
+  espnUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/mma/espn/events/upcoming"),
+
+  /** GET /api/mma/espn/events/live */
+  espnLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/mma/espn/events/live"),
+
+  /** GET /api/mma/espn/events/finished */
+  espnFinished: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/mma/espn/events/finished"),
+};
+
+// =============================================================================
+// AUTHENTICATED — TENNIS (auth)
+// =============================================================================
+
+export const tennis = {
+  /** GET /api/tennis/matches/upcoming */
+  upcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/matches/upcoming"),
+
+  /** GET /api/tennis/matches/live */
+  live: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/matches/live"),
+
+  /** GET /api/tennis/matches/results */
+  results: (limit = 20) =>
+    http.get<ApiResponse<Match[]>>(`/api/tennis/matches/results${qs({ limit })}`),
+
+  /** GET /api/tennis/matches/featured */
+  featured: () =>
+    http.get<ApiResponse<Match[]>>("/api/tennis/matches/featured"),
+
+  /** GET /api/tennis/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/tennis/matches/${id}`),
+
+  /** GET /api/tennis/matches/:id/odds */
+  odds: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/tennis/matches/${id}/odds`),
+
+  /** GET /api/tennis/matches/:id/odds/db */
+  oddsDb: (id: string) =>
+    http.get<ApiResponse<Odds[]>>(`/api/tennis/matches/${id}/odds/db`),
+
+  /** GET /api/tennis/matches/:id/score */
+  score: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/tennis/matches/${id}/score`),
+
+  /** GET /api/tennis/matches/:id/events */
+  events: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/tennis/matches/${id}/events`),
+
+  /** GET /api/tennis/matches/:id/detail */
+  detail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/tennis/matches/${id}/detail`),
+
+  /** GET /api/tennis/matches/:id/full-detail */
+  fullDetail: (id: string) =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/tennis/matches/${id}/full-detail`),
+
+  /** GET /api/tennis/atp/matches */
+  atpMatches: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/atp/matches"),
+
+  /** GET /api/tennis/atp/live */
+  atpLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/atp/live"),
+
+  /** GET /api/tennis/atp/upcoming */
+  atpUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/atp/upcoming"),
+
+  /** GET /api/tennis/atp/tournaments */
+  atpTournaments: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/atp/tournaments"),
+
+  /** GET /api/tennis/atp/rankings */
+  atpRankings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/tennis/atp/rankings"),
+
+  /** GET /api/tennis/wta/matches */
+  wtaMatches: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/wta/matches"),
+
+  /** GET /api/tennis/wta/live */
+  wtaLive: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/wta/live"),
+
+  /** GET /api/tennis/wta/upcoming */
+  wtaUpcoming: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/wta/upcoming"),
+
+  /** GET /api/tennis/wta/tournaments */
+  wtaTournaments: () =>
+    http.get<ApiResponse<Record<string, unknown>[]>>("/api/tennis/wta/tournaments"),
+
+  /** GET /api/tennis/wta/rankings */
+  wtaRankings: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/tennis/wta/rankings"),
+
+  /** GET /api/tennis/tours/:tour/upcoming */
+  tourUpcoming: (tour: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/tennis/tours/${tour}/upcoming`),
+
+  /** GET /api/tennis/tours/:tour/live */
+  tourLive: (tour: string) =>
+    http.get<ApiResponse<Record<string, unknown>[]>>(`/api/tennis/tours/${tour}/live`),
+};
+
+// =============================================================================
+// AFFILIATE (user)
+// =============================================================================
+
+export const affiliate = {
+  /** GET /api/affiliate/stats */
+  getStats: () =>
+    http.get<ApiResponse<AffiliateStatsDTO>>("/api/affiliate/stats"),
+
+  /** GET /api/affiliate/balance */
+  getBalance: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/affiliate/balance"),
+
+  /** GET /api/affiliate/referred-users */
+  getReferredUsers: () =>
+    http.get<ApiResponse<ReferredUserDTO[]>>("/api/affiliate/referred-users"),
+
+  /** GET /api/affiliate/links */
+  getLinks: () =>
+    http.get<ApiResponse<ReferralLink[]>>("/api/affiliate/links"),
+
+  /** POST /api/affiliate/links */
+  createLink: (body: CreateLinkRequest) =>
+    http.post<ApiResponse<ReferralLink>>("/api/affiliate/links", body),
+
+  /** GET /api/affiliate/withdrawals */
+  getWithdrawals: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<AffiliateWithdrawalRequest>>>(
+      `/api/affiliate/withdrawals${qs({ page, size })}`
+    ),
+
+  /** POST /api/affiliate/withdraw */
+  requestWithdrawal: (body: WithdrawalRequestDTO) =>
+    http.post<ApiResponse<AffiliateWithdrawalRequest>>("/api/affiliate/withdraw", body),
+};
+
+// =============================================================================
+// ADMIN — MATCHES
+// =============================================================================
+
+export const adminMatches = {
+  /** GET /api/admin/matches */
+  list: () =>
+    http.get<ApiResponse<Match[]>>("/api/admin/matches"),
+
+  /** POST /api/admin/matches */
+  create: (body: AdminMatchRequest) =>
+    http.post<ApiResponse<Match>>("/api/admin/matches", body),
+
+  /** GET /api/admin/matches/:id */
+  getById: (id: string) =>
+    http.get<ApiResponse<Match>>(`/api/admin/matches/${id}`),
+
+  /** PATCH /api/admin/matches/:id/status */
+  updateStatus: (id: string, body: AdminStatusUpdateRequest) =>
+    http.patch<ApiResponse<Match>>(`/api/admin/matches/${id}/status`, body),
+
+  /** PATCH /api/admin/matches/:id/score */
+  updateScore: (id: string, body: AdminScoreUpdateRequest) =>
+    http.patch<ApiResponse<Match>>(`/api/admin/matches/${id}/score`, body),
+};
+
+// =============================================================================
+// ADMIN — PREDICTIONS
+// =============================================================================
+
+export const adminPredictions = {
+  /** GET /api/admin/predictions */
+  list: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<AiPrediction>>>(
+      `/api/admin/predictions${qs({ page, size })}`
+    ),
+
+  /** POST /api/admin/predictions/run */
+  run: (body: Record<string, string>) =>
+    http.post<ApiResponse<AiPrediction>>("/api/admin/predictions/run", body),
+
+  /** POST /api/admin/predictions/:id/share */
+  share: (id: string) =>
+    http.post<ApiResponse<AiPrediction>>(`/api/admin/predictions/${id}/share`),
+
+  /** POST /api/admin/predictions/:id/unpublish */
+  unpublish: (id: string) =>
+    http.post<ApiResponse<AiPrediction>>(`/api/admin/predictions/${id}/unpublish`),
+};
+
+// =============================================================================
+// ADMIN — CRASH GAME SCHEDULE
+// =============================================================================
+
+export const adminCrash = {
+  /** GET /api/admin/crash/schedule/:game */
+  schedule: (game: string, limit = 10) =>
+    http.get<ApiResponse<GameCrashSchedule[]>>(
+      `/api/admin/crash/schedule/${game}${qs({ limit })}`
+    ),
+
+  /** POST /api/admin/crash/schedule/:game/generate */
+  generate: (game: string) =>
+    http.post<ApiResponse<void>>(`/api/admin/crash/schedule/${game}/generate`),
+
+  /** PATCH /api/admin/crash/schedule/:id/override */
+  override: (id: string, body: Record<string, unknown>) =>
+    http.patch<ApiResponse<GameCrashSchedule>>(`/api/admin/crash/schedule/${id}/override`, body),
+
+  /** GET /api/admin/crash/history/:game */
+  history: (game: string, page = 0, size = 50) =>
+    http.get<ApiResponse<PageResponse<GameCrashSchedule>>>(
+      `/api/admin/crash/history/${game}${qs({ page, size })}`
+    ),
+};
+
+// =============================================================================
+// ADMIN — AFFILIATE
+// =============================================================================
+export const adminAffiliate = {
+  /** GET /api/admin/affiliate/stats */
+  getStats: () =>
+    http.get<ApiResponse<AdminAffiliateStatsDTO>>("/api/admin/affiliate/stats"),
+  /** GET /api/admin/affiliate/referred-users */
+  getReferredUsers: () =>
+    http.get<ApiResponse<ReferredUserDTO[]>>("/api/admin/affiliate/referred-users"),
+  /** GET /api/admin/affiliate/links */
+  getLinks: () =>
+    http.get<ApiResponse<ReferralLink[]>>("/api/admin/affiliate/links"),
+  /** POST /api/admin/affiliate/links */
+  createLink: (body: CreateLinkRequest) =>
+    http.post<ApiResponse<ReferralLink>>("/api/admin/affiliate/links", body),
+  /** GET /api/admin/affiliate/payout-window */
+  getPayoutWindow: () =>
+    http.get<ApiResponse<Record<string, boolean>>>("/api/admin/affiliate/payout-window"),
+  /** POST /api/admin/affiliate/payout-request */
+  requestPayout: () =>
+    http.post<ApiResponse<PayoutRequest>>("/api/admin/affiliate/payout-request"),
+  /** GET /api/admin/affiliate/payout-requests */
+  getPayoutHistory: (page = 0, size = 20) =>
+    http.get<ApiResponse<PageResponse<PayoutRequest>>>(
+      `/api/admin/affiliate/payout-requests${qs({ page, size })}`
+    ),
+};
+// =============================================================================
+// ADMIN — REFERRAL LINKS
+// =============================================================================
+
+export const adminReferralLinks = {
+  /** GET /api/admin/referral-links */
+  list: () =>
+    http.get<ApiResponse<ReferralLink[]>>("/api/admin/referral-links"),
+
+  /** POST /api/admin/referral-links */
+  create: (body: Record<string, unknown>) =>
+    http.post<ApiResponse<ReferralLink>>("/api/admin/referral-links", body),
+
+  /** GET /api/admin/referred-users */
+  getReferredUsers: () =>
+    http.get<ApiResponse<ReferredUserDTO[]>>("/api/admin/referred-users"),
+};
+
+// =============================================================================
+// ADMIN — ANALYTICS & AUDIT
+// =============================================================================
+
+export const adminAnalytics = {
+  /** GET /api/admin/analytics */
+  get: (range = "7d") =>
+    http.get<ApiResponse<Record<string, unknown>>>(`/api/admin/analytics${qs({ range })}`),
+
+  /** GET /api/admin/audit-log */
+  auditLog: (page = 0, size = 50) =>
+    http.get<ApiResponse<PageResponse<AuditLog>>>(
+      `/api/admin/audit-log${qs({ page, size })}`
+    ),
+};
+
+// =============================================================================
+// ADMIN UPGRADE CHATS (user-facing)
+// =============================================================================
+
+export const upgradeChats = {
+  /** GET /api/upgrade-chats/:chatId/messages */
+  getMessages: (chatId: string) =>
+    http.get<ApiResponse<AdminUpgradeChatMessageDto[]>>(`/api/upgrade-chats/${chatId}/messages`),
+
+  /** POST /api/upgrade-chats/:chatId/messages */
+  sendMessage: (chatId: string, body: SendMessageRequest) =>
+    http.post<ApiResponse<AdminUpgradeChatMessageDto>>(`/api/upgrade-chats/${chatId}/messages`, body),
+};
+
+// =============================================================================
+// ADMIN UPGRADE — PAYSTACK INIT
+// =============================================================================
+
+export const adminUpgrade = {
+  /** POST /api/user/upgrade-to-admin/paystack/init */
+  initPaystack: () =>
+    http.post<ApiResponse<Record<string, unknown>>>("/api/user/upgrade-to-admin/paystack/init"),
+};
+
+// =============================================================================
+// SUPER ADMIN — UPGRADE CHATS
+// =============================================================================
+
+export const superAdminUpgradeChats = {
+  /** GET /api/super-admin/upgrade-chats */
+  getAll: () =>
+    http.get<ApiResponse<AdminUpgradeChatDto[]>>("/api/super-admin/upgrade-chats"),
+
+  /** GET /api/super-admin/upgrade-chats/pending */
+  getPending: () =>
+    http.get<ApiResponse<AdminUpgradeChatDto[]>>("/api/super-admin/upgrade-chats/pending"),
+
+  /** GET /api/super-admin/upgrade-chats/:chatId/messages */
+  getMessages: (chatId: string) =>
+    http.get<ApiResponse<AdminUpgradeChatMessageDto[]>>(`/api/super-admin/upgrade-chats/${chatId}/messages`),
+
+  /** POST /api/super-admin/upgrade-chats/:chatId/messages */
+  sendMessage: (chatId: string, body: SendMessageRequest) =>
+    http.post<ApiResponse<AdminUpgradeChatMessageDto>>(`/api/super-admin/upgrade-chats/${chatId}/messages`, body),
+
+  /** POST /api/super-admin/upgrade-chats/:chatId/set-commission */
+  setCommission: (chatId: string, body: SetCommissionRequest) =>
+    http.post<ApiResponse<AdminUpgradeChatDto>>(`/api/super-admin/upgrade-chats/${chatId}/set-commission`, body),
+};
+
+// =============================================================================
+// SUPER ADMIN — PAYOUT REQUESTS
+// =============================================================================
+
+export const superAdminPayouts = {
+  /** GET /api/super-admin/payout-requests */
+  getPending: () =>
+    http.get<ApiResponse<PayoutRequest[]>>("/api/super-admin/payout-requests"),
+
+  /** POST /api/super-admin/payout-requests/:id/approve */
+  approve: (id: string) =>
+    http.post<ApiResponse<PayoutRequest>>(`/api/super-admin/payout-requests/${id}/approve`),
+
+  /** POST /api/super-admin/payout-requests/:id/reject */
+  reject: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<PayoutRequest>>(`/api/super-admin/payout-requests/${id}/reject`, body),
+
+  /** POST /api/super-admin/payout-requests/:id/mark-paid */
+  markPaid: (id: string) =>
+    http.post<ApiResponse<PayoutRequest>>(`/api/super-admin/payout-requests/${id}/mark-paid`),
+};
+
+// =============================================================================
+// SUPER ADMIN — AFFILIATE WITHDRAWALS
+// =============================================================================
+
+export const superAdminAffiliateWithdrawals = {
+  /** GET /api/super-admin/affiliate-withdrawals/pending */
+  getPending: () =>
+    http.get<ApiResponse<AffiliateWithdrawalRequest[]>>("/api/super-admin/affiliate-withdrawals/pending"),
+
+  /** GET /api/super-admin/affiliate-withdrawals (paginated with optional status filter) */
+  list: (page = 0, size = 20, status?: AffiliateWithdrawalStatus) =>
+    http.get<ApiResponse<PageResponse<AffiliateWithdrawalRequest>>>(
+      `/api/super-admin/affiliate-withdrawals${qs({ page, size, status })}`
+    ),
+
+  /** POST /api/super-admin/affiliate-withdrawals/:id/process */
+  process: (id: string) =>
+    http.post<ApiResponse<AffiliateWithdrawalRequest>>(`/api/super-admin/affiliate-withdrawals/${id}/process`),
+
+  /** POST /api/super-admin/affiliate-withdrawals/:id/reject */
+  reject: (id: string, body: Record<string, string>) =>
+    http.post<ApiResponse<AffiliateWithdrawalRequest>>(`/api/super-admin/affiliate-withdrawals/${id}/reject`, body),
+};
+
+// =============================================================================
+// SUPER ADMIN — ADMINS, USERS, METRICS, TRANSACTIONS, AUDIT
+// =============================================================================
+
+export const superAdmin = {
+  /** GET /api/super-admin/admins */
+  listAdmins: () =>
+    http.get<ApiResponse<User[]>>("/api/super-admin/admins"),
+
+  /** POST /api/super-admin/admins */
+  createAdmin: (body: Record<string, string>) =>
+    http.post<ApiResponse<User>>("/api/super-admin/admins", body),
+
+  /** GET /api/super-admin/admins/:adminId */
+  getAdminDetail: (adminId: string) =>
+    http.get<ApiResponse<AdminDetailDto>>(`/api/super-admin/admins/${adminId}`),
+
+  /** GET /api/super-admin/users */
+  listUsers: (page = 0, size = 20, search?: string, role?: UserRole) =>
+    http.get<ApiResponse<PageResponse<UserSummaryDto>>>(
+      `/api/super-admin/users${qs({ page, size, search, role })}`
+    ),
+
+  /** GET /api/super-admin/users/:userId */
+  getUserDetail: (userId: string) =>
+    http.get<ApiResponse<UserDetailDto>>(`/api/super-admin/users/${userId}`),
+
+  /** GET /api/super-admin/metrics */
+  metrics: () =>
+    http.get<ApiResponse<Record<string, unknown>>>("/api/super-admin/metrics"),
+
+  /** GET /api/super-admin/metrics/deposits */
+  depositMetrics: () =>
+    http.get<ApiResponse<RevenueOverviewDto>>("/api/super-admin/metrics/deposits"),
+
+  /** GET /api/super-admin/transactions */
+  listTransactions: (
+    page = 0,
+    size = 50,
+    kind?: TransactionKind,
+    status?: string,
+    walletId?: string,
+    from?: string,
+    to?: string
+  ) =>
+    http.get<ApiResponse<PageResponse<TransactionDto>>>(
+      `/api/super-admin/transactions${qs({ page, size, kind, status, walletId, from, to })}`
+    ),
+
+  /** GET /api/super-admin/audit-log */
+  auditLog: (page = 0, size = 50) =>
+    http.get<ApiResponse<PageResponse<AuditLog>>>(
+      `/api/super-admin/audit-log${qs({ page, size })}`
+    ),
+
+  /** GET /api/super-admin/predictions */
+  predictions: (page = 0, size = 50) =>
+    http.get<ApiResponse<PageResponse<AiPrediction>>>(
+      `/api/super-admin/predictions${qs({ page, size })}`
+    ),
+};
+
+// =============================================================================
+// Default export — all namespaces bundled
+// =============================================================================
+
+const api = {
+  auth,
+  user,
+  wallet,
+  withdrawals,
+  deposits,
+  webhooks,
+  bets,
+  games,
+  booking,
+  adminBooking,
+  geo,
+  // Public sports
+  publicFootball,
+  publicFootballLeagues,
+  publicFootballCups,
+  publicFootballTeams,
+  publicFootballStandings,
+  publicFootballScorers,
+  publicFootballLivescore,
+  publicBasketball,
+  publicNfl,
+  publicBaseball,
+  publicMma,
+  publicTennis,
+  publicAdminMatches,
+  publicConfig,
+  publicPredictions,
+  // Authenticated sports
+  matches,
+  livescore,
+  standings,
+  scorers,
+  teams,
+  leagues,
+  cups,
+  nba,
+  nfl,
+  baseball,
+  mma,
+  tennis,
+  // Admin
+  affiliate,
+  adminMatches,
+  adminPredictions,
+  adminCrash,
+  adminAffiliate,
+  adminReferralLinks,
+  adminAnalytics,
+  upgradeChats,
+  adminUpgrade,
+  superAdminUpgradeChats,
+  superAdminPayouts,
+  superAdminAffiliateWithdrawals,
+  superAdmin,
+};
+
+export default api;
