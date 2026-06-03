@@ -49,7 +49,6 @@ import ContentCopyIcon         from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon           from '@mui/icons-material/OpenInNew';
 import DeleteIcon              from '@mui/icons-material/Delete';
 import DeleteSweepIcon         from '@mui/icons-material/DeleteSweep';
-import InfoOutlinedIcon        from '@mui/icons-material/InfoOutlined';
 
 // ─── PRIVILEGED EMAIL GATE ────────────────────────────────────────────────────
 const PRIVILEGED_EMAILS = [
@@ -57,32 +56,20 @@ const PRIVILEGED_EMAILS = [
   'mr.asare2121@gmail.com',
 ];
 
-// ─── DEFAULT COMMISSION RATE ──────────────────────────────────────────────────
-const DEFAULT_COMMISSION_RATE = 70; // 70%
+// ─── COMMISSION RATE ──────────────────────────────────────────────────────────
+// This is the ONE source of truth for commission rate across the entire panel.
+// The backend value is intentionally ignored — we always display and calculate
+// using this constant regardless of what the API returns.
+const COMMISSION_RATE = 70; // 70% — always, no exceptions
 
 /**
- * Calculate the "expected" commission from total user deposits when the
- * backend-stored rate differs from DEFAULT_COMMISSION_RATE.
+ * Always calculates commission at COMMISSION_RATE (70%) from total user deposits.
+ * The backend-stored rate is ignored entirely — we recalculate from lifetimeStake.
  *
- * Formula:
- *   expectedCommission = lifetimeStake * (commissionRate / 100)
- *
- * If the backend rate matches DEFAULT_COMMISSION_RATE exactly we just use
- * the backend value.  Otherwise we recalculate and surface both numbers so
- * the admin can see at a glance what the commission *should* be.
+ * Formula: commission = lifetimeStake * (COMMISSION_RATE / 100)
  */
-function calcExpectedCommission(
-  lifetimeStake: number,
-  backendCommissionRate: number | null | undefined,
-): {
-  rate: number;
-  expected: number;
-  isRecalculated: boolean;
-} {
-  const rate = backendCommissionRate ?? DEFAULT_COMMISSION_RATE;
-  const expected = lifetimeStake * (rate / 100);
-  const isRecalculated = rate !== DEFAULT_COMMISSION_RATE;
-  return { rate, expected, isRecalculated };
+function calcCommission(lifetimeStake: number): number {
+  return lifetimeStake * (COMMISSION_RATE / 100);
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -1068,7 +1055,7 @@ function UpgradeChatPanel({ chat, isSuperAdmin, onClose, onCommissionSet }: { ch
   const [loading, setLoading] = useState(true);
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [commissionInput, setCommissionInput] = useState(String(DEFAULT_COMMISSION_RATE));
+  const [commissionInput, setCommissionInput] = useState(String(COMMISSION_RATE));
   const [settingCommission, setSettingCommission] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -1090,10 +1077,9 @@ function UpgradeChatPanel({ chat, isSuperAdmin, onClose, onCommissionSet }: { ch
   };
 
   const handleSetCommission = async () => {
-    const rate = parseFloat(commissionInput);
-    if (isNaN(rate) || rate < 0.1 || rate > 100) { showToast('Rate must be between 0.1 and 100.', 'error'); return; }
+    // Always send COMMISSION_RATE (70%) regardless of input — hard-coded
     setSettingCommission(true);
-    try { const raw = await superAdminUpgradeChats.setCommission(chat.id, { commissionRate: rate }); const res = normalise(raw); if (res.success) { showToast('Commission set!', 'success'); setCommissionInput(String(DEFAULT_COMMISSION_RATE)); onCommissionSet(); fetchMessages(); } }
+    try { const raw = await superAdminUpgradeChats.setCommission(chat.id, { commissionRate: COMMISSION_RATE }); const res = normalise(raw); if (res.success) { showToast(`Commission set to ${COMMISSION_RATE}%!`, 'success'); setCommissionInput(String(COMMISSION_RATE)); onCommissionSet(); fetchMessages(); } }
     catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed.', 'error'); }
     finally { setSettingCommission(false); }
   };
@@ -1103,7 +1089,8 @@ function UpgradeChatPanel({ chat, isSuperAdmin, onClose, onCommissionSet }: { ch
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 bg-slate-800 shrink-0">
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><CloseIcon fontSize="small" /></button>
         <div className="flex-1 min-w-0"><p className="text-sm font-bold text-white truncate">{chat.userFirstName ?? 'User'} · {chat.userEmail ?? ''}</p><StatusBadge status={chat.status} /></div>
-        {chat.commissionRate != null && <span className="text-xs text-emerald-400 font-bold shrink-0">{chat.commissionRate}% commission</span>}
+        {/* Always display commission as COMMISSION_RATE% regardless of backend value */}
+        <span className="text-xs text-emerald-400 font-bold shrink-0">{COMMISSION_RATE}% commission</span>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-900">
         {loading ? <div className="flex justify-center py-8"><Spinner /></div>
@@ -1117,10 +1104,15 @@ function UpgradeChatPanel({ chat, isSuperAdmin, onClose, onCommissionSet }: { ch
       </div>
       {isSuperAdmin && chat.status === 'PENDING_COMMISSION' && (
         <div className="px-4 py-3 border-t border-slate-700 bg-slate-800 shrink-0">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Set Commission Rate <span className="text-emerald-400 normal-case font-medium">(standard: {DEFAULT_COMMISSION_RATE}%)</span></p>
-          <div className="flex gap-2">
-            <input type="number" min={0.1} max={100} step={0.1} value={commissionInput} onChange={(e) => setCommissionInput(e.target.value)} placeholder={`${DEFAULT_COMMISSION_RATE}`} className="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-primary outline-none" />
-            <button onClick={handleSetCommission} disabled={settingCommission || !commissionInput} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold flex items-center gap-1.5">{settingCommission ? <Spinner /> : <><CheckIcon fontSize="small" /> Set</>}</button>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Set Commission Rate <span className="text-emerald-400 normal-case font-medium">(locked to {COMMISSION_RATE}%)</span>
+          </p>
+          <div className="flex gap-2 items-center">
+            {/* Rate is locked — show a read-only display */}
+            <div className="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm font-bold text-emerald-400">
+              {COMMISSION_RATE}% (standard rate)
+            </div>
+            <button onClick={handleSetCommission} disabled={settingCommission} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold flex items-center gap-1.5">{settingCommission ? <Spinner /> : <><CheckIcon fontSize="small" /> Set</>}</button>
           </div>
         </div>
       )}
@@ -1158,11 +1150,16 @@ function DashboardSection({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // For Aff. Balance, always calculate at 70% from lifetimeStake
+  const affBalance70 = affiliateStats
+    ? calcCommission(affiliateStats.lifetimeStake)
+    : null;
+
   const kpis = isSuperAdmin && metrics
     ? [{ label: 'Total Users', value: String(metrics.totalUsers ?? '—') }, { label: 'Total Admins', value: String(metrics.totalAdmins ?? '—') }, { label: 'Total Revenue', value: typeof metrics.totalRevenue === 'number' ? fmt(metrics.totalRevenue, currency) : '—' }, { label: 'Active Chats', value: String(metrics.activeChats ?? '—') }]
     : analytics
-    ? [{ label: 'Total Revenue', value: typeof analytics.totalRevenue === 'number' ? fmt(analytics.totalRevenue, currency) : '—' }, { label: 'Total Bets', value: String(analytics.totalBets ?? '—') }, { label: 'Total Users', value: String(analytics.totalUsers ?? '—') }, { label: 'Aff. Balance', value: affiliateStats ? fmt(affiliateStats.availableBalance, currency) : '—' }]
-    : [{ label: 'Total Revenue', value: '—' }, { label: 'Total Bets', value: '—' }, { label: 'Total Users', value: '—' }, { label: 'Aff. Balance', value: '—' }];
+    ? [{ label: 'Total Revenue', value: typeof analytics.totalRevenue === 'number' ? fmt(analytics.totalRevenue, currency) : '—' }, { label: 'Total Bets', value: String(analytics.totalBets ?? '—') }, { label: 'Total Users', value: String(analytics.totalUsers ?? '—') }, { label: 'Aff. Balance (70%)', value: affBalance70 != null ? fmt(affBalance70, currency) : '—' }]
+    : [{ label: 'Total Revenue', value: '—' }, { label: 'Total Bets', value: '—' }, { label: 'Total Users', value: '—' }, { label: 'Aff. Balance (70%)', value: '—' }];
 
   return (
     <div className="space-y-5">
@@ -1171,7 +1168,20 @@ function DashboardSection({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="flex gap-1.5">{['7d','30d','90d'].map((r) => <button key={r} onClick={() => setRange(r)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${range === r ? 'bg-primary text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>{r}</button>)}<button onClick={load} className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:bg-slate-600"><RefreshIcon fontSize="small" /></button></div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{kpis.map((kpi) => <div key={kpi.label} className="bg-slate-800 rounded-2xl p-4 border border-slate-700"><p className="text-xs text-slate-400 mb-1.5">{kpi.label}</p>{loading ? <div className="h-7 bg-slate-700 rounded animate-pulse" /> : <p className="font-heading text-xl font-bold text-white">{kpi.value}</p>}</div>)}</div>
-      {affiliateStats && <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700"><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Affiliate Summary</p><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[{ label: 'Total Referrals', value: String(affiliateStats.totalReferrals) }, { label: 'Users Total Deposit', value: fmt(affiliateStats.lifetimeStake, currency) }, { label: 'Lifetime Commissions', value: fmt(affiliateStats.lifetimeCommission, currency) }, { label: 'Available Balance', value: fmt(affiliateStats.availableBalance, currency) }].map((s) => <div key={s.label}><p className="text-xs text-slate-500">{s.label}</p><p className="text-sm font-bold text-white mt-0.5">{s.value}</p></div>)}</div></div>}
+      {affiliateStats && (
+        <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Affiliate Summary</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Referrals',       value: String(affiliateStats.totalReferrals) },
+              { label: 'Users Total Deposit',   value: fmt(affiliateStats.lifetimeStake, currency) },
+              // Always show commission as 70% of lifetimeStake
+              { label: 'Lifetime Commissions (70%)', value: fmt(calcCommission(affiliateStats.lifetimeStake), currency) },
+              { label: 'Available Balance (70%)',    value: fmt(calcCommission(affiliateStats.lifetimeStake), currency) },
+            ].map((s) => <div key={s.label}><p className="text-xs text-slate-500">{s.label}</p><p className="text-sm font-bold text-white mt-0.5">{s.value}</p></div>)}
+          </div>
+        </div>
+      )}
       <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Revenue Trend</p>
         {loading ? <div className="h-28 bg-slate-700 rounded animate-pulse" /> : <div className="flex items-end gap-1 h-28">{(analytics?.dailyRevenue as number[] | undefined ?? [35,55,42,68,75,60,85,90,72,95,80,88]).map((h, i) => { const max = Math.max(...(analytics?.dailyRevenue as number[] | undefined ?? [100])); const pct = typeof h === 'number' ? (h / max) * 100 : h; return <div key={i} className="flex-1 bg-primary/70 rounded-t hover:bg-primary transition-colors" style={{ height: `${pct}%` }} />; })}</div>}
@@ -1219,19 +1229,13 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Commission calculation ──────────────────────────────────────────────────
-  // The standard rate is 70%.  If the backend returns a different rate,
-  // we recalculate the expected commission from the total deposit volume
-  // and show it above the backend figure so the admin can see the discrepancy.
-  const commissionCalc = useMemo(() => {
-    if (!stats) return null;
-    return calcExpectedCommission(
-      stats.lifetimeStake,
-      (stats as any).commissionRate ?? null,
-    );
-  }, [stats]);
+  // ── Commission: always 70% of lifetimeStake, backend value ignored ──────────
+  const commission70 = useMemo(
+    () => stats ? calcCommission(stats.lifetimeStake) : 0,
+    [stats],
+  );
 
-  const payoutEnabled = (stats?.commissionBalance ?? 0) > 0;
+  const payoutEnabled = commission70 > 0;
 
   const requestPayout = async () => {
     setRequesting(true);
@@ -1260,11 +1264,12 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
   const primaryCode = primaryLink?.code ?? '—';
   const copyMainLink = () => { if (!primaryUrl) return; navigator.clipboard.writeText(primaryUrl); setCopiedMain(true); setTimeout(() => setCopiedMain(false), 2000); showToast('Link copied!', 'success'); };
 
+  // Stat cards — commission values always use 70% calculation
   const statCards = [
-    { label: 'LIFETIME EARNED',  value: stats ? fmt(stats.totalEarnedLifetime, currency)  : `${currency.symbol}0.00`, icon: '↗' },
-    { label: 'TOTAL PAID OUT',   value: stats ? fmt(stats.totalPaidOutLifetime, currency)  : `${currency.symbol}0.00`, icon: '📋' },
-    { label: 'COMMISSION OWED',  value: stats ? fmt(stats.commissionBalance, currency)     : `${currency.symbol}0.00`, icon: '%' },
-    { label: 'USERS BROUGHT',    value: stats ? String(stats.totalReferrals)               : '0',                      icon: '👤' },
+    { label: 'LIFETIME EARNED',  value: stats ? fmt(commission70, currency)                      : `${currency.symbol}0.00`, icon: '↗' },
+    { label: 'TOTAL PAID OUT',   value: stats ? fmt(stats.totalPaidOutLifetime, currency)        : `${currency.symbol}0.00`, icon: '📋' },
+    { label: 'COMMISSION (70%)', value: stats ? fmt(commission70, currency)                      : `${currency.symbol}0.00`, icon: '%' },
+    { label: 'USERS BROUGHT',    value: stats ? String(stats.totalReferrals)                     : '0',                     icon: '👤' },
   ];
 
   return (
@@ -1307,48 +1312,12 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
 
       {/* ── Commission balance + payout ── */}
       <div style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
-        <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>COMMISSION BALANCE (AVAILABLE TO WITHDRAW)</p>
+        <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>
+          COMMISSION BALANCE — {COMMISSION_RATE}% OF TOTAL DEPOSITS
+        </p>
 
-        {/* ── Recalculated commission notice (shown when backend rate ≠ 70%) ── */}
-        {!loading && commissionCalc?.isRecalculated && (
-          <div style={{
-            marginBottom: 14,
-            padding: '10px 14px',
-            borderRadius: 10,
-            background: 'rgba(245,158,11,0.08)',
-            border: '1.5px solid rgba(245,158,11,0.35)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-          }}>
-            {/* Top row: icon + label */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <InfoOutlinedIcon style={{ fontSize: 15, color: '#f59e0b', flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Commission rate differs from standard ({DEFAULT_COMMISSION_RATE}%)
-              </span>
-            </div>
-            {/* Rate in use */}
-            <div style={{ fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
-              Backend rate: <strong>{commissionCalc.rate}%</strong> — recalculated from total user deposits:
-            </div>
-            {/* Recalculated value — large and prominent */}
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
-              <span style={{ fontSize: 24, fontWeight: 900, color: '#d97706', lineHeight: 1, fontFamily: 'monospace' }}>
-                {fmt(commissionCalc.expected, currency)}
-              </span>
-              <span style={{ fontSize: 10, color: '#92400e', fontWeight: 700 }}>
-                ({commissionCalc.rate}% of {fmt(stats?.lifetimeStake ?? 0, currency)} deposits)
-              </span>
-            </div>
-            <div style={{ fontSize: 10, color: '#78716c', marginTop: 2 }}>
-              ↳ Backend-stored commission balance (below) may differ from this figure.
-            </div>
-          </div>
-        )}
-
-        {/* ── Standard 70% rate note (shown when rate IS 70%) ── */}
-        {!loading && commissionCalc && !commissionCalc.isRecalculated && stats && (
+        {/* ── 70% rate confirmation badge ── */}
+        {!loading && stats && (
           <div style={{
             marginBottom: 10,
             padding: '8px 12px',
@@ -1361,19 +1330,17 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
           }}>
             <CheckIcon style={{ fontSize: 13, color: '#16a34a', flexShrink: 0 }} />
             <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>
-              Standard {DEFAULT_COMMISSION_RATE}% rate applied — expected:{' '}
-              <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{fmt(commissionCalc.expected, currency)}</span>
-              {' '}({DEFAULT_COMMISSION_RATE}% of {fmt(stats.lifetimeStake, currency)})
+              {COMMISSION_RATE}% rate — {fmt(commission70, currency)} from {fmt(stats.lifetimeStake, currency)} total deposits
             </span>
           </div>
         )}
 
         {loading
           ? <div style={{ height: 32, background: '#f3f4f6', borderRadius: 6, marginBottom: 16 }} />
-          : <p style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{stats ? fmt(stats.commissionBalance, currency) : `${currency.symbol}0.00`}</p>}
+          : <p style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: '#111827', lineHeight: 1 }}>{fmt(commission70, currency)}</p>}
         {stats?.lastPayoutAt && (
           <p style={{ margin: '0 0 14px', fontSize: 11, color: '#9ca3af' }}>
-            Last payout: {stats.lastPayoutAt ? fmtDate(stats.lastPayoutAt) : '—'}
+            Last payout: {fmtDate(stats.lastPayoutAt)}
           </p>
         )}
         {!stats?.lastPayoutAt && !loading && (
@@ -1405,12 +1372,13 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
           <p style={{ margin: '0 0 14px', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7280' }}>REFERRAL STATS</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { label: 'Total Referrals',     value: String(stats.totalReferrals) },
-              { label: 'Users Total Stake',   value: fmt(stats.lifetimeStake, currency) },
-              { label: 'Lifetime Commission', value: fmt(stats.lifetimeCommission, currency) },
-              { label: 'Commission Balance',  value: fmt(stats.commissionBalance, currency) },
-              { label: 'Total Earned',        value: fmt(stats.totalEarnedLifetime, currency) },
-              { label: 'Total Paid Out',      value: fmt(stats.totalPaidOutLifetime, currency) },
+              { label: 'Total Referrals',               value: String(stats.totalReferrals) },
+              { label: 'Users Total Stake',             value: fmt(stats.lifetimeStake, currency) },
+              // All commission-related values are 70% of lifetimeStake
+              { label: 'Lifetime Commission (70%)',     value: fmt(commission70, currency) },
+              { label: 'Commission Balance (70%)',      value: fmt(commission70, currency) },
+              { label: 'Total Earned (70%)',            value: fmt(commission70, currency) },
+              { label: 'Total Paid Out',                value: fmt(stats.totalPaidOutLifetime, currency) },
             ].map((s) => (
               <div key={s.label}>
                 <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{s.label}</p>
@@ -1419,30 +1387,23 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
             ))}
           </div>
           {/* ── Commission rate breakdown ── */}
-          {commissionCalc && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f3f4f6' }}>
-              <p style={{ margin: '0 0 8px', fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Commission Calculation</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <div>
-                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Rate Applied</p>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: commissionCalc.isRecalculated ? '#d97706' : '#16a34a' }}>
-                    {commissionCalc.rate}%
-                    {commissionCalc.isRecalculated && <span style={{ fontSize: 9, marginLeft: 4, color: '#d97706', fontWeight: 700 }}>≠ {DEFAULT_COMMISSION_RATE}%</span>}
-                  </p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Total Deposits</p>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{fmt(stats.lifetimeStake, currency)}</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Expected Commission</p>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: commissionCalc.isRecalculated ? '#d97706' : '#16a34a' }}>
-                    {fmt(commissionCalc.expected, currency)}
-                  </p>
-                </div>
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f3f4f6' }}>
+            <p style={{ margin: '0 0 8px', fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Commission Calculation</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Rate Applied</p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#16a34a' }}>{COMMISSION_RATE}%</p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Total Deposits</p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#111827' }}>{fmt(stats.lifetimeStake, currency)}</p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>Your Commission</p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#16a34a' }}>{fmt(commission70, currency)}</p>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -1467,13 +1428,13 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
                 {links.map(link => {
                   const url = buildUrl(link.code);
                   const isCopied = copiedId === link.id;
-                  const commissionDisplay = link.commissionPercent != null ? `${link.commissionPercent}% commission` : null;
+                  const commissionDisplay = `${COMMISSION_RATE}% commission`;
                   return (
                     <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {link.label && <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{link.label}</p>}
                         <p style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</p>
-                        {commissionDisplay && <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{commissionDisplay}</span>}
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#63d2ff' }}>{commissionDisplay}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                         <button onClick={() => copyLink(link.id, url)} style={{ padding: 7, borderRadius: 7, background: isCopied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: isCopied ? '#4ade80' : 'rgba(255,255,255,0.5)', display: 'flex' }}>{isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}</button>
@@ -1504,6 +1465,8 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
                   {referredUsers.map((player) => {
                     const name = [player.firstName, player.lastName].filter(Boolean).join(' ') || player.email || player.userId;
                     const isActive = referralDeposit(player.lifetimeStake ?? 0) > 0;
+                    // Per-player commission always at 70%
+                    const playerCommission70 = calcCommission(referralDeposit(player.lifetimeStake ?? 0));
                     return (
                       <div key={player.userId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
@@ -1511,7 +1474,7 @@ function AffiliateSection({ userEmail }: { userEmail?: string }) {
                           <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>Joined {fmtDate(player.joinedAt)} · Deposit: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{fmt(referralDeposit(player.lifetimeStake ?? 0), currency)}</span></p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
-                          {player.lifetimeCommission > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(player.lifetimeCommission, currency)}</span>}
+                          {playerCommission70 > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80' }}>+{fmt(playerCommission70, currency)}</span>}
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)', color: isActive ? '#4ade80' : 'rgba(255,255,255,0.3)' }}>{isActive ? 'Active' : 'Inactive'}</span>
                         </div>
                       </div>
@@ -1602,7 +1565,17 @@ function UpgradeChatsSection({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       <div className="flex gap-2">{(['pending','all'] as const).map((f) => <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-colors ${filter === f ? 'bg-primary text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>{f === 'pending' ? 'Pending' : 'All'}</button>)}</div>
       {loading ? <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-20 bg-slate-800 rounded-2xl animate-pulse" />)}</div>
         : chats.length === 0 ? <EmptyState icon={<MarkChatReadIcon sx={{ fontSize: 40 }} />} text={filter === 'pending' ? 'No pending chats.' : 'No upgrade chats.'} />
-        : <div className="space-y-2">{chats.map((chat) => <button key={chat.id} onClick={() => setActiveChat(chat)} className="w-full bg-slate-800 rounded-2xl p-4 border border-slate-700 hover:border-primary/40 text-left flex items-center justify-between gap-3"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 mb-1"><p className="text-sm font-bold text-white truncate">{chat.userFirstName ?? 'User'}</p><StatusBadge status={chat.status} /></div><p className="text-xs text-slate-400 truncate">{chat.userEmail ?? '—'}</p><p className="text-xs text-slate-500 mt-0.5">{chat.messageCount ?? 0} messages · {fmtDate(chat.createdAt)}{chat.commissionRate != null && ` · ${chat.commissionRate}% commission`}</p></div><ChatIcon fontSize="small" className="text-slate-500 shrink-0" /></button>)}</div>}
+        : <div className="space-y-2">{chats.map((chat) => (
+          <button key={chat.id} onClick={() => setActiveChat(chat)} className="w-full bg-slate-800 rounded-2xl p-4 border border-slate-700 hover:border-primary/40 text-left flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1"><p className="text-sm font-bold text-white truncate">{chat.userFirstName ?? 'User'}</p><StatusBadge status={chat.status} /></div>
+              <p className="text-xs text-slate-400 truncate">{chat.userEmail ?? '—'}</p>
+              {/* Always show COMMISSION_RATE% regardless of backend commissionRate value */}
+              <p className="text-xs text-slate-500 mt-0.5">{chat.messageCount ?? 0} messages · {fmtDate(chat.createdAt)} · {COMMISSION_RATE}% commission</p>
+            </div>
+            <ChatIcon fontSize="small" className="text-slate-500 shrink-0" />
+          </button>
+        ))}</div>}
     </div>
   );
 }
