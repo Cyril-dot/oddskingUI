@@ -28,13 +28,15 @@ import AccountBalanceIcon      from '@mui/icons-material/AccountBalance';
 import VolunteerActivismIcon   from '@mui/icons-material/VolunteerActivism';
 import InfoOutlinedIcon        from '@mui/icons-material/InfoOutlined';
 
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface WalletData {
   balance: number;
   currency?: string;
-  depositCountToday?: number;   // How many deposits the user has made today (resets midnight)
-  hasEverDeposited?: boolean;   // Permanent flag: true once the user has made any deposit ever
+  depositCountToday?: number;       // How many deposits the user has made today (resets midnight)
+  hasEverDeposited?: boolean;       // Permanent flag: true once the user has made any deposit ever
+  totalDepositedGhs?: number;       // Cumulative all-time deposit total in GHS
   [key: string]: unknown;
 }
 
@@ -407,52 +409,6 @@ function MethodToggle({ value, onChange, options }: { value: string; onChange: (
   );
 }
 
-// ── Deposit Progress Indicator ────────────────────────────────────────────────
-// Shows how many of the 3 required daily deposits the user has completed.
-
-function DepositProgressBar({
-  depositCountToday,
-  minRequired,
-}: {
-  depositCountToday: number;
-  minRequired: number;
-}) {
-  const dots = Array.from({ length: minRequired }, (_, i) => i < depositCountToday);
-  return (
-    <div
-      className="rounded-2xl px-4 py-3 space-y-2"
-      style={{ backgroundColor: 'color-mix(in srgb, #3b82f6 8%, transparent)', border: '1px solid color-mix(in srgb, #3b82f6 20%, transparent)' }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>
-          Daily deposit progress
-        </span>
-        <span className="text-xs font-bold tabular-nums" style={{ color: '#2563eb' }}>
-          {depositCountToday}/{minRequired}
-        </span>
-      </div>
-      <div className="flex gap-2">
-        {dots.map((filled, i) => (
-          <div
-            key={i}
-            className="flex-1 h-2 rounded-full transition-all duration-300"
-            style={{
-              backgroundColor: filled
-                ? '#3b82f6'
-                : 'color-mix(in srgb, #3b82f6 20%, transparent)',
-            }}
-          />
-        ))}
-      </div>
-      <p className="text-xs" style={{ color: 'color-mix(in srgb, #2563eb 80%, transparent)' }}>
-        {depositCountToday >= minRequired
-          ? 'Requirement met — you can now withdraw!'
-          : `Make ${minRequired - depositCountToday} more deposit${minRequired - depositCountToday > 1 ? 's' : ''} today to unlock withdrawals.`}
-      </p>
-    </div>
-  );
-}
-
 // ── Withdraw Modal ────────────────────────────────────────────────────────────
 
 interface WithdrawModalProps {
@@ -461,9 +417,11 @@ interface WithdrawModalProps {
   onSuccess: () => void;
   balanceGhs: number;
   currency: CurrencyInfo;
-  minDepositsRequired: number;   // How many deposits per day are required (= 3)
-  depositCountToday: number;     // How many deposits the user has made today
-  hasEverDeposited: boolean;     // Has the user EVER made a deposit?
+  minDepositsRequired: number;        // Daily deposit count requirement (= 3)
+  depositCountToday: number;          // Deposits made today
+  hasEverDeposited: boolean;          // Has the user EVER made a deposit?
+  totalDepositedGhs: number;          // Cumulative all-time deposited amount in GHS
+  minDepositAmountGhs: number;        // Minimum cumulative deposit in GHS to unlock withdrawals (= 500)
   isAdmin: boolean;
 }
 
@@ -476,6 +434,8 @@ function WithdrawModal({
   minDepositsRequired,
   depositCountToday,
   hasEverDeposited,
+  totalDepositedGhs,
+  minDepositAmountGhs,
   isAdmin,
 }: WithdrawModalProps) {
   const [step, setStep]                   = useState<'form' | 'confirm' | 'done'>('form');
@@ -499,33 +459,36 @@ function WithdrawModal({
 
   // ── Withdrawal eligibility ────────────────────────────────────────────────
   //
-  // RULE:
-  //   • Admins       → always allowed.
-  //   • Never deposited before → NOT allowed (must deposit first).
-  //   • Has deposited before → allowed ONLY when depositCountToday >= 3.
-  //     (The 3-deposit-per-day requirement kicks in after the very first deposit ever.)
+  // RULES (in order of precedence):
+  //   1. Admins          → always allowed.
+  //   2. Never deposited → NOT allowed (must deposit first).
+  //   3. Total deposited < GH₵ 500 → NOT allowed (must reach the minimum cumulative amount).
+  //   4. Daily count < 3 → NOT allowed (must hit the daily deposit count).
+  //   5. All checks pass → allowed.
   //
+  const meetsAmountThreshold: boolean = totalDepositedGhs >= minDepositAmountGhs;
+  const meetsDailyCount: boolean      = depositCountToday >= minDepositsRequired;
+
   const canWithdraw: boolean =
     isAdmin ||
-    (hasEverDeposited && depositCountToday >= minDepositsRequired);
+    (hasEverDeposited && meetsAmountThreshold && meetsDailyCount);
 
-  // ── What banner to show the user ─────────────────────────────────────────
-  type BannerKind = 'never_deposited' | 'need_more_today' | null;
+  // ── What banner/indicator to show ────────────────────────────────────────
+  type BannerKind = 'never_deposited' | 'below_amount_threshold' | 'need_more_today' | null;
   const bannerKind: BannerKind = (() => {
     if (isAdmin) return null;
     if (!hasEverDeposited) return 'never_deposited';
-    if (depositCountToday < minDepositsRequired) return 'need_more_today';
+    if (!meetsAmountThreshold) return 'below_amount_threshold';
+    if (!meetsDailyCount) return 'need_more_today';
     return null;
   })();
 
-  // Form is valid when all inputs are filled AND amount is within balance
   const formValid =
     amountLocal > 0 &&
     amountLocal <= balanceLocal &&
     !!accountNumber &&
     !!accountName;
 
-  // Continue button only enabled when form AND eligibility are both satisfied
   const canProceed = formValid && canWithdraw;
 
   const reset = () => {
@@ -620,18 +583,26 @@ function WithdrawModal({
             </span>
           </div>
 
-          {/* ── Eligibility banners shown at top of form ── */}
+          {/* ── Eligibility banners ── */}
+
           {bannerKind === 'never_deposited' && (
             <AlertBanner
               type="info"
-              message="You need to make a deposit before you can withdraw. Please deposit first to get started."
+              message={`You need to deposit at least ${formatCurrency(minDepositAmountGhs, currency)} (GH₵ ${minDepositAmountGhs.toLocaleString()}) before you can withdraw. Please make a deposit to get started.`}
+            />
+          )}
+
+          {bannerKind === 'below_amount_threshold' && (
+            <AlertBanner
+              type="info"
+              message={`You need to deposit a total of GH₵ ${minDepositAmountGhs.toLocaleString()} before you can withdraw. Please make a deposit to continue.`}
             />
           )}
 
           {bannerKind === 'need_more_today' && (
-            <DepositProgressBar
-              depositCountToday={depositCountToday}
-              minRequired={minDepositsRequired}
+            <AlertBanner
+              type="info"
+              message={`You need to make ${minDepositsRequired - depositCountToday} more deposit${minDepositsRequired - depositCountToday > 1 ? 's' : ''} today before you can withdraw.`}
             />
           )}
 
@@ -686,12 +657,6 @@ function WithdrawModal({
 
           {error && <AlertBanner type="error" message={error} />}
 
-          {/*
-            Continue button:
-            - Disabled when form inputs are incomplete (formValid = false)
-            - Also disabled when canWithdraw = false (eligibility not met)
-            - The banners above already explain WHY it's locked; no extra tooltip needed.
-          */}
           <BtnPrimary
             size="lg"
             disabled={!canProceed}
@@ -828,6 +793,10 @@ function AffiliateWithdrawModal({ open, onClose, onSuccess, availableBalanceGhs,
 // How many deposits per day a user must make before withdrawals unlock.
 const MIN_DEPOSITS_REQUIRED = 3;
 
+// Minimum cumulative deposit amount (in GHS) a user must have deposited
+// in total (all-time) before they are allowed to make any withdrawal.
+const MIN_DEPOSIT_AMOUNT_GHS = 500;
+
 export default function WalletPage() {
   const navigate = useNavigate();
   const { user: currentUser } = useAppStore();
@@ -901,9 +870,12 @@ export default function WalletPage() {
   const affLifetimeGhs = affiliateStats?.lifetimeCommission  ?? 0;
 
   // Withdrawal eligibility data — sourced from backend via walletApi.getWallet()
-  const depositCountToday = walletData?.depositCountToday ?? 0;
-  const hasEverDeposited  = walletData?.hasEverDeposited  ?? false;
-  const isAdmin           = currentUser?.role === 'ADMIN';
+  const depositCountToday  = walletData?.depositCountToday  ?? 0;
+  const hasEverDeposited   = walletData?.hasEverDeposited   ?? false;
+  // totalDepositedGhs: the backend must return this field in the wallet response.
+  // It represents the user's all-time cumulative deposit total in GHS.
+  const totalDepositedGhs  = (walletData?.totalDepositedGhs as number) ?? 0;
+  const isAdmin            = currentUser?.role === 'ADMIN';
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading || currencyLoading) {
@@ -1135,6 +1107,8 @@ export default function WalletPage() {
         minDepositsRequired={MIN_DEPOSITS_REQUIRED}
         depositCountToday={depositCountToday}
         hasEverDeposited={hasEverDeposited}
+        totalDepositedGhs={totalDepositedGhs}
+        minDepositAmountGhs={MIN_DEPOSIT_AMOUNT_GHS}
         isAdmin={isAdmin}
       />
       <AffiliateWithdrawModal
