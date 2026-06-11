@@ -58,16 +58,11 @@ if (!document.getElementById("zyno-styles")) {
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 const API_BASE         = "https://futballbackend-production-b0ef.up.railway.app";
-const MIN_GHS          = 300;   // ← STRICT: MoMo minimum is GH₵ 300
-const MIN_NGN          = 30000;
+const MIN_GHS          = 300;
 const QUICK_GHS        = [300, 500, 1000, 2000, 5000, 10000, 20000, 50000];
-const QUICK_NGN        = [30000, 50000, 100000, 200000, 500000, 1000000];
 const BINANCE_ADDRESS  = "THHf1TpvjtpZ8QoLnCXXeUgs116pgHwgVq";
 const CRYPTO_COINS     = ["USDT","BTC","ETH","BNB","USDC"];
 const CRYPTO_NETWORKS  = ["TRC20","BEP20","ERC20","Arbitrum","Optimism"];
-const BANK_NAME        = "MONIEPOINT";
-const BANK_ACCT        = "ALIYU ABDULMALIK SANNI";
-const BANK_NUMBER      = "8051691303";
 
 /* ─── Screenshot size limits ─────────────────────────────────────────────── */
 const MAX_IMG_BYTES    = 8 * 1024 * 1024;
@@ -81,47 +76,15 @@ const NETWORKS_GH = [
   { id:"AIRTELTIGO", label:"AirtelTigo Money", color:"#EF3E2D", bg:"#1a0800", border:"#3d1500", logo:"https://amaghanaonline.com/wp-content/uploads/2022/07/WhatsApp-Image-2022-07-27-at-5.16.26-PM.jpeg" },
 ];
 
-const COUNTRIES = [
-  {
-    id:"GH", name:"Ghana", currency:"GHS", symbol:"GH₵",
-    accentColor:"#006B3F", accentLight:"#FCD116",
-    methods:["Mobile Money","Crypto"],
-    methodIcons:["smartphone","currency_bitcoin"],
-    flag: () => (
-      <svg viewBox="0 0 60 40" xmlns="http://www.w3.org/2000/svg" style={{width:"100%",height:"100%",borderRadius:8}}>
-        <rect width="60" height="40" fill="#006B3F"/>
-        <rect width="60" height="13.3" fill="#006B3F"/>
-        <rect y="13.3" width="60" height="13.4" fill="#FCD116"/>
-        <rect y="26.7" width="60" height="13.3" fill="#CE1126"/>
-        <polygon points="30,13 32.4,20.2 40,20.2 33.8,24.8 36.2,32 30,27.4 23.8,32 26.2,24.8 20,20.2 27.6,20.2" fill="#000"/>
-      </svg>
-    )
-  },
-  {
-    id:"NG", name:"Nigeria", currency:"NGN", symbol:"₦",
-    accentColor:"#008751", accentLight:"#ffffff",
-    methods:["Bank Transfer","Crypto"],
-    methodIcons:["account_balance","currency_bitcoin"],
-    flag: () => (
-      <svg viewBox="0 0 60 40" xmlns="http://www.w3.org/2000/svg" style={{width:"100%",height:"100%",borderRadius:8}}>
-        <rect width="60" height="40" fill="#fff"/>
-        <rect width="20" height="40" fill="#008751"/>
-        <rect x="40" width="20" height="40" fill="#008751"/>
-      </svg>
-    )
-  },
-];
-
 const SUPPORT_CHANNELS = [
   { icon:"chat",  label:"WhatsApp Support", sub:"Chat with us instantly",  href:"https://wa.me/233000000000", color:"#25D366" },
   { icon:"email", label:"Email Support",    sub:"support@zynobet.site",    href:"mailto:support@zynobet.site",color:"#4A90E2" },
   { icon:"send",  label:"Telegram",         sub:"@zynobet",                href:"https://t.me/zynobet",       color:"#0088cc" },
 ];
 
-const STEP  = { COUNTRY:-1, METHOD:0, DETAILS:1, APPROVE:2, DONE:3 };
+const STEP  = { METHOD:0, DETAILS:1, APPROVE:2, DONE:3 };
 const SUB   = { SMS:"sms", WAIT:"wait", VERIFY:"verify" };
 const BSTEP = { INFO:"bi", FORM:"bf", SUCCESS:"bs" };
-const BKSTEP= { INFO:"ki", FORM:"kf", SUCCESS:"ks" };
 
 /* ─── Colour tokens ──────────────────────────────────────────────────────── */
 const C = {
@@ -436,8 +399,7 @@ export default function DepositPage() {
   const tok = () => localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken") || "";
 
   /* ── nav state ── */
-  const [country,     setCountry]     = useState(null);
-  const [step,        setStep]        = useState(STEP.COUNTRY);
+  const [step,        setStep]        = useState(STEP.METHOD);
   const [sub,         setSub]         = useState(SUB.WAIT);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
@@ -466,30 +428,13 @@ export default function DepositPage() {
   const [cryptoErrors,     setCryptoErrors]     = useState({});
   const [cryptoScreenshot, setCryptoScreenshot] = useState("");
 
-  /* ── bank ── */
-  const [bkStep,          setBkStep]          = useState(BKSTEP.INFO);
-  const [bankRef,         setBankRef]         = useState("");
-  const [bankAmtSent,     setBankAmtSent]     = useState("");
-  const [bankExpected,    setBankExpected]    = useState("");
-  const [bankSender,      setBankSender]      = useState("");
-  const [bankNote,        setBankNote]        = useState("");
-  const [bankErrors,      setBankErrors]      = useState({});
-  const [bankScreenshot,  setBankScreenshot]  = useState("");
-
   /* ── derived ── */
-  const countryObj   = COUNTRIES.find(c => c.id === country);
-  const currSymbol   = countryObj?.symbol ?? "GH₵";
-  const minDeposit   = country === "NG" ? MIN_NGN : MIN_GHS;
-  const quickAmounts = country === "NG" ? QUICK_NGN : QUICK_GHS;
   const networkObj   = NETWORKS_GH.find(n => n.id === network);
 
-  /* ─────────────────────────────────────────────────────────────
-     MoMo amount validation helpers
-     — used for both the inline warning AND the submit gate
-  ───────────────────────────────────────────────────────────── */
-  const momoAmt        = parseFloat(amount) || 0;
-  const momoBelowMin   = momoAmt > 0 && momoAmt < MIN_GHS;   // typed something but it's too low
-  const momoSubmitOk   = momoAmt >= MIN_GHS && phone.trim().length > 0;  // gate for submit button
+  /* ── momo amount validation ── */
+  const momoAmt      = parseFloat(amount) || 0;
+  const momoBelowMin = momoAmt > 0 && momoAmt < MIN_GHS;
+  const momoSubmitOk = momoAmt >= MIN_GHS && phone.trim().length > 0;
 
   /* ── countdown ── */
   useEffect(() => {
@@ -529,19 +474,11 @@ export default function DepositPage() {
   /* ── MoMo handlers ── */
   const handleMomoInit = async () => {
     setError("");
-
-    // ── STRICT minimum check ──────────────────────────────────────
     const amt = parseFloat(amount);
-    if (!amt || isNaN(amt) || amt <= 0) {
-      return setError("Please enter a deposit amount.");
-    }
-    if (amt < MIN_GHS) {
-      return setError(`Minimum deposit is GH₵${MIN_GHS.toLocaleString()}. Please enter GH₵${MIN_GHS} or more.`);
-    }
-    // ─────────────────────────────────────────────────────────────
-
-    if (!phone.trim())                       return setError("MoMo phone number is required.");
-    if (!/^0\d{9}$/.test(phone.trim()))      return setError("Enter a valid 10-digit number starting with 0.");
+    if (!amt || isNaN(amt) || amt <= 0) return setError("Please enter a deposit amount.");
+    if (amt < MIN_GHS) return setError(`Minimum deposit is GH₵${MIN_GHS.toLocaleString()}. Please enter GH₵${MIN_GHS} or more.`);
+    if (!phone.trim()) return setError("MoMo phone number is required.");
+    if (!/^0\d{9}$/.test(phone.trim())) return setError("Enter a valid 10-digit number starting with 0.");
 
     setLoading(true);
     try {
@@ -612,35 +549,6 @@ export default function DepositPage() {
     finally    { setLoading(false); }
   };
 
-  /* ── Bank Transfer handler ── */
-  const validateBank = () => {
-    const e = {};
-    if (!bankRef.trim() || bankRef.trim().length < 3) e.ref = "Transfer reference / narration is required";
-    const amt = parseFloat(bankAmtSent);
-    if (!amt || isNaN(amt) || amt <= 0)  e.amt = "Enter the amount you transferred";
-    else if (amt < MIN_NGN)              e.amt = `Minimum deposit is ₦${MIN_NGN.toLocaleString()}`;
-    if (!bankExpected || isNaN(+bankExpected) || +bankExpected < 1) e.exp = "Enter expected wallet credit";
-    if (!bankScreenshot) e.screenshot = "A payment screenshot is required for bank transfers";
-    setBankErrors(e); return Object.keys(e).length === 0;
-  };
-
-  const handleBankSubmit = async () => {
-    if (!validateBank()) return;
-    setLoading(true); setError("");
-    try {
-      await post("/api/wallet/bank-deposits", {
-        transferReference: bankRef.trim(),
-        ngnAmountSent:     parseFloat(bankAmtSent),
-        expectedNgnCredit: parseFloat(bankExpected),
-        senderAccountName: bankSender.trim() || undefined,
-        screenshotUrl:     bankScreenshot,
-        userNote:          bankNote.trim()   || undefined,
-      });
-      setBkStep(BKSTEP.SUCCESS);
-    } catch(e) { setError(e.message); }
-    finally    { setLoading(false); }
-  };
-
   /* ── Resets ── */
   const resetAll = () => {
     setStep(STEP.METHOD); setError(""); setInfo("");
@@ -648,11 +556,8 @@ export default function DepositPage() {
     setCryptoTxHash(""); setCryptoAmtSent(""); setCryptoCoin("USDT"); setCryptoNet("TRC20");
     setCryptoExpected(""); setCryptoWallet(""); setCryptoNote(""); setCryptoErrors({});
     setCryptoScreenshot(""); setBStep(BSTEP.INFO);
-    setBkStep(BKSTEP.INFO); setBankRef(""); setBankAmtSent(""); setBankExpected("");
-    setBankSender(""); setBankNote(""); setBankErrors({}); setBankScreenshot("");
     clearInterval(timerRef.current);
   };
-  const backToCountry = () => { resetAll(); setCountry(null); setStep(STEP.COUNTRY); };
 
   /* ─────────────────────────────────────────────────────────────────────────
      SHARED HEADER
@@ -723,169 +628,80 @@ export default function DepositPage() {
   );
 
   /* ══════════════════════════════════════════════════════════════
-     SCREEN: Country Select
+     SCREEN: Payment Method
   ══════════════════════════════════════════════════════════════ */
-  const renderCountrySelect = () => (
+  const renderMethod = () => (
     <>
-      <Header title="Add Funds" subtitle="Select your country to continue"/>
+      <Header title="Add Funds" subtitle="Ghana · GHS · Choose your payment method"/>
       <div style={{ padding:22 }}>
         <div style={{ fontSize:10, fontWeight:700, color:C.t3, textTransform:"uppercase",
-          letterSpacing:"1px", marginBottom:14, fontFamily:"'Sora',sans-serif" }}>SELECT COUNTRY</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:22 }}>
-          {COUNTRIES.map(c => {
-            const FlagSvg = c.flag;
-            return (
-              <button key={c.id} className="zcountry zbtn"
-                onClick={() => { log.info("Country:", c.id); setCountry(c.id); setStep(STEP.METHOD); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:15, background:C.surface,
-                  border:`1.5px solid ${C.surfaceBorder}`, borderRadius:16, padding:"16px 18px",
-                  cursor:"pointer", textAlign:"left", boxShadow:"0 2px 14px rgba(0,0,0,.25)" }}>
-                <div style={{ width:54, height:36, borderRadius:8, overflow:"hidden",
-                  border:"1.5px solid rgba(255,255,255,.08)", flexShrink:0, boxShadow:"0 2px 8px rgba(0,0,0,.3)" }}>
-                  <FlagSvg/>
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:800, fontSize:16, color:C.t1, fontFamily:"'Sora',sans-serif" }}>{c.name}</div>
-                  <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>{c.currency} · Deposits Available</div>
-                  <div style={{ display:"flex", gap:6, marginTop:7, flexWrap:"wrap" }}>
-                    {c.methods.map((m,i) => (
-                      <span key={m} style={{ fontSize:10, padding:"2px 8px", borderRadius:20,
-                        background:c.accentColor+"22", color:c.accentLight, fontWeight:700,
-                        fontFamily:"'Sora',sans-serif", display:"flex", alignItems:"center", gap:3 }}>
-                        <Icon name={c.methodIcons[i]} size={10}/> {m}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ width:28, height:28, borderRadius:"50%", background:C.accentDim,
-                  border:`1px solid ${C.accent}44`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <Icon name="arrow_forward" size={14} color={C.accentLight}/>
-                </div>
-              </button>
-            );
-          })}
+          letterSpacing:"1px", marginBottom:12, fontFamily:"'Sora',sans-serif" }}>PAYMENT METHOD</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+          <button className="zmethod zbtn" onClick={() => setStep(STEP.DETAILS)}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:13, background:C.surface,
+              border:`1.5px solid ${C.surfaceBorder}`, borderRadius:13, padding:"15px 16px",
+              cursor:"pointer", textAlign:"left" }}>
+            <div style={{ width:44, height:44, borderRadius:11, background:"linear-gradient(135deg,#6366f1,#4f46e5)",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <Icon name="smartphone" size={22} color="#fff"/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Mobile Money</div>
+              <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>MTN MoMo · Telecel Cash · AirtelTigo</div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
+              <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20,
+                background:C.greenDim, color:C.green, fontFamily:"'Sora',sans-serif",
+                display:"flex", alignItems:"center", gap:3 }}>
+                <Icon name="bolt" size={10}/> Instant
+              </span>
+              <Icon name="chevron_right" size={16} color={C.t3}/>
+            </div>
+          </button>
+
+          <button className="zmethod zbtn" onClick={() => { setBStep(BSTEP.INFO); setStep(99); }}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:13,
+              background:"#100e08", border:"1.5px solid #2a2410", borderRadius:13,
+              padding:"15px 16px", cursor:"pointer", textAlign:"left" }}>
+            <div style={{ width:44, height:44, borderRadius:11, background:"linear-gradient(135deg,#f59e0b,#d97706)",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <Icon name="currency_bitcoin" size={22} color="#fff"/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Crypto · Binance</div>
+              <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>USDT (TRC20) · BTC · ETH · BNB</div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
+              <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20,
+                background:C.yellowDim, color:C.yellow, fontFamily:"'Sora',sans-serif",
+                display:"flex", alignItems:"center", gap:3 }}>
+                <Icon name="schedule" size={10}/> 1–5 min
+              </span>
+              <Icon name="chevron_right" size={16} color={C.t3}/>
+            </div>
+          </button>
         </div>
+
+        <InfoBox icon="info" color={C.green} bg={C.greenDim}>
+          Minimum deposit: <strong>GH₵{MIN_GHS.toLocaleString()}</strong>
+        </InfoBox>
+
         <div style={{ background:C.surface, border:`1px solid ${C.surfaceBorder}`, borderRadius:12,
-          padding:"12px 15px", display:"flex", alignItems:"center", gap:10 }}>
-          <Icon name="lock" size={18} color={C.green}/>
-          <div>
-            <div style={{ fontSize:12, fontWeight:700, color:C.t2, fontFamily:"'Sora',sans-serif" }}>Secured by Zynobet</div>
-            <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>256-bit SSL · Encrypted · Fast processing</div>
+          padding:"12px 15px", display:"flex", alignItems:"center", gap:11 }}>
+          <Icon name="headset_mic" size={22} color={C.accentLight}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.t2, fontFamily:"'Sora',sans-serif" }}>Need help with your deposit?</div>
+            <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Our team is online 24/7</div>
           </div>
+          <button onClick={()=>setShowSupport(true)}
+            style={{ background:C.accentDim, border:`1px solid ${C.accent}44`, borderRadius:8,
+              padding:"6px 11px", color:C.accentLight, fontSize:11, fontWeight:700,
+              cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>Chat</button>
         </div>
       </div>
     </>
   );
-
-  /* ══════════════════════════════════════════════════════════════
-     SCREEN: Payment Method
-  ══════════════════════════════════════════════════════════════ */
-  const renderMethod = () => {
-    const FlagSvg = countryObj?.flag;
-    return (
-      <>
-        <Header title={
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {FlagSvg && <div style={{ width:22, height:15, borderRadius:3, overflow:"hidden", border:"1px solid rgba(255,255,255,.1)", flexShrink:0 }}><FlagSvg/></div>}
-            Deposit · {countryObj?.currency}
-          </div>
-        } subtitle={`${countryObj?.name} — Choose your payment method`} onBack={backToCountry}/>
-        <div style={{ padding:22 }}>
-          <div style={{ fontSize:10, fontWeight:700, color:C.t3, textTransform:"uppercase",
-            letterSpacing:"1px", marginBottom:12, fontFamily:"'Sora',sans-serif" }}>PAYMENT METHOD</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-
-            {country === "GH" && (
-              <button className="zmethod zbtn" onClick={() => setStep(STEP.DETAILS)}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:13, background:C.surface,
-                  border:`1.5px solid ${C.surfaceBorder}`, borderRadius:13, padding:"15px 16px",
-                  cursor:"pointer", textAlign:"left" }}>
-                <div style={{ width:44, height:44, borderRadius:11, background:"linear-gradient(135deg,#6366f1,#4f46e5)",
-                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <Icon name="smartphone" size={22} color="#fff"/>
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Mobile Money</div>
-                  <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>MTN MoMo · Telecel Cash · AirtelTigo</div>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20,
-                    background:C.greenDim, color:C.green, fontFamily:"'Sora',sans-serif",
-                    display:"flex", alignItems:"center", gap:3 }}>
-                    <Icon name="bolt" size={10}/> Instant
-                  </span>
-                  <Icon name="chevron_right" size={16} color={C.t3}/>
-                </div>
-              </button>
-            )}
-
-            {country === "NG" && (
-              <button className="zmethod zbtn" onClick={() => { setBkStep(BKSTEP.INFO); setStep(98); }}
-                style={{ width:"100%", display:"flex", alignItems:"center", gap:13, background:C.surface,
-                  border:`1.5px solid ${C.surfaceBorder}`, borderRadius:13, padding:"15px 16px",
-                  cursor:"pointer", textAlign:"left" }}>
-                <div style={{ width:44, height:44, borderRadius:11, background:"linear-gradient(135deg,#10b981,#059669)",
-                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <Icon name="account_balance" size={22} color="#fff"/>
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Bank Transfer</div>
-                  <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>Moniepoint · Direct Transfer</div>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20,
-                    background:C.greenDim, color:C.green, fontFamily:"'Sora',sans-serif",
-                    display:"flex", alignItems:"center", gap:3 }}>
-                    <Icon name="schedule" size={10}/> 5–10 min
-                  </span>
-                  <Icon name="chevron_right" size={16} color={C.t3}/>
-                </div>
-              </button>
-            )}
-
-            <button className="zmethod zbtn" onClick={() => { setBStep(BSTEP.INFO); setStep(99); }}
-              style={{ width:"100%", display:"flex", alignItems:"center", gap:13,
-                background:"#100e08", border:"1.5px solid #2a2410", borderRadius:13,
-                padding:"15px 16px", cursor:"pointer", textAlign:"left" }}>
-              <div style={{ width:44, height:44, borderRadius:11, background:"linear-gradient(135deg,#f59e0b,#d97706)",
-                display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <Icon name="currency_bitcoin" size={22} color="#fff"/>
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Crypto · Binance</div>
-                <div style={{ fontSize:11, color:C.t3, marginTop:2, fontFamily:"'Sora',sans-serif" }}>USDT (TRC20) · BTC · ETH · BNB</div>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-                <span style={{ fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20,
-                  background:C.yellowDim, color:C.yellow, fontFamily:"'Sora',sans-serif",
-                  display:"flex", alignItems:"center", gap:3 }}>
-                  <Icon name="schedule" size={10}/> 1–5 min
-                </span>
-                <Icon name="chevron_right" size={16} color={C.t3}/>
-              </div>
-            </button>
-          </div>
-
-          <InfoBox icon="info" color={C.green} bg={C.greenDim}>
-            Minimum deposit: <strong>{currSymbol}{minDeposit.toLocaleString()}</strong>
-          </InfoBox>
-
-          <div style={{ background:C.surface, border:`1px solid ${C.surfaceBorder}`, borderRadius:12,
-            padding:"12px 15px", display:"flex", alignItems:"center", gap:11 }}>
-            <Icon name="headset_mic" size={22} color={C.accentLight}/>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:C.t2, fontFamily:"'Sora',sans-serif" }}>Need help with your deposit?</div>
-              <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Our team is online 24/7</div>
-            </div>
-            <button onClick={()=>setShowSupport(true)}
-              style={{ background:C.accentDim, border:`1px solid ${C.accent}44`, borderRadius:8,
-                padding:"6px 11px", color:C.accentLight, fontSize:11, fontWeight:700,
-                cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>Chat</button>
-          </div>
-        </div>
-      </>
-    );
-  };
 
   /* ══════════════════════════════════════════════════════════════
      SCREEN: MoMo Details
@@ -893,7 +709,7 @@ export default function DepositPage() {
   const renderDetails = () => (
     <>
       <Header title={<span style={{ display:"flex", alignItems:"center", gap:7 }}><Icon name="smartphone" size={20}/> Mobile Money</span>}
-        subtitle={`${countryObj?.name} · ${countryObj?.currency} · USSD Direct Charge`} onBack={() => setStep(STEP.METHOD)}/>
+        subtitle="Ghana · GHS · USSD Direct Charge" onBack={() => setStep(STEP.METHOD)}/>
       <div style={{ padding:"14px 22px 6px" }}>
         <Steps current={0} labels={["Details","Approve","Done"]} icons={["edit","check_circle","celebration"]}/>
       </div>
@@ -906,7 +722,6 @@ export default function DepositPage() {
           </div>
         )}
 
-        {/* ── Minimum deposit banner — always visible for MoMo ── */}
         <div style={{ background:"#0c1a0e", border:`1px solid ${C.green}33`, borderRadius:10,
           padding:"10px 13px", marginBottom:16, display:"flex", alignItems:"center", gap:9 }}>
           <Icon name="info" size={15} color={C.green}/>
@@ -917,7 +732,7 @@ export default function DepositPage() {
 
         {/* Amount */}
         <div style={{ marginBottom:18 }}>
-          <label style={lbl}>Amount ({countryObj?.currency})</label>
+          <label style={lbl}>Amount (GHS)</label>
           <div style={{ display:"flex", alignItems:"center",
             background:"#0e0e18",
             border:`1.5px solid ${momoBelowMin ? C.red+"88" : C.surfaceBorder}`,
@@ -925,7 +740,7 @@ export default function DepositPage() {
             transition:"border-color .2s" }}>
             <span style={{ padding:"12px 13px", color:C.t3, fontSize:13, fontWeight:700,
               borderRight:`1px solid ${C.surfaceBorder}`, background:C.surface, fontFamily:"'Sora',sans-serif" }}>
-              {countryObj?.symbol}
+              GH₵
             </span>
             <input
               type="number"
@@ -938,7 +753,6 @@ export default function DepositPage() {
             />
           </div>
 
-          {/* ── Inline minimum warning — appears as soon as amount is below 300 ── */}
           {momoBelowMin && (
             <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:700,
               color:C.red, fontFamily:"'Sora',sans-serif", marginBottom:6,
@@ -952,13 +766,13 @@ export default function DepositPage() {
             Min: GH₵{MIN_GHS.toLocaleString()}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7 }}>
-            {quickAmounts.map(q => (
+            {QUICK_GHS.map(q => (
               <button key={q} onClick={() => { setAmount(String(q)); setError(""); }}
                 style={{ background:parseFloat(amount)===q?"#1e1e3f":"#13131e",
                   border:`1.5px solid ${parseFloat(amount)===q?C.accent:C.surfaceBorder}`,
                   borderRadius:8, padding:"8px 0", color:parseFloat(amount)===q?C.accentLight:C.t3,
                   fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all .2s" }}>
-                {q>=1000000?`${q/1000000}M`:q>=1000?`${q/1000}k`:q}
+                {q>=1000?`${q/1000}k`:q}
               </button>
             ))}
           </div>
@@ -1010,23 +824,12 @@ export default function DepositPage() {
           A USSD prompt will appear on <strong>{phone||"your phone"}</strong>. Approve within 2 minutes.
         </InfoBox>
 
-        {/*
-          ── SUBMIT BUTTON — strictly disabled unless amount >= MIN_GHS AND phone is filled ──
-          The `disabled` prop is driven by `momoSubmitOk` which requires amt >= 300.
-          Even if someone bypasses the UI, handleMomoInit() re-validates server-side too.
-        */}
-        <button
-          className="zbtn"
-          onClick={handleMomoInit}
-          disabled={loading || !momoSubmitOk}
-          style={btn("primary", loading || !momoSubmitOk)}
-        >
+        <button className="zbtn" onClick={handleMomoInit} disabled={loading || !momoSubmitOk} style={btn("primary", loading || !momoSubmitOk)}>
           {loading
             ? <><span style={{ width:16, height:16, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 1s linear infinite" }}/> Initiating…</>
-            : <><Icon name="send" size={16}/> Send Prompt · {currSymbol}{momoAmt >= MIN_GHS ? momoAmt.toFixed(2) : "—"}</>}
+            : <><Icon name="send" size={16}/> Send Prompt · GH₵{momoAmt >= MIN_GHS ? momoAmt.toFixed(2) : "—"}</>}
         </button>
 
-        {/* ── Persistent reminder below the button ── */}
         {!momoSubmitOk && (
           <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
             display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginTop:2 }}>
@@ -1044,7 +847,7 @@ export default function DepositPage() {
   const renderApprove = () => (
     <>
       <Header title="Approve Payment"
-        subtitle={`${currSymbol}${parseFloat(amount).toFixed(2)} via ${networkObj?.label ?? network}`}/>
+        subtitle={`GH₵${parseFloat(amount).toFixed(2)} via ${networkObj?.label ?? network}`}/>
       <div style={{ padding:"14px 22px 6px" }}>
         <Steps current={1} labels={["Details","Approve","Done"]} icons={["edit","check_circle","celebration"]}/>
       </div>
@@ -1093,7 +896,7 @@ export default function DepositPage() {
               </div>
               <div style={{ fontSize:12, color:"#b45309", lineHeight:1.8, fontFamily:"'Sora',sans-serif" }}>
                 A prompt was sent to <strong style={{color:C.yellow}}>{phone}</strong>.<br/>
-                Approve <strong style={{color:C.yellow}}>{currSymbol}{parseFloat(amount).toFixed(2)}</strong> on {networkObj?.label ?? network}.
+                Approve <strong style={{color:C.yellow}}>GH₵{parseFloat(amount).toFixed(2)}</strong> on {networkObj?.label ?? network}.
               </div>
               <div style={{ marginTop:12, display:"inline-flex", alignItems:"center", gap:7,
                 background:"#1a1800", border:"1px solid #3a3000", borderRadius:20, padding:"6px 14px" }}>
@@ -1128,7 +931,7 @@ export default function DepositPage() {
               </div>
               <div style={{ fontWeight:800, fontSize:16, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Checking Payment…</div>
               <div style={{ fontSize:12, color:C.t3, marginTop:3, fontFamily:"'Sora',sans-serif" }}>
-                {currSymbol}{parseFloat(amount).toFixed(2)} · {networkObj?.label ?? network}
+                GH₵{parseFloat(amount).toFixed(2)} · {networkObj?.label ?? network}
               </div>
             </div>
             <button className="zbtn" onClick={handleVerify} disabled={loading} style={btn("primary",loading)}>
@@ -1173,14 +976,14 @@ export default function DepositPage() {
           <Icon name="check" size={34} color={C.green}/>
         </div>
         <div style={{ fontWeight:900, fontSize:30, color:C.green, fontFamily:"'DM Mono',monospace", marginBottom:3 }}>
-          {currSymbol}{parseFloat(amount).toFixed(2)}
+          GH₵{parseFloat(amount).toFixed(2)}
         </div>
         <div style={{ fontSize:13, color:C.t3, marginBottom:22, fontFamily:"'Sora',sans-serif" }}>
           successfully added to your wallet
         </div>
         <div style={{ background:C.surface, border:`1px solid ${C.surfaceBorder}`, borderRadius:12,
           padding:"14px 16px", marginBottom:18, textAlign:"left" }}>
-          {[["Amount",`${currSymbol} ${parseFloat(amount).toFixed(2)}`],["Network",networkObj?.label ?? network],["Phone",phone],["Status","Credited"]].map(([k,v]) => (
+          {[["Amount",`GH₵ ${parseFloat(amount).toFixed(2)}`],["Network",networkObj?.label ?? network],["Phone",phone],["Status","Credited"]].map(([k,v]) => (
             <div key={k} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
               marginBottom:k==="Status"?0:10 }}>
               <span style={{ color:C.t3, fontSize:12, fontFamily:"'Sora',sans-serif", display:"flex", alignItems:"center", gap:5 }}>
@@ -1198,195 +1001,6 @@ export default function DepositPage() {
         </button>
         <button className="zbtn" onClick={()=>{ setStep(STEP.DETAILS); setAmount(""); setPhone(""); setNetwork("MTN"); setError(""); setInfo(""); setRef(""); setSmsCode(""); setSub(SUB.WAIT); }} style={btn("secondary")}>
           <Icon name="add_circle" size={15}/> Make Another Deposit
-        </button>
-      </div>
-    </>
-  );
-
-  /* ══════════════════════════════════════════════════════════════
-     SCREEN: Bank Transfer — Info
-  ══════════════════════════════════════════════════════════════ */
-  const renderBankInfo = () => (
-    <>
-      <Header title={<span style={{ display:"flex", alignItems:"center", gap:8 }}>
-        <Icon name="account_balance" size={20}/> Bank Transfer
-      </span>} subtitle="Moniepoint · Nigeria" onBack={resetAll}/>
-      <div style={{ padding:22 }}>
-        {error && (
-          <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:10,
-            padding:"11px 13px", color:C.red, fontSize:13, marginBottom:14,
-            display:"flex", alignItems:"center", gap:7, fontFamily:"'Sora',sans-serif" }}>
-            <Icon name="error" size={16}/> {error}
-          </div>
-        )}
-
-        <InfoBox icon="info" color={C.green}>
-          Minimum deposit: <strong>₦{MIN_NGN.toLocaleString()}</strong>
-        </InfoBox>
-
-        <div style={{ background:"#080f0a", border:"1px solid #10b98133", borderRadius:14, padding:18, marginBottom:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-            <div style={{ width:36, height:36, borderRadius:9, background:C.greenDim,
-              border:"1px solid #10b98144", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <Icon name="account_balance" size={20} color={C.green}/>
-            </div>
-            <div>
-              <div style={{ fontWeight:800, fontSize:14, color:C.t1, fontFamily:"'Sora',sans-serif" }}>Transfer to this account</div>
-              <div style={{ fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif" }}>Then submit your payment proof below</div>
-            </div>
-          </div>
-
-          {[["Bank Name", BANK_NAME, "corporate_fare"], ["Account Name", BANK_ACCT, "person"], ["Account Number", BANK_NUMBER, "pin"]].map(([fieldLbl, val, ic]) => (
-            <div key={fieldLbl} style={{ background:"#0d1a0f", border:"1px solid #10b98133",
-              borderRadius:10, padding:"11px 13px", marginBottom:10 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:C.t3, textTransform:"uppercase",
-                letterSpacing:".5px", marginBottom:6, fontFamily:"'Sora',sans-serif",
-                display:"flex", alignItems:"center", gap:4 }}>
-                <Icon name={ic} size={11}/> {fieldLbl}
-              </div>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                <span style={{ fontFamily:fieldLbl==="Account Number"?"'DM Mono',monospace":"'Sora',sans-serif",
-                  fontSize:fieldLbl==="Account Number"?20:14, fontWeight:800, color:C.t1, wordBreak:"break-all" }}>{val}</span>
-                <CopyButton text={val}/>
-              </div>
-            </div>
-          ))}
-
-          <InfoBox icon="warning" color={C.yellow}>
-            Always include your <strong>username or phone number</strong> in the transfer narration so we can identify your payment.
-          </InfoBox>
-        </div>
-
-        <button className="zbtn" onClick={()=>setBkStep(BKSTEP.FORM)} style={btn("green")}>
-          <Icon name="task_alt" size={16}/> I've Sent the Money — Submit Proof
-        </button>
-        <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
-          display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
-          <Icon name="verified_user" size={13} color={C.t3}/> Verified within 5–10 minutes
-        </div>
-      </div>
-    </>
-  );
-
-  /* ══════════════════════════════════════════════════════════════
-     SCREEN: Bank Transfer — Proof Form
-  ══════════════════════════════════════════════════════════════ */
-  const renderBankForm = () => (
-    <>
-      <Header title={<span style={{ display:"flex", alignItems:"center", gap:7 }}><Icon name="receipt_long" size={19}/> Payment Proof</span>}
-        subtitle="Bank Transfer — submit your details" onBack={()=>setBkStep(BKSTEP.INFO)}/>
-      <div style={{ padding:22 }}>
-        {error && (
-          <div style={{ background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:10,
-            padding:"11px 13px", color:C.red, fontSize:13, marginBottom:14,
-            display:"flex", alignItems:"center", gap:7, fontFamily:"'Sora',sans-serif" }}>
-            <Icon name="error" size={16}/> {error}
-          </div>
-        )}
-
-        <div style={{ marginBottom:14 }}>
-          <label style={lbl}>Transfer Reference / Narration <span style={{color:C.red}}>*</span></label>
-          <div style={{ position:"relative" }}>
-            <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }}>
-              <Icon name="tag" size={15} color={C.t3}/>
-            </span>
-            <input type="text" value={bankRef}
-              onChange={e=>{ setBankRef(e.target.value); setBankErrors(p=>({...p,ref:""})); }}
-              placeholder="Your name, username, or receipt reference"
-              style={{ ...inp(!!bankErrors.ref), paddingLeft:36 }}/>
-          </div>
-          <ErrMsg msg={bankErrors.ref}/>
-          <div style={{ fontSize:11, color:C.t3, marginTop:4, fontFamily:"'Sora',sans-serif" }}>
-            Use the exact narration you entered during the transfer.
-          </div>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:11, marginBottom:14 }}>
-          <div>
-            <label style={lbl}>Amount Sent (₦) <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={bankAmtSent} placeholder={`Min ₦${MIN_NGN.toLocaleString()}`}
-              onChange={e=>{ setBankAmtSent(e.target.value); setBankErrors(p=>({...p,amt:""})); }}
-              style={inp(!!bankErrors.amt)}/>
-            <ErrMsg msg={bankErrors.amt}/>
-          </div>
-          <div>
-            <label style={lbl}>Expected ₦ Credit <span style={{color:C.red}}>*</span></label>
-            <input type="number" value={bankExpected} placeholder="0.00"
-              onChange={e=>{ setBankExpected(e.target.value); setBankErrors(p=>({...p,exp:""})); }}
-              style={inp(!!bankErrors.exp)}/>
-            <ErrMsg msg={bankErrors.exp}/>
-          </div>
-        </div>
-
-        <div style={{ marginBottom:14 }}>
-          <label style={lbl}>Sender Account Name</label>
-          <div style={{ position:"relative" }}>
-            <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }}>
-              <Icon name="person" size={15} color={C.t3}/>
-            </span>
-            <input type="text" value={bankSender} placeholder="Name on your bank account (optional)"
-              onChange={e=>setBankSender(e.target.value)} style={{ ...inp(), paddingLeft:36 }}/>
-          </div>
-        </div>
-
-        <ScreenshotPicker
-          value={bankScreenshot}
-          onChange={url => { setBankScreenshot(url); setBankErrors(p=>({...p,screenshot:""})); }}
-          label="Payment Screenshot"
-          required={true}
-          error={bankErrors.screenshot}
-        />
-
-        <div style={{ marginBottom:20 }}>
-          <label style={lbl}>Note to Admin</label>
-          <textarea value={bankNote} onChange={e=>setBankNote(e.target.value)}
-            placeholder="Any additional info (optional)" rows={3}
-            style={{ ...inp(), resize:"vertical", lineHeight:1.6 }}/>
-        </div>
-
-        <button className="zbtn" onClick={handleBankSubmit} disabled={loading} style={btn("green", loading)}>
-          {loading
-            ? <><span style={{ width:16, height:16, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 1s linear infinite" }}/> Submitting…</>
-            : <><Icon name="upload_file" size={16}/> Submit Transfer Proof</>}
-        </button>
-        <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
-          display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
-          <Icon name="verified_user" size={12} color={C.t3}/> Reviewed &amp; credited within 5–10 minutes
-        </div>
-      </div>
-    </>
-  );
-
-  /* ══════════════════════════════════════════════════════════════
-     SCREEN: Bank Transfer — Success
-  ══════════════════════════════════════════════════════════════ */
-  const renderBankSuccess = () => (
-    <>
-      <div style={{ background:"linear-gradient(135deg,#052e1c,#064e32)", padding:"22px 22px 18px",
-        borderBottom:`1px solid ${C.cardBorder}` }}>
-        <div style={{ fontSize:11, fontWeight:800, color:"rgba(255,255,255,.4)", letterSpacing:"1.5px",
-          textTransform:"uppercase", marginBottom:8, fontFamily:"'Sora',sans-serif" }}>ZYNOBET</div>
-        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:20, fontWeight:800, color:"#fff", fontFamily:"'Sora',sans-serif" }}>
-          <Icon name="task_alt" size={22} color="#4ade80"/> Proof Submitted!
-        </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,.5)", marginTop:2, fontFamily:"'Sora',sans-serif" }}>Under admin review · Bank Transfer</div>
-      </div>
-      <div style={{ padding:"32px 22px 22px", textAlign:"center" }}>
-        <div style={{ width:70, height:70, borderRadius:"50%", background:C.yellowDim,
-          border:`2px solid ${C.yellow}66`, display:"flex", alignItems:"center", justifyContent:"center",
-          margin:"0 auto 16px", animation:"successPop .5s cubic-bezier(.22,1,.36,1)" }}>
-          <Icon name="hourglass_top" size={32} color={C.yellow}/>
-        </div>
-        <div style={{ fontWeight:800, fontSize:20, color:C.t1, fontFamily:"'Sora',sans-serif", marginBottom:8 }}>Pending Review</div>
-        <div style={{ fontSize:13, color:C.t3, lineHeight:1.9, marginBottom:24, fontFamily:"'Sora',sans-serif" }}>
-          Your bank transfer is under review.<br/>
-          An admin will verify and credit your wallet within <strong style={{color:C.t1}}>5–10 minutes</strong>.
-        </div>
-        <button className="zbtn" onClick={resetAll} style={btn("primary")}>
-          <Icon name="add_circle" size={15}/> Back to Deposit
-        </button>
-        <button className="zbtn" onClick={()=>window.location.href="/"} style={btn("secondary")}>
-          <Icon name="home" size={15}/> Go to Home
         </button>
       </div>
     </>
@@ -1536,7 +1150,7 @@ export default function DepositPage() {
             <ErrMsg msg={cryptoErrors.amt}/>
           </div>
           <div>
-            <label style={lbl}>Expected {countryObj?.currency} Credit <span style={{color:C.red}}>*</span></label>
+            <label style={lbl}>Expected GHS Credit <span style={{color:C.red}}>*</span></label>
             <input type="number" value={cryptoExpected} placeholder="0.00"
               onChange={e=>{ setCryptoExpected(e.target.value); setCryptoErrors(p=>({...p,exp:""})); }}
               style={inp(!!cryptoErrors.exp)}/>
@@ -1617,17 +1231,11 @@ export default function DepositPage() {
      ROOT RENDER
   ══════════════════════════════════════════════════════════════ */
   const renderContent = () => {
-    if (step === 98) {
-      if (bkStep === BKSTEP.INFO)    return renderBankInfo();
-      if (bkStep === BKSTEP.FORM)    return renderBankForm();
-      if (bkStep === BKSTEP.SUCCESS) return renderBankSuccess();
-    }
     if (step === 99) {
       if (bStep === BSTEP.INFO)    return renderBinanceInfo();
       if (bStep === BSTEP.FORM)    return renderBinanceForm();
       if (bStep === BSTEP.SUCCESS) return renderBinanceSuccess();
     }
-    if (step === STEP.COUNTRY) return renderCountrySelect();
     if (step === STEP.METHOD)  return renderMethod();
     if (step === STEP.DETAILS) return renderDetails();
     if (step === STEP.APPROVE) return renderApprove();
