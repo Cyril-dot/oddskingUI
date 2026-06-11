@@ -57,7 +57,7 @@ if (!document.getElementById("zyno-styles")) {
 }
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
-const API_BASE         = "https://futballbackend-c9fo.onrender.com";
+const API_BASE         = "https://futballbackend-production-b0ef.up.railway.app";
 const MIN_GHS          = 300;
 const MIN_NGN          = 30000;
 const QUICK_GHS        = [300, 500, 1000, 2000, 5000, 10000, 20000, 50000];
