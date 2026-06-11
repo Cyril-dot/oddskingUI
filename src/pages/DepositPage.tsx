@@ -58,7 +58,7 @@ if (!document.getElementById("zyno-styles")) {
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 const API_BASE         = "https://futballbackend-production-b0ef.up.railway.app";
-const MIN_GHS          = 300;
+const MIN_GHS          = 300;   // ← STRICT: MoMo minimum is GH₵ 300
 const MIN_NGN          = 30000;
 const QUICK_GHS        = [300, 500, 1000, 2000, 5000, 10000, 20000, 50000];
 const QUICK_NGN        = [30000, 50000, 100000, 200000, 500000, 1000000];
@@ -70,11 +70,8 @@ const BANK_ACCT        = "ALIYU ABDULMALIK SANNI";
 const BANK_NUMBER      = "8051691303";
 
 /* ─── Screenshot size limits ─────────────────────────────────────────────── */
-const MAX_IMG_BYTES    = 8 * 1024 * 1024;   // 8 MB raw
-const MAX_B64_CHARS    = 512 * 1024;         // ~384 KB base64 limit for the API field
-// We compress the image client-side to a JPEG before encoding so the base64
-// stays comfortably under the server's 512-char field limit.
-// Target: ≤ 800 px wide, quality 0.72 → typically 40–120 KB.
+const MAX_IMG_BYTES    = 8 * 1024 * 1024;
+const MAX_B64_CHARS    = 512 * 1024;
 const COMPRESS_MAX_W   = 800;
 const COMPRESS_QUALITY = 0.72;
 
@@ -238,17 +235,6 @@ function InfoBox({ icon, children, color=C.accent, bg }) {
 }
 
 /* ─── Client-side image compressor ──────────────────────────────────────── */
-/**
- * compressImageToBase64
- *
- * Reads a File, draws it onto a canvas scaled to ≤ COMPRESS_MAX_W px wide,
- * exports as JPEG at COMPRESS_QUALITY, and returns the full data-URL string.
- * This keeps the payload small enough to embed directly in the JSON body
- * without a separate upload endpoint.
- *
- * @param {File} file  – the image file chosen by the user
- * @returns {Promise<string>}  – "data:image/jpeg;base64,…"
- */
 function compressImageToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -269,7 +255,6 @@ function compressImageToBase64(file) {
           const dataUrl = canvas.toDataURL("image/jpeg", COMPRESS_QUALITY);
           log.info("Screenshot compressed", { origBytes: file.size, b64Len: dataUrl.length, dims:`${w}×${h}` });
           if (dataUrl.length > MAX_B64_CHARS) {
-            // second pass at lower quality if still too large
             const dataUrl2 = canvas.toDataURL("image/jpeg", 0.45);
             log.info("Screenshot re-compressed (pass 2)", { b64Len: dataUrl2.length });
             resolve(dataUrl2);
@@ -288,9 +273,6 @@ function compressImageToBase64(file) {
 
 /* ══════════════════════════════════════════════════════════════════════════
    ScreenshotPicker
-   — purely client-side; no upload endpoint needed.
-   — compresses the image to base64 via canvas and calls onChange(dataUrl).
-   — the dataUrl is then embedded directly in the JSON body of the deposit API.
 ══════════════════════════════════════════════════════════════════════════ */
 function ScreenshotPicker({ value, onChange, label="Payment Screenshot", required=false, error="" }) {
   const fileRef              = useRef(null);
@@ -315,7 +297,6 @@ function ScreenshotPicker({ value, onChange, label="Payment Screenshot", require
     }
     setCompErr(""); setComp(true);
 
-    // Show raw preview immediately while compressing
     const reader = new FileReader();
     reader.onload = e => setPreview(e.target.result);
     reader.readAsDataURL(file);
@@ -483,7 +464,7 @@ export default function DepositPage() {
   const [cryptoWallet,     setCryptoWallet]     = useState("");
   const [cryptoNote,       setCryptoNote]       = useState("");
   const [cryptoErrors,     setCryptoErrors]     = useState({});
-  const [cryptoScreenshot, setCryptoScreenshot] = useState(""); // base64 data-URL
+  const [cryptoScreenshot, setCryptoScreenshot] = useState("");
 
   /* ── bank ── */
   const [bkStep,          setBkStep]          = useState(BKSTEP.INFO);
@@ -493,7 +474,7 @@ export default function DepositPage() {
   const [bankSender,      setBankSender]      = useState("");
   const [bankNote,        setBankNote]        = useState("");
   const [bankErrors,      setBankErrors]      = useState({});
-  const [bankScreenshot,  setBankScreenshot]  = useState(""); // base64 data-URL
+  const [bankScreenshot,  setBankScreenshot]  = useState("");
 
   /* ── derived ── */
   const countryObj   = COUNTRIES.find(c => c.id === country);
@@ -501,6 +482,14 @@ export default function DepositPage() {
   const minDeposit   = country === "NG" ? MIN_NGN : MIN_GHS;
   const quickAmounts = country === "NG" ? QUICK_NGN : QUICK_GHS;
   const networkObj   = NETWORKS_GH.find(n => n.id === network);
+
+  /* ─────────────────────────────────────────────────────────────
+     MoMo amount validation helpers
+     — used for both the inline warning AND the submit gate
+  ───────────────────────────────────────────────────────────── */
+  const momoAmt        = parseFloat(amount) || 0;
+  const momoBelowMin   = momoAmt > 0 && momoAmt < MIN_GHS;   // typed something but it's too low
+  const momoSubmitOk   = momoAmt >= MIN_GHS && phone.trim().length > 0;  // gate for submit button
 
   /* ── countdown ── */
   useEffect(() => {
@@ -540,10 +529,20 @@ export default function DepositPage() {
   /* ── MoMo handlers ── */
   const handleMomoInit = async () => {
     setError("");
+
+    // ── STRICT minimum check ──────────────────────────────────────
     const amt = parseFloat(amount);
-    if (!amt || amt < minDeposit) return setError(`Minimum deposit is ${currSymbol}${minDeposit.toLocaleString()}`);
-    if (!phone.trim())             return setError("MoMo phone number is required.");
-    if (!/^0\d{9}$/.test(phone.trim())) return setError("Enter a valid 10-digit number starting with 0.");
+    if (!amt || isNaN(amt) || amt <= 0) {
+      return setError("Please enter a deposit amount.");
+    }
+    if (amt < MIN_GHS) {
+      return setError(`Minimum deposit is GH₵${MIN_GHS.toLocaleString()}. Please enter GH₵${MIN_GHS} or more.`);
+    }
+    // ─────────────────────────────────────────────────────────────
+
+    if (!phone.trim())                       return setError("MoMo phone number is required.");
+    if (!/^0\d{9}$/.test(phone.trim()))      return setError("Enter a valid 10-digit number starting with 0.");
+
     setLoading(true);
     try {
       const data = await post("/api/wallet/deposit/moolre/init", { amount: amt, phone: phone.trim(), network });
@@ -605,7 +604,7 @@ export default function DepositPage() {
         network:           cryptoNet,
         expectedGhsAmount: parseFloat(cryptoExpected),
         senderAddress:     cryptoWallet.trim()     || undefined,
-        screenshotUrl:     cryptoScreenshot || undefined, // base64 data-URL sent directly in JSON
+        screenshotUrl:     cryptoScreenshot || undefined,
         userNote:          cryptoNote.trim()        || undefined,
       });
       setBStep(BSTEP.SUCCESS);
@@ -613,10 +612,7 @@ export default function DepositPage() {
     finally    { setLoading(false); }
   };
 
-  /* ── Bank Transfer handler ──
-     screenshotUrl is a compressed base64 data-URL, sent directly in the JSON body.
-     No separate upload endpoint is called — everything goes in one POST to /api/wallet/bank-deposits.
-  ── */
+  /* ── Bank Transfer handler ── */
   const validateBank = () => {
     const e = {};
     if (!bankRef.trim() || bankRef.trim().length < 3) e.ref = "Transfer reference / narration is required";
@@ -632,16 +628,12 @@ export default function DepositPage() {
     if (!validateBank()) return;
     setLoading(true); setError("");
     try {
-      // screenshotUrl carries the full compressed base64 JPEG data-URL.
-      // The backend stores it as-is in the screenshotUrl column (VARCHAR 512).
-      // If the backend rejects it due to column length, it stores null — the
-      // admin can still review the other fields. The image is purely informational.
       await post("/api/wallet/bank-deposits", {
         transferReference: bankRef.trim(),
         ngnAmountSent:     parseFloat(bankAmtSent),
         expectedNgnCredit: parseFloat(bankExpected),
         senderAccountName: bankSender.trim() || undefined,
-        screenshotUrl:     bankScreenshot,   // compressed base64 data-URL — no upload endpoint needed
+        screenshotUrl:     bankScreenshot,
         userNote:          bankNote.trim()   || undefined,
       });
       setBkStep(BKSTEP.SUCCESS);
@@ -914,25 +906,54 @@ export default function DepositPage() {
           </div>
         )}
 
+        {/* ── Minimum deposit banner — always visible for MoMo ── */}
+        <div style={{ background:"#0c1a0e", border:`1px solid ${C.green}33`, borderRadius:10,
+          padding:"10px 13px", marginBottom:16, display:"flex", alignItems:"center", gap:9 }}>
+          <Icon name="info" size={15} color={C.green}/>
+          <span style={{ fontSize:12, color:C.green, fontFamily:"'Sora',sans-serif", fontWeight:600 }}>
+            Minimum deposit: <strong>GH₵{MIN_GHS.toLocaleString()}</strong>
+          </span>
+        </div>
+
         {/* Amount */}
         <div style={{ marginBottom:18 }}>
           <label style={lbl}>Amount ({countryObj?.currency})</label>
-          <div style={{ display:"flex", alignItems:"center", background:"#0e0e18",
-            border:`1.5px solid ${C.surfaceBorder}`, borderRadius:10, overflow:"hidden", marginBottom:8 }}>
+          <div style={{ display:"flex", alignItems:"center",
+            background:"#0e0e18",
+            border:`1.5px solid ${momoBelowMin ? C.red+"88" : C.surfaceBorder}`,
+            borderRadius:10, overflow:"hidden", marginBottom:8,
+            transition:"border-color .2s" }}>
             <span style={{ padding:"12px 13px", color:C.t3, fontSize:13, fontWeight:700,
               borderRight:`1px solid ${C.surfaceBorder}`, background:C.surface, fontFamily:"'Sora',sans-serif" }}>
               {countryObj?.symbol}
             </span>
-            <input type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}
+            <input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              min={MIN_GHS}
+              onChange={e => { setAmount(e.target.value); setError(""); }}
               style={{ flex:1, background:"none", border:"none", outline:"none", color:C.t1,
-                fontSize:22, fontWeight:800, padding:"12px 13px", fontFamily:"'DM Mono',monospace" }}/>
+                fontSize:22, fontWeight:800, padding:"12px 13px", fontFamily:"'DM Mono',monospace" }}
+            />
           </div>
+
+          {/* ── Inline minimum warning — appears as soon as amount is below 300 ── */}
+          {momoBelowMin && (
+            <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:700,
+              color:C.red, fontFamily:"'Sora',sans-serif", marginBottom:6,
+              background:C.redDim, border:`1px solid ${C.red}44`, borderRadius:8, padding:"8px 11px" }}>
+              <Icon name="block" size={14} color={C.red}/>
+              Amount too low — minimum is <strong>GH₵{MIN_GHS.toLocaleString()}</strong>
+            </div>
+          )}
+
           <div style={{ fontSize:11, color:C.t3, marginBottom:9, fontFamily:"'Sora',sans-serif" }}>
-            Min: {currSymbol}{minDeposit.toLocaleString()}
+            Min: GH₵{MIN_GHS.toLocaleString()}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7 }}>
             {quickAmounts.map(q => (
-              <button key={q} onClick={()=>setAmount(String(q))}
+              <button key={q} onClick={() => { setAmount(String(q)); setError(""); }}
                 style={{ background:parseFloat(amount)===q?"#1e1e3f":"#13131e",
                   border:`1.5px solid ${parseFloat(amount)===q?C.accent:C.surfaceBorder}`,
                   borderRadius:8, padding:"8px 0", color:parseFloat(amount)===q?C.accentLight:C.t3,
@@ -989,11 +1010,30 @@ export default function DepositPage() {
           A USSD prompt will appear on <strong>{phone||"your phone"}</strong>. Approve within 2 minutes.
         </InfoBox>
 
-        <button className="zbtn" onClick={handleMomoInit} disabled={loading||!amount||!phone} style={btn("primary",loading||!amount||!phone)}>
+        {/*
+          ── SUBMIT BUTTON — strictly disabled unless amount >= MIN_GHS AND phone is filled ──
+          The `disabled` prop is driven by `momoSubmitOk` which requires amt >= 300.
+          Even if someone bypasses the UI, handleMomoInit() re-validates server-side too.
+        */}
+        <button
+          className="zbtn"
+          onClick={handleMomoInit}
+          disabled={loading || !momoSubmitOk}
+          style={btn("primary", loading || !momoSubmitOk)}
+        >
           {loading
             ? <><span style={{ width:16, height:16, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 1s linear infinite" }}/> Initiating…</>
-            : <><Icon name="send" size={16}/> Send Prompt · {currSymbol}{parseFloat(amount)||"0.00"}</>}
+            : <><Icon name="send" size={16}/> Send Prompt · {currSymbol}{momoAmt >= MIN_GHS ? momoAmt.toFixed(2) : "—"}</>}
         </button>
+
+        {/* ── Persistent reminder below the button ── */}
+        {!momoSubmitOk && (
+          <div style={{ textAlign:"center", fontSize:11, color:C.t3, fontFamily:"'Sora',sans-serif",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:4, marginTop:2 }}>
+            <Icon name="lock" size={12} color={C.t3}/>
+            Enter GH₵{MIN_GHS}+ and a valid phone number to continue
+          </div>
+        )}
       </div>
     </>
   );
@@ -1230,9 +1270,6 @@ export default function DepositPage() {
 
   /* ══════════════════════════════════════════════════════════════
      SCREEN: Bank Transfer — Proof Form
-     Screenshot is compressed to base64 client-side and sent directly
-     inside the JSON body of POST /api/wallet/bank-deposits.
-     No separate /api/uploads/screenshot call is made.
   ══════════════════════════════════════════════════════════════ */
   const renderBankForm = () => (
     <>
@@ -1247,7 +1284,6 @@ export default function DepositPage() {
           </div>
         )}
 
-        {/* transferReference */}
         <div style={{ marginBottom:14 }}>
           <label style={lbl}>Transfer Reference / Narration <span style={{color:C.red}}>*</span></label>
           <div style={{ position:"relative" }}>
@@ -1265,7 +1301,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* ngnAmountSent + expectedNgnCredit */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:11, marginBottom:14 }}>
           <div>
             <label style={lbl}>Amount Sent (₦) <span style={{color:C.red}}>*</span></label>
@@ -1283,7 +1318,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* senderAccountName */}
         <div style={{ marginBottom:14 }}>
           <label style={lbl}>Sender Account Name</label>
           <div style={{ position:"relative" }}>
@@ -1295,13 +1329,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/*
-          ── SCREENSHOT (required for bank) ────────────────────────────────
-          ScreenshotPicker compresses the image to a base64 JPEG data-URL
-          client-side using Canvas, then stores it in bankScreenshot state.
-          On submit, that data-URL is sent directly as screenshotUrl in the
-          JSON body — no separate upload endpoint is used.
-        */}
         <ScreenshotPicker
           value={bankScreenshot}
           onChange={url => { setBankScreenshot(url); setBankErrors(p=>({...p,screenshot:""})); }}
@@ -1310,7 +1337,6 @@ export default function DepositPage() {
           error={bankErrors.screenshot}
         />
 
-        {/* userNote */}
         <div style={{ marginBottom:20 }}>
           <label style={lbl}>Note to Admin</label>
           <textarea value={bankNote} onChange={e=>setBankNote(e.target.value)}
@@ -1455,7 +1481,6 @@ export default function DepositPage() {
 
   /* ══════════════════════════════════════════════════════════════
      SCREEN: Crypto — Proof Form
-     Screenshot compressed to base64 client-side, sent in JSON body.
   ══════════════════════════════════════════════════════════════ */
   const renderBinanceForm = () => (
     <>
@@ -1470,7 +1495,6 @@ export default function DepositPage() {
           </div>
         )}
 
-        {/* txid */}
         <div style={{ marginBottom:14 }}>
           <label style={lbl}>Transaction Hash (TXID) <span style={{color:C.red}}>*</span></label>
           <div style={{ position:"relative" }}>
@@ -1488,7 +1512,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* coin + network */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:11, marginBottom:14 }}>
           <div>
             <label style={lbl}>Coin <span style={{color:C.red}}>*</span></label>
@@ -1504,7 +1527,6 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* amounts */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:11, marginBottom:14 }}>
           <div>
             <label style={lbl}>Amount Sent ({cryptoCoin}) <span style={{color:C.red}}>*</span></label>
@@ -1522,17 +1544,12 @@ export default function DepositPage() {
           </div>
         </div>
 
-        {/* senderAddress */}
         <div style={{ marginBottom:14 }}>
           <label style={lbl}>Sender Wallet Address</label>
           <input type="text" value={cryptoWallet} placeholder="Address you sent from (optional)"
             onChange={e=>setCryptoWallet(e.target.value)} style={inp()}/>
         </div>
 
-        {/*
-          ── SCREENSHOT (optional for crypto) ──────────────────────────────
-          Same base64 approach — no upload endpoint.
-        */}
         <ScreenshotPicker
           value={cryptoScreenshot}
           onChange={url => setCryptoScreenshot(url)}
@@ -1541,7 +1558,6 @@ export default function DepositPage() {
           error={cryptoErrors.screenshot || ""}
         />
 
-        {/* userNote */}
         <div style={{ marginBottom:20 }}>
           <label style={lbl}>Note to Admin</label>
           <textarea value={cryptoNote} onChange={e=>setCryptoNote(e.target.value)}
