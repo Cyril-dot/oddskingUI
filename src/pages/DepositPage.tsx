@@ -1104,35 +1104,38 @@ export default function DepositPage() {
   };
 
   /* ── Ghana MoMo validation & submit (uses /api/wallet/bank-deposits) ── */
-  const validateGhMomo = () => {
-    const e: Record<string, string> = {};
-    if (!bankSender.trim() || bankSender.trim().length < 9) e.sender = "Enter your MoMo phone number";
-    if (!bankRef.trim() || bankRef.trim().length < 2) e.ref = "Enter your MoMo reference or note";
-    const amt = parseFloat(bankAmtSent);
-    if (!amt || isNaN(amt) || amt <= 0)       e.amt = "Enter the amount you sent";
-    else if (amt < MIN_DEPOSIT_GHS)           e.amt = `Minimum deposit is GH₵${MIN_DEPOSIT_GHS}`;
-    if (!bankExpected || isNaN(+bankExpected) || +bankExpected < 1) e.exp = "Enter expected wallet credit";
-    if (!bankScreenshot) e.screenshot = "A payment screenshot is required";
-    setBankErrs(e); return Object.keys(e).length === 0;
-  };
+ const validateGhMomo = () => {
+  const e: Record<string, string> = {};
+  if (!bankSender.trim() || bankSender.trim().length < 9) e.sender = "Enter your MoMo phone number";
+  if (!bankRef.trim() || bankRef.trim().length < 2) e.ref = "Enter your MoMo reference or note";
+  const amt = parseFloat(bankAmtSent);
+  if (!amt || isNaN(amt) || amt <= 0)       e.amt = "Enter the amount you sent";
+  else if (amt < MIN_DEPOSIT_GHS)           e.amt = `Minimum deposit is GH₵${MIN_DEPOSIT_GHS}`; // ← was MIN_DEPOSIT_NGN
+  if (!bankExpected || isNaN(+bankExpected) || +bankExpected < 1) e.exp = "Enter expected wallet credit";
+  if (!bankScreenshot) e.screenshot = "A payment screenshot is required";
+  setBankErrs(e); return Object.keys(e).length === 0;
+};
 
   const handleGhMomoSubmit = async () => {
-    if (!validateGhMomo()) return;
-    setLoading(true); setError("");
-    try {
-      // Same endpoint & field names as Nigerian bank deposit
-      await post("/api/wallet/bank-deposits", {
-        transferReference:  bankRef.trim(),
-        ngnAmountSent:      parseFloat(bankAmtSent),
-        expectedNgnCredit:  parseFloat(bankExpected),
-        senderAccountName:  bankSender.trim(),
-        screenshotUrl:      bankScreenshot,
-        userNote:           bankNote.trim() || undefined,
-      });
-      setStep("gh_success");
-    } catch (e: unknown) { setError((e as Error).message); }
-    finally { setLoading(false); }
-  };
+  if (!validateGhMomo()) return;
+  setLoading(true); setError("");
+  try {
+    const result = await post("/api/wallet/bank-deposits", {
+      transferReference:  bankRef.trim(),
+      ngnAmountSent:      parseFloat(bankAmtSent),
+      expectedNgnCredit:  parseFloat(bankExpected),
+      senderAccountName:  bankSender.trim(),
+      screenshotUrl:      bankScreenshot,
+      userNote:           bankNote.trim() || undefined,
+    });
+    console.log("Success:", result);
+    setStep("gh_success");
+  } catch (e: unknown) {
+    console.error("Full error:", e);  // ← add this
+    setError((e as Error).message);
+  }
+  finally { setLoading(false); }
+};
 
   /* ── Nigeria bank validation & submit ── */
   const validateBank = () => {
