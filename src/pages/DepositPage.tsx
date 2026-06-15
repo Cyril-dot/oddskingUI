@@ -1035,15 +1035,19 @@ export default function DepositPage() {
   const [bankErrs,        setBankErrs]        = useState<Record<string, string>>({});
 
   const post = async (path: string, body: object) => {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok()}` },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.message || data?.error || "Request failed.");
-    return data;
-  };
+  const res = await fetch(`https://futballbackend-production-b0ef.up.railway.app${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok()}` },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  let data: any = {};
+  try { data = text ? JSON.parse(text) : {}; } catch {}
+
+  if (!res.ok) throw new Error(data?.message || data?.error || `Server error ${res.status}`);
+  return data;
+};
 
   const handleSelectCountry = useCallback((c: Country) => {
     setCountry(c); setGateway(null); setError(""); setStep("form");
