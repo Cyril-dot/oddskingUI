@@ -44,13 +44,38 @@ const BINANCE_ADDRESS = "THHf1TpvjtpZ8QoLnCXXeUgs116pgHwgVq";
 const CRYPTO_COINS    = ["USDT", "BTC", "ETH", "BNB", "USDC"];
 const CRYPTO_NETWORKS = ["TRC20", "BEP20", "ERC20", "Arbitrum", "Optimism"];
 
+/* ─── ImgBB (crypto screenshot hosting) ─────────────────────────────────────
+   The backend's BinanceDeposit.screenshotUrl column is capped at 512 chars,
+   so a compressed base64 data-URL (tens of thousands of chars) will never
+   fit. ImgBB returns a short, real, public HTTPS URL instead — well under
+   that limit — which is what gets sent as screenshotUrl on submit.
+──────────────────────────────────────────────────────────────────────────── */
+const IMGBB_API_KEY = "bdd12743a2e929bcdd4a6843dea9295e";
+
+async function uploadToImgBB(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Image upload failed (${res.status})`);
+  }
+  const data = await res.json();
+  const url: string = data?.data?.url;
+  if (!url) throw new Error("Image host returned no URL — check the ImgBB API key.");
+  return url;
+}
+
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 const T = {
   bg: "#050c1a", surface: "#0a1628", raised: "#0f1f38",
   border: "rgba(99,179,237,0.12)",
   blue: "#2563eb", blueBright: "#3b82f6",
   blueLow: "rgba(37,99,235,0.12)", blueMid: "rgba(37,99,235,0.32)",
-  gold: "#f59e0b", goldLow: "rgba(245,158,11,0.1)",
+  gold: "#f59e0b", goldLow: "rgba(245,158,11,0.1)", goldMid: "rgba(245,158,11,0.32)",
   green: "#22c55e", greenLow: "rgba(34,197,94,0.1)", greenMid: "rgba(34,197,94,0.22)",
   white: "#f0f6ff", dim: "rgba(224,238,255,0.42)", faint: "rgba(224,238,255,0.05)",
 };
@@ -70,6 +95,12 @@ const btnPrimary: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
   transition: "opacity 0.15s", fontFamily: "inherit",
   boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
+};
+
+const btnPrimaryDis: React.CSSProperties = {
+  ...btnPrimary,
+  cursor: "not-allowed",
+  opacity: 0.38,
 };
 
 const btnGreen: React.CSSProperties = {
@@ -145,7 +176,7 @@ function compressImageToBase64(file: File): Promise<string> {
   });
 }
 
-/* ── Screenshot Upload widget (reused) ── */
+/* ── Screenshot Upload widget (reused — MoMo / Bank NG, base64) ── */
 function ScreenshotUpload({ screenshot, compressing, errs, onFileChange, onRemove }: {
   screenshot: string; compressing: boolean;
   errs: Record<string,string>; onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemove: () => void;
@@ -187,6 +218,72 @@ function ScreenshotUpload({ screenshot, compressing, errs, onFileChange, onRemov
       {errs.screenshot && <div style={{ fontSize: 11, color: "#f87171", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><span className="material-symbols-outlined" style={{ fontSize: 12 }}>error</span>{errs.screenshot}</div>}
       {!errs.screenshot && !screenshot && <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Upload a screenshot of your payment confirmation.</div>}
       {!errs.screenshot && screenshot && <div style={{ fontSize: 11, color: T.green, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}><span className="material-symbols-outlined" style={{ fontSize: 13 }}>check_circle</span>Screenshot attached — will be sent with your deposit proof</div>}
+    </div>
+  );
+}
+
+/* ── Crypto Screenshot Upload widget (NEW — Binance/crypto only, ImgBB-hosted) ──
+   Screenshot is OPTIONAL (recommended), not required, for the crypto flow.
+   Picking a file shows an instant local preview while it uploads to ImgBB
+   in the background; the short hosted URL becomes `screenshot`.
+──────────────────────────────────────────────────────────────────────────── */
+function CryptoScreenshotUpload({ screenshot, preview, uploading, error, onFileChange, onRemove }: {
+  screenshot: string; preview: string; uploading: boolean; error?: string;
+  onFileChange: (file: File) => void; onRemove: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onFileChange(file);
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={lbl}>
+        Payment Screenshot{" "}
+        <span style={{ color: T.dim, textTransform: "none", fontSize: 10 }}>(recommended)</span>
+      </label>
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleInputChange} />
+      <button
+        type="button"
+        onClick={() => !uploading && fileInputRef.current?.click()}
+        style={{
+          position: "relative", width: "100%",
+          padding: preview ? 0 : "22px 16px", borderRadius: 10,
+          cursor: uploading ? "wait" : "pointer", boxSizing: "border-box", overflow: "hidden",
+          backgroundColor: screenshot ? T.greenLow : T.faint,
+          border: `2px dashed ${error ? "rgba(239,68,68,0.5)" : screenshot ? T.greenMid : T.border}`,
+          color: screenshot ? T.green : T.dim,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
+          fontFamily: "inherit",
+        }}
+      >
+        {preview ? (
+          <img src={preview} alt="Payment proof" style={{ width: "100%", maxHeight: 160, objectFit: "contain", opacity: uploading ? 0.5 : 1, display: "block" }} />
+        ) : (
+          <>
+            <span className="material-symbols-outlined" style={{ fontSize: 28, color: T.dim }}>add_photo_alternate</span>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Tap to upload screenshot</span>
+            <span style={{ fontSize: 10, color: T.dim }}>PNG · JPG · WEBP — max 10 MB</span>
+          </>
+        )}
+        {uploading && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <Spin /><span style={{ fontSize: 12, color: "#fff", fontWeight: 600 }}>Uploading…</span>
+          </div>
+        )}
+      </button>
+      {screenshot && !uploading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: T.green, display: "flex", alignItems: "center", gap: 4 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>check_circle</span>Uploaded — tap image to change
+          </div>
+          <button onClick={onRemove} style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 6, cursor: "pointer", border: "none", background: "rgba(239,68,68,0.15)", color: "#f87171", fontFamily: "inherit" }}>
+            Remove
+          </button>
+        </div>
+      )}
+      {error && <div style={{ fontSize: 11, color: "#f87171", marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}><span className="material-symbols-outlined" style={{ fontSize: 12 }}>error</span>{error}</div>}
+      {!screenshot && !uploading && !error && <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Optional but speeds up verification.</div>}
     </div>
   );
 }
@@ -651,17 +748,62 @@ function BinanceInfo({ error, onNext }: { error: string; onNext: () => void }) {
   );
 }
 
-/* ── Binance Proof ── */
-function BinanceProof({ error, txid, setTxid, cryptoAmt, setCryptoAmt, coin, setCoin, cryptoNet, setCryptoNet, expectedGhs, setExpectedGhs, senderAddr, setSenderAddr, userNote, setUserNote, bErrs, setBErrs, loading, onSubmit, onBack }: {
+/* ── Binance Proof — UPDATED: now includes the optional ImgBB screenshot
+   uploader between "Sender Wallet" and "Note to Admin", matching the
+   other two apps. Submit button is disabled while an upload is in flight. ── */
+interface BinanceProofProps {
   error: string; txid: string; setTxid: (v: string) => void; cryptoAmt: string; setCryptoAmt: (v: string) => void;
   coin: string; setCoin: (v: string) => void; cryptoNet: string; setCryptoNet: (v: string) => void;
   expectedGhs: string; setExpectedGhs: (v: string) => void; senderAddr: string; setSenderAddr: (v: string) => void;
-  userNote: string; setUserNote: (v: string) => void; bErrs: Record<string,string>;
+  userNote: string; setUserNote: (v: string) => void;
+  screenshot: string; setScreenshot: (v: string) => void;
+  preview: string; setPreview: (v: string) => void;
+  uploading: boolean; setUploading: (v: boolean) => void;
+  bErrs: Record<string,string>;
   setBErrs: (fn: (p: Record<string,string>) => Record<string,string>) => void;
   loading: boolean; onSubmit: () => void; onBack: () => void;
-}) {
+}
+function BinanceProof({
+  error, txid, setTxid, cryptoAmt, setCryptoAmt, coin, setCoin, cryptoNet, setCryptoNet,
+  expectedGhs, setExpectedGhs, senderAddr, setSenderAddr, userNote, setUserNote,
+  screenshot, setScreenshot, preview, setPreview, uploading, setUploading,
+  bErrs, setBErrs, loading, onSubmit, onBack,
+}: BinanceProofProps) {
   const fe = (k: string) => bErrs[k] ? <div style={{ fontSize: 11, color: "#f87171", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><span className="material-symbols-outlined" style={{ fontSize: 12 }}>error</span>{bErrs[k]}</div> : null;
   const fi = (k: string): React.CSSProperties => ({ ...inp, border: `1px solid ${bErrs[k] ? "rgba(239,68,68,0.5)" : T.border}` });
+
+  const handlePick = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setBErrs(p => ({ ...p, screenshot: "Please select an image file." }));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setBErrs(p => ({ ...p, screenshot: "Image must be under 10 MB." }));
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setUploading(true);
+    setBErrs(p => ({ ...p, screenshot: "" }));
+    try {
+      const url = await uploadToImgBB(file);
+      setScreenshot(url);
+    } catch (err: unknown) {
+      setBErrs(p => ({ ...p, screenshot: err instanceof Error ? err.message : "Upload failed. Try again." }));
+      setScreenshot("");
+      URL.revokeObjectURL(objectUrl);
+      setPreview("");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setScreenshot("");
+    setPreview("");
+    setBErrs(p => ({ ...p, screenshot: "" }));
+  };
+
   return (
     <div>
       {error && <ErrBox msg={error} />}
@@ -700,12 +842,23 @@ function BinanceProof({ error, txid, setTxid, cryptoAmt, setCryptoAmt, coin, set
         <label style={lbl}>Sender Wallet <span style={{ color: T.dim, textTransform: "none", fontSize: 10 }}>(optional)</span></label>
         <input type="text" value={senderAddr} placeholder="Address you sent from" onChange={e => setSenderAddr(e.target.value)} style={inp} />
       </div>
+
+      {/* ── NEW: optional ImgBB-hosted screenshot uploader ── */}
+      <CryptoScreenshotUpload
+        screenshot={screenshot}
+        preview={preview}
+        uploading={uploading}
+        error={bErrs.screenshot}
+        onFileChange={handlePick}
+        onRemove={handleRemove}
+      />
+
       <div style={{ marginBottom: 18 }}>
         <label style={lbl}>Note to Admin <span style={{ color: T.dim, textTransform: "none", fontSize: 10 }}>(optional)</span></label>
         <textarea value={userNote} onChange={e => setUserNote(e.target.value)} placeholder="Any extra info" rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.6 } as React.CSSProperties} />
       </div>
-      <button onClick={onSubmit} disabled={loading} style={{ ...btnPrimary, opacity: loading ? 0.38 : 1, marginBottom: 8 }}>
-        {loading ? <><Spin /> Submitting…</> : <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>upload_file</span>Submit Deposit Proof</>}
+      <button onClick={onSubmit} disabled={loading || uploading} style={loading || uploading ? btnPrimaryDis : { ...btnPrimary, marginBottom: 8 }}>
+        {loading ? <><Spin /> Submitting…</> : uploading ? <><Spin /> Uploading screenshot…</> : <><span className="material-symbols-outlined" style={{ fontSize: 18 }}>upload_file</span>Submit Deposit Proof</>}
       </button>
       <button onClick={onBack} style={btnGhost}><span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_back</span>Back</button>
     </div>
@@ -728,7 +881,11 @@ function PendingSuccess({ label, mins, onHome, onReset }: { label: string; mins:
   );
 }
 
-function CryptoSuccess({ onHome, onReset }: { onHome: () => void; onReset: () => void }) {
+/* ── Crypto Success — now shows a small receipt incl. screenshot status ── */
+function CryptoSuccess({ coin, cryptoNet, cryptoAmt, expectedGhs, txid, screenshot, onHome, onReset }: {
+  coin: string; cryptoNet: string; cryptoAmt: string; expectedGhs: string; txid: string; screenshot: string;
+  onHome: () => void; onReset: () => void;
+}) {
   return (
     <div style={{ textAlign: "center", padding: "12px 0 8px" }}>
       <div style={{ width: 64, height: 64, borderRadius: "50%", margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", background: T.goldLow, border: "2px solid rgba(245,158,11,0.35)" }}>
@@ -738,6 +895,23 @@ function CryptoSuccess({ onHome, onReset }: { onHome: () => void; onReset: () =>
       <div style={{ fontSize: 13, color: T.dim, lineHeight: 1.65, marginBottom: 20 }}>
         Your crypto deposit is under review.<br />Admin will credit your Zynobet wallet within <strong style={{ color: T.white }}>1–5 minutes</strong>.
       </div>
+
+      <div style={{ background: T.goldLow, border: `1px solid ${T.goldMid}`, borderRadius: 12, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+        {[
+          ["Method",     `Crypto — ${coin} (${cryptoNet})`],
+          ["Amount",     `${cryptoAmt} ${coin}`],
+          ["Expected",   `GH₵ ${expectedGhs}`],
+          ["TXID",       txid || "—"],
+          ["Screenshot", screenshot ? "Attached ✓" : "Not provided"],
+          ["Status",     "Pending Admin Review"],
+        ].map(([k, v]) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
+            <span style={{ color: T.dim, fontSize: 12, flexShrink: 0 }}>{k}</span>
+            <span style={{ color: k === "Screenshot" && screenshot ? T.green : T.white, fontSize: 12, fontWeight: 700, textAlign: "right", wordBreak: "break-all", maxWidth: "60%" }}>{v}</span>
+          </div>
+        ))}
+      </div>
+
       <button onClick={onHome} style={{ ...btnPrimary, marginBottom: 8 }}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>home</span>Back to Home</button>
       <button onClick={onReset} style={btnGhost}><span className="material-symbols-outlined" style={{ fontSize: 16 }}>add_circle</span>Make Another Deposit</button>
     </div>
@@ -786,6 +960,12 @@ export default function DepositPage() {
   const [cryptoNet, setCryptoNet] = useState("TRC20"); const [expectedGhs, setExpectedGhs] = useState("");
   const [senderAddr, setSenderAddr] = useState(""); const [userNote, setUserNote] = useState("");
   const [bErrs, setBErrs] = useState<Record<string,string>>({});
+  // Crypto screenshot — optional. cryptoShot holds the short hosted ImgBB
+  // URL sent to the API; cryptoPreview is a local object-URL shown while
+  // the real upload is in flight.
+  const [cryptoShot, setCryptoShot] = useState("");
+  const [cryptoPreview, setCryptoPreview] = useState("");
+  const [cryptoUploading, setCryptoUploading] = useState(false);
 
   const [bankRef, setBankRef] = useState(""); const [bankAmtSent, setBankAmtSent] = useState("");
   const [bankExpected, setBankExpected] = useState(""); const [bankSender, setBankSender] = useState("");
@@ -815,18 +995,35 @@ export default function DepositPage() {
     if (gw === "bank_gh") setStep("gh_info"); else if (gw === "bank_ng") setStep("bank_info"); else setStep("form");
   }, []);
 
+  /* ── Binance: validate (screenshot NOT required, but blocks submit while uploading) ── */
   const validateBinance = () => {
     const e: Record<string,string> = {};
     if (!txid.trim() || txid.trim().length < 10) e.txid = "Valid TXID required (min 10 chars)";
     if (!cryptoAmt || isNaN(+cryptoAmt) || +cryptoAmt <= 0) e.cryptoAmt = "Enter the amount you sent";
     if (!expectedGhs || isNaN(+expectedGhs) || +expectedGhs < 1) e.expectedGhs = "Enter expected GH₵ credit";
+    if (cryptoUploading) e.screenshot = "Please wait for the screenshot to finish uploading";
     setBErrs(e); return Object.keys(e).length === 0;
   };
 
+  /* ── Binance: submit ───────────────────────────────────────────────────────
+     FIXED: endpoint corrected from the non-existent
+     `/api/wallet/deposit/binance/submit` to the actual controller route
+     `/api/wallet/binance-deposits` (same as the other apps), and
+     `screenshotUrl` is now included from the ImgBB upload.
+  ─────────────────────────────────────────────────────────────────────────── */
   const handleBinanceSubmit = async () => {
     if (!validateBinance()) return; setLoading(true); setError("");
     try {
-      await post("/api/wallet/deposit/binance/submit", { txid: txid.trim(), cryptoAmount: parseFloat(cryptoAmt), coin, network: cryptoNet, expectedGhsAmount: parseFloat(expectedGhs), senderAddress: senderAddr.trim() || undefined, userNote: userNote.trim() || undefined });
+      await post("/api/wallet/binance-deposits", {
+        txid: txid.trim(),
+        cryptoAmount: parseFloat(cryptoAmt),
+        coin,
+        network: cryptoNet,
+        expectedGhsAmount: parseFloat(expectedGhs),
+        senderAddress: senderAddr.trim() || undefined,
+        screenshotUrl: cryptoShot || undefined,
+        userNote: userNote.trim() || undefined,
+      });
       setStep("success");
     } catch (e: unknown) { setError((e as Error).message); } finally { setLoading(false); }
   };
@@ -890,6 +1087,7 @@ export default function DepositPage() {
   const reset = useCallback(() => {
     setCountry(null); setGateway(null); setError(""); setMomoRecipient(null);
     setTxid(""); setCryptoAmt(""); setCoin("USDT"); setCryptoNet("TRC20"); setExpectedGhs(""); setSenderAddr(""); setUserNote(""); setBErrs({});
+    setCryptoShot(""); setCryptoPreview(""); setCryptoUploading(false);
     resetBankState(); setStep("form");
   }, [resetBankState]);
 
@@ -909,8 +1107,32 @@ export default function DepositPage() {
       if (step === "gh_success") return <PendingSuccess label="MoMo payment" mins="5–15 minutes" onHome={() => window.location.href = "/"} onReset={reset} />;
     }
     if (gateway === "binance") {
-      if (step === "proof") return <BinanceProof error={error} txid={txid} setTxid={setTxid} cryptoAmt={cryptoAmt} setCryptoAmt={setCryptoAmt} coin={coin} setCoin={setCoin} cryptoNet={cryptoNet} setCryptoNet={setCryptoNet} expectedGhs={expectedGhs} setExpectedGhs={setExpectedGhs} senderAddr={senderAddr} setSenderAddr={setSenderAddr} userNote={userNote} setUserNote={setUserNote} bErrs={bErrs} setBErrs={setBErrs} loading={loading} onSubmit={handleBinanceSubmit} onBack={() => setStep("form")} />;
-      if (step === "success") return <CryptoSuccess onHome={() => window.location.href = "/"} onReset={reset} />;
+      if (step === "proof") return (
+        <BinanceProof
+          error={error}
+          txid={txid} setTxid={setTxid}
+          cryptoAmt={cryptoAmt} setCryptoAmt={setCryptoAmt}
+          coin={coin} setCoin={setCoin}
+          cryptoNet={cryptoNet} setCryptoNet={setCryptoNet}
+          expectedGhs={expectedGhs} setExpectedGhs={setExpectedGhs}
+          senderAddr={senderAddr} setSenderAddr={setSenderAddr}
+          userNote={userNote} setUserNote={setUserNote}
+          screenshot={cryptoShot} setScreenshot={setCryptoShot}
+          preview={cryptoPreview} setPreview={setCryptoPreview}
+          uploading={cryptoUploading} setUploading={setCryptoUploading}
+          bErrs={bErrs} setBErrs={setBErrs}
+          loading={loading}
+          onSubmit={handleBinanceSubmit}
+          onBack={() => setStep("form")}
+        />
+      );
+      if (step === "success") return (
+        <CryptoSuccess
+          coin={coin} cryptoNet={cryptoNet} cryptoAmt={cryptoAmt} expectedGhs={expectedGhs}
+          txid={txid} screenshot={cryptoShot}
+          onHome={() => window.location.href = "/"} onReset={reset}
+        />
+      );
       return <BinanceInfo error={error} onNext={() => setStep("proof")} />;
     }
     if (gateway === "bank_ng") {
