@@ -5,8 +5,7 @@ const MIN_DEPOSIT_GHS = 300;
 
 /* ─── Ghana MoMo Recipients ─────────────────────────────────────────────── */
 const GH_MOMO_RECIPIENTS = [
-  { id: "mtn",    network: "MTN MoMo",     networkShort: "MTN",    number: "0594240246", name: "Abraham Kwadwo Asiamah", icon: "phone_android", color: "#f59e0b", colorLow: "rgba(245,158,11,0.1)", colorMid: "rgba(245,158,11,0.3)" },
-  { id: "telecel",network: "Telecel Cash", networkShort: "Telecel", number: "0502918371", name: "Ikahs Prempeh",          icon: "phone_iphone",  color: "#3b82f6", colorLow: "rgba(37,99,235,0.12)",  colorMid: "rgba(37,99,235,0.32)"  },
+  { id: "mtn",    network: "MTN MoMo",     networkShort: "MTN",    number: "0594240246", name: "Abraham Kwadwo Asiamah", icon: "phone_android", color: "#f59e0b", colorLow: "rgba(245,158,11,0.1)", colorMid: "rgba(245,158,11,0.3)" }
 ] as const;
 type MomoId = typeof GH_MOMO_RECIPIENTS[number]["id"];
 
